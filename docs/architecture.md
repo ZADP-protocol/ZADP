@@ -131,3 +131,11 @@ The open protocol and reference crates must remain useful without any hosted ser
 ## Unresolved questions
 
 Captured in [roadmap.md](./roadmap.md) and [zcash-integration-todos.md](./zcash-integration-todos.md).
+
+## Real discovery implementation (current)
+
+The production path is `BoardDescriptor → RealZcashScanner (read-only BoardSource) → BoardIndexer → SqliteOfferRepository → board_router GET /offers`. A signed descriptor pins network/receiver/UIVK/birthday/admission. SQLite admits offers and commits the cursor in the same transaction. The scanner fetches compact blocks, locally trial-decrypts, obtains full matching transactions, and decrypts their memos with official Zcash libraries. Domain validation is shared with deterministic sources.
+
+The seller binary is a separate privileged boundary: local protected Ed25519 identity → canonical signed memo → authenticated loopback Zallet PCZT proposal → fee/destination preview → explicit confirmation → local wallet proof/sign/extract → local final-tx verification → lightwalletd broadcast. No wallet spending key is passed to the scanner or model. Existing commerce components remain mock-only.
+
+Earlier bootstrap sections above describe the retained mock demo. The mainnet implementation and limitations are authoritative in [zcash-scanning](zcash-scanning.md) and [mainnet-publishing](mainnet-publishing.md); funded end-to-end validation is pending.

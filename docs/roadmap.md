@@ -52,3 +52,11 @@ The open-source protocol and reference implementation remain usable without ZADP
 ## Explicitly deferred
 
 Escrow, DAO, tokens, DID systems, production hardened wallets, cross-chain abstraction layers, and recommendation engines.
+
+## Current mainnet discovery milestone
+
+Implemented: signed portable board contract, actual network scanner/decryption, durable admission/reorg state, confirmation-aware GET /offers, and explicit local-wallet shielded publication CLI. Offline tests include real Orchard note encryption and two independent reconstructed indexes.
+
+Still required before declaring this milestone complete: provision the dedicated mainnet board, integrate the funded local Zallet version, review the computed publication fee, explicitly publish one real OFFER, discover its mined output from the actual service, and reconstruct it with a fresh independent indexer. Preserve txid/descriptor/HTTP evidence without wallet data. Follow [the live checklist](mainnet-publishing.md).
+
+Only after that acceptance: update/revoke semantics, portable delegated seller authorization, operational readiness/metrics and stronger service verification. Production purchasing/AI buyer, reputation and hosted marketplace remain future scope; the existing purchase demonstration is mock-only.

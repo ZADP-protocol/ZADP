@@ -219,3 +219,13 @@ Sellers publish messages “to the ZADP board.” Exact on-chain addressing (uni
 
 - Breaking envelope changes increment `zadp`.
 - Additive optional JSON fields may appear within ZADP/1 if unknown-field-tolerant; Phase 1 indexers MAY ignore unknown fields after signature verification over known canonical set only (unknown fields MUST NOT be in the signed CBOR set unless version bump).
+
+## Shielded board OFFER wire format
+
+Mainnet discovery requires `board_id` and `issued_at` in the signed OFFER. Optional omission is retained only for legacy mock compatibility. Ed25519 verification is strict. Transport uses a 512-byte arbitrary-data ZIP 302 memo: `0xf5 || "ZADP" || wire_version(1) || payload_length(u16 big-endian) || CBOR payload || zero padding`. Maximum payload is 504 bytes; no fragmentation.
+
+The CBOR tuple is `(zadp, board_id, offer_id, seller_public_key_bytes32, capability, title, description_or_null, price_zat_u64, endpoint, issued_unix_seconds, expires_unix_seconds, nonce_bytes16_to32, signature_bytes64)`. Wire OFFER type and ZEC currency are implicit. This compact tuple is transport only; signatures cover the existing canonical typed OFFER representation including board and issue time. Price is normalized to integer zatoshis; fractional zatoshis and subsecond timestamps cannot be encoded. Unrelated memos are ignored, invalid framing/padding/versions rejected, decoded messages undergo signature, semantic and board admission checks.
+
+Operator signatures cover the descriptor body with a distinct domain prefix. Authorized sellers use its signed allowlist in this milestone. Accepted seller/id and seller/nonce cannot be replayed, including in another transaction. Duplicate outputs/blocks are idempotent; reorgs remove orphan admissions. TTL and rate decisions use inclusion block time, while API expiration uses current time. A new seller key can bypass per-seller quotas on an open board; listing value or authorized mode is needed for stronger admission.
+
+OFFER_UPDATE and OFFER_REVOKE are forward design points, not accepted wire messages yet. Only active, unexpired OFFER discovery is operational. There is no production purchasing protocol in this milestone.

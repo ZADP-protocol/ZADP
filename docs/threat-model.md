@@ -111,3 +111,13 @@ flowchart LR
 - [ ] Enforce invoice and offer expiry before payment.
 - [ ] Keep policy decisions outside the model.
 - [ ] Log payment *decisions* without logging secrets.
+
+## Real board discovery boundary
+
+Public UIVK gives anyone incoming board values/memos; dedicated board accounts are mandatory for privacy isolation. Publishing a signature does not make arbitrary incoming content admissible. The scanner requires the exact receiver, supported protocol, strict signature, board binding, HTTPS endpoint, nonexpired bounded TTL, listing value, allowlist (if enabled), rate and active limits. No endpoint is fetched by the indexer. Rejections store reason codes/output identifiers, not raw private memo content.
+
+Operator signatures authenticate a pinned key, not an operator's real-world identity. Pin a descriptor fingerprint through a trusted channel. A compromised operator can change a descriptor, but databases reject silently changed fingerprints. An open board remains vulnerable to Sybil sellers and disk/network DoS via many incoming transactions. Per-seller limits do not solve Sybil spam; use authorized admission and service/database resource limits. Public text/URLs remain untrusted: consumers must escape them and never treat them as instructions.
+
+The lightwalletd service is trusted for canonical chain data and availability; the scanner is not a consensus-validating full node. Reorg handling does not remove that trust. Full-transaction requests can reveal interest to the service. The API defaults to loopback and does not implement deployment authentication/TLS. `/healthz` is liveness, not sync readiness.
+
+Publication trusts the local wallet for account spending/change and supported fee calculation. Auth files and Ed25519 identity files are owner-only, regular, symlink-resistant, and never printed. Final transaction parsing verifies exact board output/memo/value and the confirmed fee before broadcasting. RPC bodies/errors are suppressed to avoid wallet data leaks. Review a funded dry run locally. A network timeout can leave broadcast status unknown; check the txid before any retry. Normal tests cannot broadcast and do not access real wallet secrets.
