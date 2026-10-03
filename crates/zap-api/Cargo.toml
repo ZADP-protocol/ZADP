@@ -1,0 +1,22 @@
+[package]
+name = "zap-api"
+description = "ZAP HTTP/JSON REST API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zap-protocol = { workspace = true }
+zap-indexer = { workspace = true }
+zap-seller = { workspace = true }
+zap-zcash = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+
+[lints]
+workspace = true
