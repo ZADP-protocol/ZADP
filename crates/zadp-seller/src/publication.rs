@@ -35,6 +35,7 @@ impl LocalWallet {
                 && !password.contains('\n'),
             "invalid wallet authentication file"
         );
+        zadp_zcash::initialize_tls();
         let client = reqwest::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
@@ -122,6 +123,20 @@ pub fn inspect_fee(value: &Value, address: &str, listing_value_zat: u64) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn local_wallet_client_initializes_tls_and_rejects_remote_rpc() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("fixture.wallet-auth");
+        std::fs::write(&path, "fixture-user:fixture-password").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(LocalWallet::connect("http://127.0.0.1:8232", &path).is_ok());
+        assert!(LocalWallet::connect("http://[::1]:8232", &path).is_ok());
+        assert!(LocalWallet::connect("http://example.com:8232", &path).is_err());
+        assert!(LocalWallet::connect("http://user:password@127.0.0.1:8232", &path).is_err());
+        // No RPC invocation, wallet access or network spending occurs in this test.
+    }
     fn preview() -> Value {
         json!({"wallet_created":true,"privacy_policy":"FullPrivacy","fee_zat":12345,"transparent":{"inputs":[],"outputs":[]},"sapling":{"spends":0,"outputs":[]},"orchard":{"outputs":[{"user_address":"board","value_zat":1000},{}]},"ironwood":{"outputs":[]}})
     }

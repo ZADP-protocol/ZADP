@@ -26,6 +26,7 @@ zcash_primitives.workspace = true
 zcash_note_encryption.workspace = true
 orchard.workspace = true
 tonic.workspace = true
+rustls.workspace = true
 
 [lints]
 workspace = true

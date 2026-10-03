@@ -61,6 +61,7 @@ orchard = { version = "0.15", default-features = false, features = ["std"] }
 zcash_note_encryption = "0.4.1"
 zcash_client_backend = { version = "0.24", features = ["lightwalletd-tonic-transport", "lightwalletd-tonic-tls-webpki-roots"] }
 zcash_primitives = { version = "0.30.1", default-features = false, features = ["std"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tonic = { version = "0.14", features = ["transport", "tls-webpki-roots"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 

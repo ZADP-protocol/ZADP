@@ -32,10 +32,20 @@ pub struct RealZcashScanner {
     receiver: orchard::Address,
 }
 
+/// Set an explicit process TLS provider before building tonic or wallet clients.
+pub fn initialize_tls() {
+    // The official backend can enable both rustls crypto providers transitively.
+    // Select one explicitly to avoid a process panic on the first TLS connection.
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
+
 pub async fn connect_lightwalletd(
     url: &str,
     network: ZcashNetwork,
 ) -> Result<CompactTxStreamerClient<Channel>, ZcashError> {
+    initialize_tls();
     let uri = url::Url::parse(url).map_err(|_| error("invalid lightwalletd URL"))?;
     if !uri.username().is_empty() || uri.password().is_some() || uri.query().is_some() {
         return Err(error(

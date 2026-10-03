@@ -73,12 +73,13 @@ fn encrypted_action(
         enc_ciphertext: encryption.encrypt_note_plaintext(),
         out_ciphertext: encryption.encrypt_outgoing_plaintext(&cv, &cmx, &mut rng),
     };
-    let sk = redpallas::SigningKey::<redpallas::SpendAuth>::try_from({
-        let mut scalar = [0u8; 32];
-        scalar[0] = 1;
-        scalar
-    })
-    .unwrap();
+    let sk = loop {
+        rng.fill_bytes(&mut raw);
+        raw[31] &= 0x3f;
+        if let Ok(key) = redpallas::SigningKey::<redpallas::SpendAuth>::try_from(raw) {
+            break key;
+        }
+    };
     let rk = redpallas::VerificationKey::from(&sk);
     Action::from_parts(
         nf,
