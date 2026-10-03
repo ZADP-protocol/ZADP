@@ -3,9 +3,26 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use zadp_protocol::Offer;
 use zadp_zcash::TxId;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainObservation {
+    pub network: zadp_protocol::ZcashNetwork,
+    pub board_id: String,
+    pub block_height: u32,
+    pub block_hash: String,
+    pub transaction_id: String,
+    pub pool: String,
+    pub output_index: u32,
+    pub listing_value_zat: u64,
+    pub scanned_height: u32,
+    pub confirmations: u32,
+    pub confirmation_status: String,
+    pub offer_status: String,
+}
 
 use crate::IndexerError;
 
@@ -14,6 +31,7 @@ pub struct OfferRecord {
     pub offer: Offer,
     pub source_txid: TxId,
     pub indexed_at: DateTime<Utc>,
+    pub chain: Option<ChainObservation>,
 }
 
 #[async_trait]
@@ -52,6 +70,7 @@ impl OfferRepository for InMemoryOfferRepository {
         let map = self.inner.read().await;
         let mut out: Vec<_> = map
             .values()
+            .filter(|r| r.offer.expires_at > Utc::now())
             .filter(|r| capability.is_none_or(|c| r.offer.capability == c))
             .cloned()
             .collect();

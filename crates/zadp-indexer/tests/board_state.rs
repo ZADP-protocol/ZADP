@@ -1,0 +1,282 @@
+use async_trait::async_trait;
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use chrono::{DateTime, Duration, Utc};
+use rand::RngCore;
+use rust_decimal::Decimal;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, RwLock},
+};
+use zadp_indexer::*;
+use zadp_protocol::*;
+use zadp_zcash::*;
+use zcash_keys::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
+use zip32::{AccountId, DiversifierIndex};
+const BIRTHDAY: u32 = 3_000_000;
+fn descriptor(policy: BoardPolicy) -> BoardDescriptor {
+    let keys = SellerKeyPair::generate();
+    let params = ZcashNetwork::Mainnet.parameters();
+    let mut seed = [0u8; 64];
+    rand::rngs::OsRng.fill_bytes(&mut seed);
+    let ivk = UnifiedSpendingKey::from_seed(&params, &seed, AccountId::ZERO)
+        .unwrap()
+        .to_unified_full_viewing_key()
+        .to_unified_incoming_viewing_key();
+    let ua = ivk
+        .address(DiversifierIndex::from(0u32), UnifiedAddressRequest::ORCHARD)
+        .unwrap();
+    BoardBody {
+        zadp: 1,
+        board_id: "ai-services".into(),
+        name: "Test board".into(),
+        network: ZcashNetwork::Mainnet,
+        address: ua.encode(&params),
+        incoming_viewing_key: ivk.encode(&params),
+        birthday_height: BIRTHDAY,
+        policy,
+        operator_key: keys.id.clone(),
+    }
+    .sign(&keys)
+    .unwrap()
+}
+fn offer(keys: &SellerKeyPair, nonce: u8) -> Offer {
+    let now = DateTime::from_timestamp(Utc::now().timestamp() - 100, 0).unwrap();
+    let draft = OfferDraft::new_ulid(
+        keys.id.clone(),
+        "llm.inference",
+        "test",
+        Price::zec(Decimal::new(1, 2)),
+        "https://example.com/zadp",
+        now + Duration::hours(24),
+        B64.encode([nonce; 16]),
+    )
+    .sign(keys)
+    .unwrap();
+    bind_offer(draft, "ai-services", now, keys).unwrap()
+}
+fn block(height: u32, hash: u32, prev: u32, offers: Vec<Offer>) -> BoardBlock {
+    BoardBlock {
+        header: BlockHeader {
+            height,
+            hash: format!("{hash:064x}"),
+            prev_hash: format!("{prev:064x}"),
+            time: DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap(),
+        },
+        outputs: offers
+            .into_iter()
+            .enumerate()
+            .map(|(i, o)| BoardOutput {
+                txid: TxId(format!("{hash:060x}{i:04x}")),
+                transaction_index: i as u64,
+                output_index: 0,
+                pool: "orchard".into(),
+                value_zat: 1000,
+                memo: encode_offer_memo(&o).unwrap().to_vec(),
+            })
+            .collect(),
+    }
+}
+#[derive(Default)]
+struct Source(RwLock<BTreeMap<u32, BoardBlock>>);
+#[async_trait]
+impl BoardSource for Source {
+    async fn tip_height(&self) -> Result<u32, ZcashError> {
+        Ok(*self.0.read().unwrap().last_key_value().unwrap().0)
+    }
+    async fn header(&self, height: u32) -> Result<BlockHeader, ZcashError> {
+        Ok(self.0.read().unwrap().get(&height).unwrap().header.clone())
+    }
+    async fn block(&self, height: u32) -> Result<BoardBlock, ZcashError> {
+        Ok(self.0.read().unwrap().get(&height).unwrap().clone())
+    }
+}
+#[tokio::test]
+async fn restart_cursor_persistence_duplicate_block_and_replay() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("board.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let o = offer(&seller, 1);
+    let source = Arc::new(Source::default());
+    source
+        .0
+        .write()
+        .unwrap()
+        .insert(BIRTHDAY, block(BIRTHDAY, 1, 0, vec![o.clone()]));
+    {
+        let repo = Arc::new(SqliteOfferRepository::open(&path, board.clone()).unwrap());
+        let indexer = BoardIndexer::new(Arc::clone(&source), Arc::clone(&repo));
+        assert_eq!(indexer.sync_once(100).await.unwrap(), 1);
+        assert_eq!(indexer.sync_once(100).await.unwrap(), 0);
+        assert_eq!(
+            repo.apply_block(source.block(BIRTHDAY).await.unwrap())
+                .unwrap(),
+            0
+        );
+        assert_eq!(repo.cursor().unwrap().unwrap().height, BIRTHDAY);
+    }
+    let repo = Arc::new(SqliteOfferRepository::open(&path, board).unwrap());
+    source
+        .0
+        .write()
+        .unwrap()
+        .insert(BIRTHDAY + 1, block(BIRTHDAY + 1, 2, 1, vec![o]));
+    let indexer = BoardIndexer::new(source, Arc::clone(&repo));
+    assert_eq!(indexer.sync_once(100).await.unwrap(), 0);
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    assert_eq!(repo.rejection_count().unwrap(), 1);
+    assert_eq!(repo.cursor().unwrap().unwrap().height, BIRTHDAY + 1);
+}
+#[tokio::test]
+async fn reorg_removes_orphans_and_independent_indexer_reconstructs() {
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let first = offer(&seller, 1);
+    let second = offer(&seller, 2);
+    let replacement = offer(&seller, 3);
+    let source = Arc::new(Source::default());
+    source
+        .0
+        .write()
+        .unwrap()
+        .insert(BIRTHDAY, block(BIRTHDAY, 1, 0, vec![first]));
+    source.0.write().unwrap().insert(
+        BIRTHDAY + 1,
+        block(BIRTHDAY + 1, 2, 1, vec![second.clone()]),
+    );
+    let repo = Arc::new(SqliteOfferRepository::open(":memory:", board.clone()).unwrap());
+    let indexer = BoardIndexer::new(Arc::clone(&source), Arc::clone(&repo));
+    assert_eq!(indexer.sync_once(100).await.unwrap(), 2);
+    source.0.write().unwrap().insert(
+        BIRTHDAY + 1,
+        block(BIRTHDAY + 1, 20, 1, vec![replacement.clone()]),
+    );
+    source
+        .0
+        .write()
+        .unwrap()
+        .insert(BIRTHDAY + 2, block(BIRTHDAY + 2, 21, 20, vec![]));
+    assert_eq!(indexer.sync_once(100).await.unwrap(), 1);
+    assert!(repo.get(&second.id).await.unwrap().is_none());
+    let found = repo.list(None).await.unwrap();
+    assert_eq!(found.len(), 2);
+    assert_eq!(
+        found[0].chain.as_ref().unwrap().confirmation_status,
+        "confirmed"
+    );
+    let independent = Arc::new(SqliteOfferRepository::open(":memory:", board).unwrap());
+    BoardIndexer::new(source, Arc::clone(&independent))
+        .sync_once(100)
+        .await
+        .unwrap();
+    let a = repo
+        .list(None)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| r.offer)
+        .collect::<Vec<_>>();
+    let b = independent
+        .list(None)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| r.offer)
+        .collect::<Vec<_>>();
+    assert_eq!(a, b);
+}
+#[tokio::test]
+async fn policy_active_limit_rate_limit_malformed_unrelated_and_duplicate_transaction() {
+    let seller = SellerKeyPair::generate();
+    let policy = BoardPolicy {
+        max_active_offers_per_seller: 1,
+        ..BoardPolicy::default()
+    };
+    let repo = SqliteOfferRepository::open(":memory:", descriptor(policy)).unwrap();
+    let mut b = block(BIRTHDAY, 1, 0, vec![offer(&seller, 1), offer(&seller, 2)]);
+    let duplicate = b.outputs[0].clone();
+    b.outputs.push(duplicate);
+    let mut bad = b.outputs[0].clone();
+    bad.txid = TxId("malformed".into());
+    bad.transaction_index = 3;
+    bad.memo = b"\xf5ZADPbad".to_vec();
+    b.outputs.push(bad);
+    let mut unrelated = b.outputs[0].clone();
+    unrelated.txid = TxId("unrelated".into());
+    unrelated.transaction_index = 4;
+    unrelated.memo = b"hello".to_vec();
+    b.outputs.push(unrelated);
+    assert_eq!(repo.apply_block(b).unwrap(), 1);
+    assert_eq!(repo.rejection_count().unwrap(), 3);
+    let policy = BoardPolicy {
+        max_publications_per_seller_per_window: 1,
+        ..BoardPolicy::default()
+    };
+    let rate = SqliteOfferRepository::open(":memory:", descriptor(policy)).unwrap();
+    assert_eq!(
+        rate.apply_block(block(
+            BIRTHDAY,
+            1,
+            0,
+            vec![offer(&seller, 1), offer(&seller, 2)]
+        ))
+        .unwrap(),
+        1
+    );
+    assert!(rate
+        .rejections(10)
+        .unwrap()
+        .iter()
+        .any(|(_, r)| r == "seller_rate_limit"));
+}
+#[test]
+fn wrong_descriptor_and_failed_block_do_not_advance_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("board.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let repo = SqliteOfferRepository::open(&path, board).unwrap();
+    assert!(repo.apply_block(block(BIRTHDAY + 1, 1, 0, vec![])).is_err());
+    assert!(repo.cursor().unwrap().is_none());
+    assert!(SqliteOfferRepository::open(path, descriptor(BoardPolicy::default())).is_err());
+}
+
+#[tokio::test]
+async fn nonce_replay_expiration_and_invalid_signature_are_rejected() {
+    let board = descriptor(BoardPolicy::default());
+    let repo = SqliteOfferRepository::open(":memory:", board).unwrap();
+    let seller = SellerKeyPair::generate();
+    let first = offer(&seller, 1);
+    let replay = offer(&seller, 1); // Distinct offer id, same seller nonce.
+    let mut expired = offer(&seller, 2);
+    expired.issued_at = Some(Utc::now() - Duration::hours(2));
+    expired.expires_at = Utc::now() - Duration::hours(1);
+    expired.issued_at = DateTime::from_timestamp(expired.issued_at.unwrap().timestamp(), 0);
+    expired.expires_at = DateTime::from_timestamp(expired.expires_at.timestamp(), 0).unwrap();
+    expired.signature = seller.sign(&signing_bytes(&expired).unwrap());
+    let mut bad_signature = offer(&seller, 3);
+    bad_signature.title = "changed after signing".into();
+    assert_eq!(
+        repo.apply_block(block(
+            BIRTHDAY,
+            1,
+            0,
+            vec![first, replay, expired, bad_signature]
+        ))
+        .unwrap(),
+        1
+    );
+    let reasons = repo.rejections(10).unwrap();
+    for expected in [
+        "duplicate_offer_nonce_or_output",
+        "expired_offer",
+        "invalid_seller_signature",
+    ] {
+        assert!(reasons.iter().any(|(_, reason)| reason == expected));
+    }
+    let after_expiry = block(BIRTHDAY + 1, 2, 1, vec![]);
+    let mut after_expiry = after_expiry;
+    after_expiry.header.time += Duration::days(2);
+    repo.apply_block(after_expiry).unwrap();
+    // Stored history remains for replay defense even when inclusion time advances.
+    assert_eq!(repo.rejection_count().unwrap(), 3);
+}

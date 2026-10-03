@@ -7,5 +7,10 @@ mod repo;
 mod service;
 
 pub use error::IndexerError;
-pub use repo::{InMemoryOfferRepository, OfferRecord, OfferRepository};
+pub use repo::{ChainObservation, InMemoryOfferRepository, OfferRecord, OfferRepository};
 pub use service::Indexer;
+
+mod board;
+mod persistent;
+pub use board::BoardIndexer;
+pub use persistent::SqliteOfferRepository;

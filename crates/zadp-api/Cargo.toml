@@ -18,5 +18,22 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 
+clap.workspace = true
+anyhow.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+base64.workspace = true
+rust_decimal.workspace = true
+zcash_keys.workspace = true
+zcash_primitives.workspace = true
+zcash_protocol.workspace = true
+zcash_note_encryption.workspace = true
+orchard.workspace = true
+zip32.workspace = true
+nonempty.workspace = true
+tower.workspace = true
+
 [lints]
 workspace = true

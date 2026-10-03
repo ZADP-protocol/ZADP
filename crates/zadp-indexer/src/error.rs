@@ -4,6 +4,10 @@ use zadp_zcash::ZcashError;
 
 #[derive(Debug, Error)]
 pub enum IndexerError {
+    #[error("storage error: {0}")]
+    Storage(#[from] rusqlite::Error),
+    #[error("board scanner state error: {0}")]
+    State(String),
     #[error(transparent)]
     Protocol(#[from] ProtocolError),
     #[error(transparent)]

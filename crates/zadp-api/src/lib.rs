@@ -9,7 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
-use zadp_indexer::{Indexer, OfferRepository};
+use zadp_indexer::{ChainObservation, Indexer, OfferRepository};
 use zadp_protocol::Offer;
 use zadp_seller::{CreateInvoiceRequest, Invoice, SellerService, ServiceResult};
 use zadp_zcash::ZcashAdapter;
@@ -57,7 +57,43 @@ pub struct OffersQuery {
 
 #[derive(Debug, Serialize)]
 pub struct OffersResponse {
-    pub offers: Vec<Offer>,
+    pub offers: Vec<IndexedOffer>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IndexedOffer {
+    #[serde(flatten)]
+    pub offer: Offer,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain: Option<ChainObservation>,
+}
+
+/// Read-only API for real board discovery. No invoice, fulfillment or wallet routes.
+pub fn board_router<R: OfferRepository + 'static>(repository: Arc<R>) -> Router {
+    Router::new()
+        .route("/healthz", get(|| async { "ok" }))
+        .route("/offers", get(board_offers::<R>))
+        .layer(TraceLayer::new_for_http())
+        .with_state(repository)
+}
+
+async fn board_offers<R: OfferRepository + 'static>(
+    State(repository): State<Arc<R>>,
+    Query(query): Query<OffersQuery>,
+) -> Result<Json<OffersResponse>, ApiError> {
+    let records = repository
+        .list(query.capability.as_deref())
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    Ok(Json(OffersResponse {
+        offers: records
+            .into_iter()
+            .map(|r| IndexedOffer {
+                offer: r.offer,
+                chain: r.chain,
+            })
+            .collect(),
+    }))
 }
 
 async fn list_offers<A, R>(
@@ -75,7 +111,13 @@ where
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(Json(OffersResponse {
-        offers: records.into_iter().map(|r| r.offer).collect(),
+        offers: records
+            .into_iter()
+            .map(|r| IndexedOffer {
+                offer: r.offer,
+                chain: r.chain,
+            })
+            .collect(),
     }))
 }
 

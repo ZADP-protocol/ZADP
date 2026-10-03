@@ -67,6 +67,7 @@ where
                 offer,
                 source_txid: txid,
                 indexed_at: Utc::now(),
+                chain: None,
             })
             .await?;
         Ok(inserted)
