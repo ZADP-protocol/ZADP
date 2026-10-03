@@ -1,9 +1,9 @@
-# ZAP Protocol Specification (ZAP/1)
+# ZADP Protocol Specification (ZADP/1)
 
 Status: **Draft for Phase 1 MVP**  
 Protocol major version: `1`
 
-This document defines message semantics for ZAP Discovery and the commerce objects used in the MVP vertical slice. It deliberately separates:
+This document defines message semantics for ZADP Discovery and the commerce objects used in the MVP vertical slice. It deliberately separates:
 
 1. **JSON representation** — human-readable, used by REST and demos today.
 2. **Canonical compact representation** — intended for Zcash shielded memos later (not production-implemented in Phase 1).
@@ -17,16 +17,16 @@ This document defines message semantics for ZAP Discovery and the commerce objec
 
 ## Message envelope
 
-Every ZAP discovery message includes:
+Every ZADP discovery message includes:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `zap` | u16 | Protocol major version (`1`) |
+| `zadp` | u16 | Protocol major version (`1`) |
 | `type` | string | Message type discriminator |
 | body fields | — | Type-specific payload |
 | `signature` | string | Base64 ed25519 signature over canonical signing bytes |
 
-### Message types (ZAP/1)
+### Message types (ZADP/1)
 
 | Type | Phase 1 | Purpose |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ Unknown `type` values MUST be rejected by conforming indexers.
 
 ```json
 {
-  "zap": 1,
+  "zadp": 1,
   "type": "offer",
   "id": "01JABCDEF...",
   "seller": "ed25519:BASE64_PUBKEY",
@@ -70,7 +70,7 @@ Unknown `type` values MUST be rejected by conforming indexers.
 | `title` | Short human-readable title. |
 | `description` | Optional longer text. May be truncated or omitted in compact memo form. |
 | `price.amount` | Decimal string in ZEC (not floating binary). Positive. |
-| `price.currency` | Must be `"ZEC"` in ZAP/1. |
+| `price.currency` | Must be `"ZEC"` in ZADP/1. |
 | `endpoint` | Absolute URL of seller commerce HTTP base. |
 | `expires_at` | RFC 3339 UTC timestamp. Indexers MUST reject expired offers. |
 | `nonce` | 16+ random bytes (Base64). Binds the signature; mitigates naive replay of identical bodies. |
@@ -78,7 +78,7 @@ Unknown `type` values MUST be rejected by conforming indexers.
 
 ### Validation rules (indexer)
 
-1. `zap == 1` and `type == "offer"`.
+1. `zadp == 1` and `type == "offer"`.
 2. All required fields present and well-typed.
 3. `price.currency == "ZEC"` and `amount` parses as positive decimal.
 4. `expires_at` is in the future at validation time.
@@ -90,17 +90,17 @@ Unknown `type` values MUST be rejected by conforming indexers.
 
 Signatures MUST cover a deterministic byte string independent of JSON key order and insignificant whitespace.
 
-**Phase 1 algorithm (`zap1-sign-v1`):**
+**Phase 1 algorithm (`zadp1-sign-v1`):**
 
 1. Take the offer **without** the `signature` field.
 2. Serialize to **canonical CBOR** (RFC 8949 definite lengths; map keys sorted by bytewise encoded key; no tags unless specified).
-3. Prepend ASCII prefix `ZAP1\0offer\0` (bytes).
+3. Prepend ASCII prefix `ZADP1\0offer\0` (bytes).
 4. Sign the resulting byte string with ed25519.
 
 JSON is **not** the signing serialization. Implementers MAY display JSON; they MUST verify against CBOR canonical bytes.
 
-Reference field order for CBOR maps (lexicographic by key):  
-`capability`, `description`, `endpoint`, `expires_at`, `id`, `nonce`, `price`, `seller`, `title`, `type`, `zap`  
+Reference field order for CBOR maps (bytewise by encoded CBOR key):
+`id`, `type`, `zadp`, `nonce`, `price`, `title`, `seller`, `endpoint`, `capability`, `expires_at`, `description`
 (`price` is a map with keys `amount`, `currency`).
 
 Optional `description` omitted entirely when empty.
@@ -109,7 +109,7 @@ Optional `description` omitted entirely when empty.
 
 Intended future path for shielded memo payloads:
 
-1. Encode the unsigned offer body as canonical CBOR (`zap1-cbor-v1`).
+1. Encode the unsigned offer body as canonical CBOR (`zadp1-cbor-v1`).
 2. Append raw 64-byte ed25519 signature (not Base64) outside or inside a thin framing header.
 3. Optionally strip/compress human fields (`description`) to meet memo budget.
 
@@ -130,7 +130,7 @@ If real usable memo capacity differs, protocol may introduce `offer_ref` (hash +
 
 ```json
 {
-  "zap": 1,
+  "zadp": 1,
   "type": "offer_update",
   "id": "<existing offer id>",
   "seller": "ed25519:...",
@@ -154,7 +154,7 @@ Rules (future):
 
 ```json
 {
-  "zap": 1,
+  "zadp": 1,
   "type": "offer_revoke",
   "id": "<existing offer id>",
   "seller": "ed25519:...",
@@ -213,9 +213,9 @@ Agent-facing API surface is limited to `request_payment(invoice)` semantics — 
 
 ## Board addressing (conceptual)
 
-Sellers publish messages “to the ZAP board.” Exact on-chain addressing (unified address, memo convention, UA receivers) is **unresolved** for real Zcash and mocked as a shared in-memory topic in Phase 1.
+Sellers publish messages “to the ZADP board.” Exact on-chain addressing (unified address, memo convention, UA receivers) is **unresolved** for real Zcash and mocked as a shared in-memory topic in Phase 1.
 
 ## Versioning
 
-- Breaking envelope changes increment `zap`.
-- Additive optional JSON fields may appear within ZAP/1 if unknown-field-tolerant; Phase 1 indexers MAY ignore unknown fields after signature verification over known canonical set only (unknown fields MUST NOT be in the signed CBOR set unless version bump).
+- Breaking envelope changes increment `zadp`.
+- Additive optional JSON fields may appear within ZADP/1 if unknown-field-tolerant; Phase 1 indexers MAY ignore unknown fields after signature verification over known canonical set only (unknown fields MUST NOT be in the signed CBOR set unless version bump).

@@ -1,0 +1,25 @@
+[package]
+name = "zadp-indexer"
+description = "ZADP offer indexer: scan, validate, store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zadp-protocol = { workspace = true }
+zadp-zcash = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+base64 = { workspace = true }
+rust_decimal = { workspace = true }
+zadp-protocol = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,8 +1,8 @@
-# ZAP Roadmap
+# ZADP Roadmap
 
 ## Phase 1 — Local mock vertical slice (current)
 
-- Versioned ZAP/1 offer messages (JSON + canonical CBOR signing).
+- Versioned ZADP/1 offer messages (JSON + canonical CBOR signing).
 - Seller identity (ed25519) sign/verify.
 - `MockZcashAdapter` for publish/scan/pay/observe.
 - Indexer validation + in-memory store.
@@ -35,7 +35,7 @@
 
 ## Phase 5 — Hosted indexing / commercial infrastructure
 
-Optional **ZAP Cloud** services that speak the open protocol:
+Optional **ZADP Cloud** services that speak the open protocol:
 
 - Hosted Zcash indexer
 - High-performance offer search API
@@ -47,7 +47,7 @@ Optional **ZAP Cloud** services that speak the open protocol:
 - Reputation / trust data
 - Private enterprise marketplaces
 
-The open-source protocol and reference implementation remain usable without ZAP Cloud.
+The open-source protocol and reference implementation remain usable without ZADP Cloud.
 
 ## Explicitly deferred
 

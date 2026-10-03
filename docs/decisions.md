@@ -4,7 +4,7 @@
 
 **Decision:** Implement protocol, indexer, API, payment, seller, and Zcash adapter as separate crates under `/crates`, plus demo binaries under `/examples`.
 
-**Why:** Clear boundaries, replaceable infrastructure, still one local workspace (`cargo run -p zap-demo`).
+**Why:** Clear boundaries, replaceable infrastructure, still one local workspace (`cargo run -p zadp-demo`).
 
 ## ADR-002: Mock Zcash behind a trait
 
@@ -32,7 +32,7 @@
 
 ## ADR-006: Single-process demo orchestration
 
-**Decision:** `examples/zap-demo` starts in-memory services and prints the vertical slice narrative.
+**Decision:** `examples/zadp-demo` starts in-memory services and prints the vertical slice narrative.
 
 **Why:** One command local demo; avoid premature microservices.
 

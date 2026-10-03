@@ -1,4 +1,4 @@
-# ZAP Threat Model (Phase 1)
+# ZADP Threat Model (Phase 1)
 
 This threat model focuses on the MVP architecture and the invariants that must hold as real Zcash integration is added.
 
@@ -74,7 +74,7 @@ flowchart LR
 
 ### Leaked viewing capability
 
-- **Risk:** Third party can read ZAP board memos / payment memos visible to that view authority.
+- **Risk:** Third party can read ZADP board memos / payment memos visible to that view authority.
 - **Mitigations:** Separate viewing from spending; minimize who holds view material; treat board as pseudonymous public discovery surface for offers (offers are meant to be discoverable). Payment memos should remain limited to parties with payment view rights — exact Zcash key topology unresolved.
 
 ### Leaked spending key

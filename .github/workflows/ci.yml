@@ -24,4 +24,4 @@ jobs:
       - name: test
         run: cargo test --workspace
       - name: demo (smoke)
-        run: cargo run -p zap-demo
+        run: cargo run -p zadp-demo

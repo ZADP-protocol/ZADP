@@ -3,7 +3,7 @@
 Phase 1 ships a single orchestrated vertical slice:
 
 ```bash
-cargo run -p zap-demo
+cargo run -p zadp-demo
 ```
 
 That binary exercises both seller and buyer roles against the in-process mock Zcash adapter and local REST API.

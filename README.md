@@ -1,12 +1,12 @@
-# ZAP — ZEC Agent Protocol
+# ZADP — Zcash Agent Discovery Protocol
 
-ZAP is an open protocol and reference implementation for **private commerce** between humans, applications, and autonomous AI agents using **Zcash**.
+ZADP is an open protocol and reference implementation for **private commerce** between humans, applications, and autonomous AI agents using **Zcash**.
 
 Sellers publish signed service offers through shielded channels. Indexers discover and validate them. Buyers (human or AI) request invoices and settle in shielded ZEC. Payment and order metadata can travel privately in shielded memos.
 
 ## Why Zcash is required
 
-Zcash is not an interchangeable plugin payment method in ZAP. The protocol is built to demonstrate:
+Zcash is not an interchangeable plugin payment method in ZADP. The protocol is built to demonstrate:
 
 - shielded ZEC settlement
 - private transaction metadata via shielded memos
@@ -28,13 +28,13 @@ Rust workspace with domain boundaries:
 
 | Crate | Role |
 | --- | --- |
-| `zap-protocol` | ZAP/1 messages, canonical signing, domain types |
-| `zap-zcash` | `ZcashAdapter` trait + `MockZcashAdapter` |
-| `zap-indexer` | Scan, validate, store offers |
-| `zap-api` | HTTP/JSON REST |
-| `zap-payment` | Spending policy + payment requests |
-| `zap-seller` | Offers, invoices, fulfillment |
-| `zap-demo` | End-to-end CLI vertical slice |
+| `zadp-protocol` | ZADP/1 messages, canonical signing, domain types |
+| `zadp-zcash` | `ZcashAdapter` trait + `MockZcashAdapter` |
+| `zadp-indexer` | Scan, validate, store offers |
+| `zadp-api` | HTTP/JSON REST |
+| `zadp-payment` | Spending policy + payment requests |
+| `zadp-seller` | Offers, invoices, fulfillment |
+| `zadp-demo` | End-to-end CLI vertical slice |
 
 See [docs/architecture.md](docs/architecture.md).
 
@@ -55,8 +55,8 @@ What is real vs mocked is also called out in the demo output.
 
 ## Protocol layers
 
-1. **ZAP Discovery** — signed `offer` messages (update/revoke specified, not implemented yet)
-2. **ZAP Commerce** — quote / invoice / order over HTTP
+1. **ZADP Discovery** — signed `offer` messages (update/revoke specified, not implemented yet)
+2. **ZADP Commerce** — quote / invoice / order over HTTP
 3. **Zcash Shielded Settlement** — private payment + memo metadata (mock in Phase 1)
 
 Details: [docs/protocol.md](docs/protocol.md)
@@ -75,7 +75,7 @@ See [docs/threat-model.md](docs/threat-model.md). Highlights:
 Requirements: Rust stable (1.80+ recommended).
 
 ```bash
-cargo run -p zap-demo
+cargo run -p zadp-demo
 ```
 
 This locally:
@@ -99,7 +99,7 @@ cargo test --workspace
 ## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Protocol ZAP/1](docs/protocol.md)
+- [Protocol ZADP/1](docs/protocol.md)
 - [Threat model](docs/threat-model.md)
 - [Roadmap](docs/roadmap.md)
 - [Decisions](docs/decisions.md)
@@ -111,7 +111,7 @@ cargo test --workspace
 2. Real Zcash testnet integration  
 3. MCP / AI buyer  
 4. Web marketplace UI  
-5. Hosted indexing / ZAP Cloud (optional commercial layer)
+5. Hosted indexing / ZADP Cloud (optional commercial layer)
 
 Open protocol remains useful without any hosted product.
 
