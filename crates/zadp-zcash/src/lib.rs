@@ -13,3 +13,10 @@ pub use types::{
     ObservedPayment, PaymentFilter, PaymentReceipt, PaymentRequest, ScannedMessage, TxId,
     ZcashAdapter,
 };
+
+mod board;
+mod lightwalletd;
+pub use board::{BlockHeader, BoardBlock, BoardOutput, BoardSource};
+pub use lightwalletd::{
+    broadcast_transaction, connect_lightwalletd, decrypt_board_outputs, RealZcashScanner,
+};

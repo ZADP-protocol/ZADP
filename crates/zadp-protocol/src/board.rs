@@ -47,6 +47,7 @@ pub struct BoardPolicy {
     pub max_publications_per_seller_per_window: u32,
     pub rate_window_seconds: u32,
     pub confirmed_after_blocks: u32,
+    pub max_clock_skew_seconds: u32,
 }
 impl Default for BoardPolicy {
     fn default() -> Self {
@@ -59,6 +60,7 @@ impl Default for BoardPolicy {
             max_publications_per_seller_per_window: 20,
             rate_window_seconds: 86400,
             confirmed_after_blocks: 3,
+            max_clock_skew_seconds: 300,
         }
     }
 }
@@ -144,7 +146,8 @@ impl BoardBody {
         {
             return Err(invalid("board_id must be a lowercase slug of 1..64 bytes"));
         }
-        if self.name.is_empty() || self.name.len() > 128 {
+        if self.name.is_empty() || self.name.len() > 128 || self.name.chars().any(char::is_control)
+        {
             return Err(invalid("invalid board name"));
         }
         let p = &self.policy;
@@ -156,6 +159,7 @@ impl BoardBody {
             || p.rate_window_seconds == 0
             || p.confirmed_after_blocks == 0
             || p.confirmed_after_blocks > 10000
+            || p.max_clock_skew_seconds > 3600
         {
             return Err(invalid("invalid board policy limits"));
         }
@@ -236,6 +240,9 @@ impl BoardDescriptor {
         block_time: DateTime<Utc>,
     ) -> Result<(), ProtocolError> {
         crate::verify_offer(offer, block_time)?;
+        if offer.title.chars().any(char::is_control) {
+            return Err(invalid("offer title contains control characters"));
+        }
         if offer.board_id.as_deref() != Some(&self.board.board_id) {
             return Err(invalid("wrong board binding"));
         }
@@ -243,7 +250,9 @@ impl BoardDescriptor {
             .issued_at
             .ok_or_else(|| invalid("missing issued_at"))?;
         let ttl = offer.expires_at.signed_duration_since(issued).num_seconds();
-        if issued > block_time
+        if issued
+            > block_time
+                + chrono::Duration::seconds(i64::from(self.board.policy.max_clock_skew_seconds))
             || ttl <= 0
             || ttl > i64::from(self.board.policy.max_offer_ttl_seconds)
         {

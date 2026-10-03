@@ -105,7 +105,7 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
     memo[8..8 + payload.len()].copy_from_slice(&payload);
     // Decode and verify preserves all signed fields, including decimal and time normalization.
     let roundtrip = decode_offer_memo_inner(&memo)?;
-    if roundtrip != *offer {
+    if roundtrip != *offer || crate::signing_bytes(&roundtrip)? != crate::signing_bytes(offer)? {
         return Err(invalid("offer is not normalized for memo transport"));
     }
     Ok(memo)

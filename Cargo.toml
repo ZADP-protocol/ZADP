@@ -43,6 +43,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 rust_decimal = { version = "1", features = ["serde-str"] }
+nonempty = "0.11"
+tower = { version = "0.5", features = ["util"] }
+libc = "0.2"
+zeroize = "1"
+tempfile = "3"
 sha2 = "0.10"
 serde_bytes = "0.11"
 url = "2"
