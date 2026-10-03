@@ -6,6 +6,10 @@
 
 A permissionless service-discovery protocol where sellers publish signed offers through Zcash shielded memos and humans or autonomous agents can discover them through independently operated indexers.
 
+![ZADP concept: sellers publish shielded offers, independent indexers expose discovery, and humans or agents consume it](docs/images/zadp-ecosystem-concept.jpg)
+
+*Concept illustration. Web/game interfaces, autonomous buyers and real purchase settlement are planned capabilities; live mainnet discovery acceptance is still pending.*
+
 ## Why ZADP?
 
 AI agents and applications increasingly need to discover paid services. Most discovery today depends on centralized registries. Public payment rails can also expose commercial relationships.
@@ -39,6 +43,14 @@ flowchart LR
 **Privacy boundary:** offer publication is intentionally discoverable by holders of the board’s public incoming viewing information. Purchases are **not** meant to go through that board viewing capability; settlement (when implemented for real) is direct buyer→seller.
 
 **Hard invariant:** no AI/LLM process may possess a Zcash spending key. Agents may request payment through a separate controller; spending stays in a wallet boundary.
+
+### Visual overview
+
+![ZADP discovery overview: signed offer publication, memo decryption, validation, indexing and API discovery](docs/images/zadp-discovery-overview.jpg)
+
+![ZADP discovery and future direct buyer-to-seller shielded settlement](docs/images/zadp-discovery-and-settlement.jpg)
+
+These are conceptual diagrams, not implementation specifications. Their illustrative JSON uses a legacy `zap` field; the actual protocol uses `zadp` and compact binary memo encoding. The current board API provides `GET /offers` and `GET /healthz`; the pictured `/offers/{id}` and `/search` endpoints are not implemented. Board offers are readable by holders of the public board incoming viewing capability, despite the encrypted transport. Real purchase settlement and the pictured client interfaces remain future work. See [Protocol](docs/protocol.md) and the status checklist below for current behavior.
 
 ## Current status
 
