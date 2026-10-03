@@ -5,3 +5,6 @@ mod service;
 
 pub use error::SellerError;
 pub use service::{CreateInvoiceRequest, Invoice, InvoiceStatus, SellerService, ServiceResult};
+
+pub mod local;
+pub mod publication;

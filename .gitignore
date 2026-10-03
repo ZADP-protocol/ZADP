@@ -13,3 +13,10 @@
 
 *.log
 /tmp/
+
+# Local identity keys, wallet credentials, scanner state and publication receipts
+*.identity
+*.wallet-auth
+*.sqlite
+*.sqlite-*
+*.publication.json
