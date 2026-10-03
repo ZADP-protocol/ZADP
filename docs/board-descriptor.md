@@ -8,15 +8,34 @@ Policy fields: `admission` (`open`/`authorized`), `authorized_sellers` (`ed25519
 
 ## Provisioning
 
-Use a separate local Zcash wallet/account to derive an Orchard-only UA and corresponding UIVK, and record a birthday no later than the first publication. The scanner must never receive its spending key, seed, or a wallet credential. This implementation does not create or fund a production board wallet. Do not paste wallet secrets into an agent/chat.
+Use a **dedicated** local wallet account (separate from the seller spend account) to derive an Orchard-only UA and corresponding UIVK. The scanner must never receive a spending key, seed, or wallet credential. This implementation does not create or fund a production board wallet. Do not paste wallet secrets into an agent/chat.
 
-Create a protected local operator identity with `cargo run -p zadp-seller -- identity-init --output operator.identity`. Use `identity-show --identity operator.identity` to obtain its public key. Populate all body fields in `board-body.json` using real wallet-derived public receiving/viewing information, then:
+### Human backup and sync (Zallet)
+
+Against released **Zallet `v0.1.0-beta.3`** (`987382f67e622915228686e9f956c6a9c9a7514c`):
+
+1. Confirm the mnemonic backup with **`zallet confirm-backup`** before deriving new accounts or addresses from a wallet-generated seed.
+2. Unlock the keystore when calling account or viewing-key RPCs.
+3. Wait until wallet sync is ready (`getwalletstatus` not sync-locked) and the backing full node for Zallet is available. Board **scanning** itself only needs public lightwalletd + `board.json`; publication needs the wallet’s chain backend as well (see [mainnet-publishing.md](./mainnet-publishing.md)).
+
+### Supported public Zallet RPCs (beta.3)
+
+After backup confirmation (method templates below; the signed descriptor contains actual public receiving/viewing values, never spending secrets):
+
+1. `z_getnewaccount` — create a dedicated board account (and a separate seller account for later `publish --wallet-account`).
+2. `z_getaddressforaccount` with `receiver_types` **`["orchard"]`** — Orchard-only UA. Default/empty receiver lists include Sapling and transparent receivers and are unsuitable for the board address.
+3. `z_exportviewingkey` with **`ivk` = `true`** — export the account **UIVK** (`uivk…`). Default `ivk=false` returns a UFVK (`uview…`); do not put a UFVK in the portable descriptor.
+4. Capture **`birthday_height` at provisioning time** (for example from `getwalletstatus.node_tip.height`, or tip−1). Beta.3 `z_listaccounts` / `z_getaccount` responses do not expose birthday height; the birthday must be no later than the first publication.
+
+`board-sign` validates network, Orchard activation birthday, operator signature key, Orchard-only address shape, and that the UIVK controls the board receiver (UA/UIVK binding). Indexers need only the resulting public `board.json` plus a compatible lightwalletd URL.
+
+Create a protected local operator identity with `cargo run -p zadp-seller -- identity-init --output operator.identity`. Use `identity-show --identity operator.identity` to obtain its public key. Populate all body fields in `board-body.json` using wallet-derived **public** receiving/viewing information, then:
 
 ```sh
 cargo run -p zadp-seller -- board-sign --body board-body.json --identity operator.identity --output board.json
 ```
 
-The command validates the network, Orchard activation birthday, signature key, address type, and that the UIVK can derive the receiving address. Indexers need only `board.json` plus a compatible network service URL. A database pins the entire descriptor fingerprint; a policy/descriptor change requires a new database and reconstruction. This avoids silently reinterpreting prior admissions.
+A database pins the entire descriptor fingerprint; a policy/descriptor change requires a new database and reconstruction. This avoids silently reinterpreting prior admissions.
 
 ## Privacy
 
