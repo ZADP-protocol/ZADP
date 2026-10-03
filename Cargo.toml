@@ -43,6 +43,20 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 rust_decimal = { version = "1", features = ["serde-str"] }
+sha2 = "0.10"
+serde_bytes = "0.11"
+url = "2"
+hex = "0.4"
+clap = { version = "4", features = ["derive", "env"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+zcash_keys = { version = "0.16.1", features = ["orchard", "sapling"] }
+zcash_protocol = "0.10.5"
+zip32 = "0.2"
+orchard = { version = "0.15", default-features = false, features = ["std"] }
+zcash_note_encryption = "0.4.1"
+zcash_client_backend = { version = "0.24", features = ["lightwalletd-tonic-transport", "lightwalletd-tonic-tls-webpki-roots"] }
+zcash_primitives = { version = "0.30.1", default-features = false, features = ["std"] }
+tonic = { version = "0.14", features = ["transport", "tls-webpki-roots"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [workspace.lints.rust]

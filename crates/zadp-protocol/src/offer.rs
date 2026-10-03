@@ -57,6 +57,10 @@ pub struct Offer {
     pub endpoint: String,
     pub expires_at: DateTime<Utc>,
     pub nonce: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issued_at: Option<DateTime<Utc>>,
     pub signature: Signature,
 }
 
@@ -131,6 +135,8 @@ impl OfferDraft {
             endpoint: self.endpoint,
             expires_at: self.expires_at,
             nonce: self.nonce,
+            board_id: None,
+            issued_at: None,
             signature: placeholder,
         };
         let bytes = signing_bytes(&offer)?;

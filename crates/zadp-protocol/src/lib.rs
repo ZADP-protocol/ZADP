@@ -15,3 +15,8 @@ pub use identity::{SellerId, SellerKeyPair, Signature};
 pub use offer::{
     verify_offer, Offer, OfferDraft, OfferStatus, Price, MESSAGE_TYPE_OFFER, PROTOCOL_VERSION,
 };
+
+mod board;
+mod memo;
+pub use board::{Admission, BoardBody, BoardDescriptor, BoardPolicy, ZcashNetwork};
+pub use memo::{bind_offer, decode_offer_memo, encode_offer_memo, zec_to_zat};

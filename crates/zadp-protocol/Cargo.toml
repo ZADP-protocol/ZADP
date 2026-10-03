@@ -17,5 +17,14 @@ chrono = { workspace = true }
 ulid = { workspace = true }
 rust_decimal = { workspace = true }
 
+sha2.workspace = true
+serde_bytes.workspace = true
+url.workspace = true
+zcash_keys.workspace = true
+zcash_protocol.workspace = true
+
+[dev-dependencies]
+zip32.workspace = true
+
 [lints]
 workspace = true

@@ -34,6 +34,12 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
         }
     }
 
+    if let Some(board_id) = &offer.board_id {
+        entries.push(entry_text("board_id", board_id.clone())?);
+    }
+    if let Some(issued_at) = offer.issued_at {
+        entries.push(entry_text("issued_at", issued_at.to_rfc3339())?);
+    }
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     let map: Vec<(Value, Value)> = entries
         .into_iter()

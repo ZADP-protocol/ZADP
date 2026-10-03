@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use ed25519_dalek::{
-    Signature as Ed25519Signature, Signer, SigningKey, Verifier, VerifyingKey, SIGNATURE_LENGTH,
+    Signature as Ed25519Signature, Signer, SigningKey, VerifyingKey, SIGNATURE_LENGTH,
 };
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -86,6 +86,17 @@ impl SellerKeyPair {
         Self { signing, id }
     }
 
+    /// Load a raw Ed25519 identity key from protected local storage. Not a Zcash key.
+    pub fn from_secret_bytes(bytes: &[u8; 32]) -> Self {
+        let signing = SigningKey::from_bytes(bytes);
+        let id = SellerId::from_verifying_key(&signing.verifying_key());
+        Self { signing, id }
+    }
+
+    pub fn secret_bytes(&self) -> [u8; 32] {
+        self.signing.to_bytes()
+    }
+
     pub fn sign(&self, message: &[u8]) -> Signature {
         let sig = self.signing.sign(message);
         Signature::from_bytes(&sig)
@@ -98,7 +109,7 @@ impl SellerKeyPair {
     ) -> Result<(), ProtocolError> {
         let vk = id.verifying_key()?;
         let sig = signature.to_ed25519()?;
-        vk.verify(message, &sig)
+        vk.verify_strict(message, &sig)
             .map_err(|_| ProtocolError::SignatureMismatch)
     }
 }
