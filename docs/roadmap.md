@@ -1,62 +1,51 @@
 # ZADP Roadmap
 
-## Phase 1 — Local mock vertical slice (current)
+Status labels reflect the **reference repository today**. Live mainnet publish → mine → scan → API acceptance is **not** complete.
 
-- Versioned ZADP/1 offer messages (JSON + canonical CBOR signing).
-- Seller identity (ed25519) sign/verify.
-- `MockZcashAdapter` for publish/scan/pay/observe.
-- Indexer validation + in-memory store.
-- REST `GET /offers`.
-- Invoice flow + payment policy engine.
-- CLI demo: offer → index → invoice → policy → pay → fulfill.
-- Docs: architecture, protocol, threat model, this roadmap.
-- CI: fmt, clippy, tests.
+## DONE
 
-## Phase 2 — Real Zcash testnet integration
+- ZADP/1 signed `offer` messages (JSON + canonical CBOR signing).
+- Seller Ed25519 identity (`identity-init` / `identity-show`).
+- Board descriptor + operator signature + admission policy.
+- 512-byte ZIP 302 memo framing (`0xf5` + `ZADP` + wire v1 + CBOR tuple).
+- CompactTxStreamer scanner (`RealZcashScanner` / `BoardSource`) with trial decrypt + full memo fetch.
+- SQLite indexer with cursor, first-wins replay rules, reorg rewind.
+- Mainnet board HTTP: `GET /healthz`, `GET /offers` (`board_router`).
+- Seller CLI: `board-sign`, `publish` via local Zallet PCZT (dry-run, confirm, final-tx verify).
+- Mock vertical slice: invoice / policy / mock pay / fulfill (`zadp-demo`).
+- Offline tests including real Orchard note encryption and independent SQLite reconstructions.
+- Docs + CI (fmt, clippy, workspace tests, demo smoke).
 
-- Replace mock adapter with testnet-backed implementation behind the same `ZcashAdapter` trait.
-- Shielded publish of offer memos to a board address.
-- Read-only scanning with viewing authority only for indexer.
-- Shielded payments with memo-carried order metadata.
-- Document exact memo framing after measuring real size limits.
-- See [zcash-integration-todos.md](./zcash-integration-todos.md).
+## IN PROGRESS
 
-## Phase 3 — MCP / AI buyer
+- Operator prep for funded local Zallet + lightwalletd against a dedicated board (no acceptance claimed yet).
 
-- MCP tools for offer discovery and `request_payment(invoice)`.
-- Strict tool schema that cannot expose wallet secrets.
-- Human approval hooks for `REQUIRE_APPROVAL` decisions.
+## NEXT (priority order)
 
-## Phase 4 — Web marketplace UI
+1. **Live mainnet acceptance** — see checklist in [mainnet-publishing.md](./mainnet-publishing.md):
+   - provision dedicated board/seller accounts, Orchard-only UA + UIVK, signed descriptor + birthday
+   - human seller funding; dry-run fee preview; explicit publication confirmation
+   - broadcast → mine → scanner → `/offers`
+   - **second scanner with the same descriptor and a fresh empty database** must reconstruct the same offer identity/inclusion metadata
+   - archive public evidence only (no wallet secrets)
+2. Stable self-hosted API / ops docs (bind, TLS termination, sync readiness beyond `/healthz`).
+3. Optional hosted indexing / high-availability API (commercial; protocol stays self-hostable).
+4. Agent / MCP buyer tools with strict schemas (still no spending keys in the model).
+5. Real shielded settlement beyond the mock demo (buyer pay + seller observe on chain).
 
-- Browse/search offers.
-- Human-friendly purchase flow.
-- Still no requirement to custody user spending keys in the web tier.
+## LATER
 
-## Phase 5 — Hosted indexing / commercial infrastructure
-
-Optional **ZADP Cloud** services that speak the open protocol:
-
-- Hosted Zcash indexer
-- High-performance offer search API
-- MCP gateway
-- Real-time offer feeds
-- Payment webhooks
-- Managed seller infrastructure
-- Analytics
-- Reputation / trust data
-- Private enterprise marketplaces
-
-The open-source protocol and reference implementation remain usable without ZADP Cloud.
+- `offer_update` / `offer_revoke` wire acceptance.
+- Portable delegated seller authorization beyond operator allowlists.
+- Stronger spam economics (proof-of-payment-to-publish, global quotas).
+- Web marketplace UI (no custody of user spending keys in the web tier).
+- Reputation / trust data, private enterprise marketplaces.
+- Broader ecosystem: independent indexers, alternate wallets, community boards.
 
 ## Explicitly deferred
 
-Escrow, DAO, tokens, DID systems, production hardened wallets, cross-chain abstraction layers, and recommendation engines.
+Escrow, DAO, tokens, DID systems, production hardened custody products, cross-chain abstraction layers, and recommendation engines.
 
-## Current mainnet discovery milestone
+## Hosted coexistence
 
-Implemented: signed portable board contract, actual network scanner/decryption, durable admission/reorg state, confirmation-aware GET /offers, and explicit local-wallet shielded publication CLI. Offline tests include real Orchard note encryption and two independent reconstructed indexes.
-
-Still required before declaring this milestone complete: provision the dedicated mainnet board, integrate the funded local Zallet version, review the computed publication fee, explicitly publish one real OFFER, discover its mined output from the actual service, and reconstruct it with a fresh independent indexer. Preserve txid/descriptor/HTTP evidence without wallet data. Follow [the live checklist](mainnet-publishing.md).
-
-Only after that acceptance: update/revoke semantics, portable delegated seller authorization, operational readiness/metrics and stronger service verification. Production purchasing/AI buyer, reputation and hosted marketplace remain future scope; the existing purchase demonstration is mock-only.
+Optional hosted indexing or managed APIs may be sold while the open protocol and reference crates remain usable without them.

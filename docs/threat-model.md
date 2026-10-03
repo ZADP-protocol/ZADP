@@ -1,6 +1,6 @@
-# ZADP Threat Model (Phase 1)
+# ZADP Threat Model
 
-This threat model focuses on the MVP architecture and the invariants that must hold as real Zcash integration is added.
+This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, and the retained mock commerce demo. Live mainnet acceptance is **not** claimed complete.
 
 ## Assets
 
@@ -8,10 +8,10 @@ This threat model focuses on the MVP architecture and the invariants that must h
 | --- | --- |
 | Buyer Zcash spending key | Critical |
 | Seller Zcash spending key | Critical |
-| Indexer viewing capability / board scan material | High |
-| Seller identity private key (offer signing) | High |
+| Board UIVK / public board descriptor | High (intentional discovery surface) |
+| Seller Ed25519 identity private key | High |
 | Offer authenticity and freshness | High |
-| Invoice / order metadata in shielded memos | High |
+| Invoice / order metadata (future real settlement) | High |
 | Buyer purchase graph | High (privacy) |
 | Indexed offer catalog integrity | Medium |
 
@@ -21,88 +21,118 @@ This threat model focuses on the MVP architecture and the invariants that must h
 flowchart LR
   Agent[AI agent / LLM]
   PayCtl[Payment controller]
-  Wallet[Buyer wallet / adapter]
-  Indexer[Indexer]
+  Wallet[Buyer or seller wallet]
+  Indexer[Indexer + board UIVK]
   Seller[Seller service]
-  Chain[Zcash network / mock]
+  Lwd[lightwalletd CompactTxStreamer]
+  Zallet[Local Zallet PCZT]
+  Chain[Zcash network]
 
   Agent -->|request_payment only| PayCtl
   PayCtl --> Wallet
   Wallet --> Chain
+  Zallet --> Lwd
+  Indexer --> Lwd
   Seller --> Chain
-  Indexer --> Chain
   Agent --> Indexer
   Agent --> Seller
 ```
 
-**Hard invariant:** no AI or LLM process may possess a Zcash spending key. The agent may request payment; only the payment controller + wallet adapter may sign/spend.
+**Hard invariant:** no AI or LLM process may possess a Zcash spending key. The agent may request payment; only a separate payment controller + wallet may sign/spend. The indexer holds board **incoming viewing** material only.
 
 ## Threats and mitigations
 
+Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
+
 ### Compromised LLM / prompt injection
 
-- **Risk:** Agent is manipulated into requesting many payments, wrong sellers, or exfiltrating data it can see.
-- **Mitigations:** Spending policy (`max_single`, `max_daily`, `require_human_approval_above`); agent never receives spending keys; least-privilege tool surface (`request_payment` only); human approval path for larger amounts.
-- **Residual:** Agent can still spam invoice requests and leak non-secret offer data.
+- **Risk:** Agent is manipulated into requesting many payments, wrong sellers, or exfiltrating data it can see. Public offer text/URLs may contain adversarial instructions.
+- **Implemented:** Spending keys never in the model; mock path uses `request_payment` + policy (`ALLOW` / `DENY` / `REQUIRE_APPROVAL`) with ceilings; consumers must treat offer fields as untrusted text (escape, never execute as instructions).
+- **Remaining:** Production AI buyer tooling, stronger human-approval UX, hosted gateway hardening.
+- **Residual:** Agent can still spam invoice requests (mock) and leak non-secret offer data.
 
 ### Malicious seller
 
-- **Risk:** Fake capability, bait pricing, non-delivery after payment, malicious endpoint.
-- **Mitigations (MVP):** Cryptographic offer identity; clear endpoint binding; no escrow yet — buyer accepts counterparty risk. Future: reputation, bonds, dispute flows (out of scope now).
-- **Residual:** MVP does not guarantee service quality.
+- **Risk:** Fake capability, bait pricing, non-delivery after payment, malicious HTTPS endpoint.
+- **Implemented:** Ed25519 offer identity; endpoint bound into signed offer; board admission requires HTTPS with host and without userinfo; indexer does **not** fetch endpoints.
+- **Remaining:** Escrow, reputation, bonds, dispute flows (out of scope).
+- **Residual:** No service-quality guarantee; buyer accepts counterparty risk for real purchases (not implemented on-chain yet).
 
-### Malicious offer / modified offer
+### Malicious buyer
+
+- **Risk:** Abuse seller endpoints, unpaid load, scrape or DoS seller APIs.
+- **Partial:** Discovery is read-only; commerce is mock-only today.
+- **Remaining:** Seller-side auth, rate limits, and real payment-gated fulfillment.
+
+### Forgery / modified offer
 
 - **Risk:** Attacker alters price, endpoint, or capability in transit or in indexer storage.
-- **Mitigations:** ed25519 signature over canonical CBOR; indexer verifies before indexing; buyers should re-verify signature on retrieved offers (Phase 1 demo verifies at index time; clients SHOULD verify too).
+- **Implemented:** Ed25519 over canonical CBOR (`ZADP1\0offer\0`); indexer verifies before admit; clients SHOULD re-verify retrieved offers.
+- **Residual:** A compromised indexer can omit valid offers or prefer attacker-favored valid ones.
 
-### Replayed offer
+### Malformed / oversized payload
 
-- **Risk:** Rebroadcast of an old valid signed offer.
-- **Mitigations:** `expires_at` enforcement; `nonce` bound into signature; offer `id` uniqueness in indexer. Full anti-replay against chain reorg/memo re-scan semantics is unresolved for real Zcash.
+- **Risk:** Crash or confuse indexers with junk memos.
+- **Implemented:** ZIP 302 framing checks (magic, wire v1, length ≤504, zero padding); unsupported types rejected; unrelated memos ignored; rejections store reason codes/output ids — not raw private memo content.
 
-### Stale / expired offer
+### Replay / duplicate publication
 
-- **Risk:** Buyer pays against expired terms.
-- **Mitigations:** Indexer rejects expired offers; invoice expiry; seller must re-check offer validity when issuing invoices.
+- **Risk:** Rebroadcast of an old valid signed offer or double-admit of the same output.
+- **Implemented:** `expires_at`; nonce bound into signature; SQLite first-wins on `(seller,id)`, `(seller,nonce)`, and `(txid,pool,output_index)`; duplicate outputs/blocks idempotent.
+- **Remaining:** `offer_update` / `offer_revoke` wire acceptance.
+
+### Expiry / reorg
+
+- **Risk:** Buyer acts on stale terms; chain reorg orphans indexed offers.
+- **Implemented:** API lists only unexpired offers; admission uses inclusion **block time** for TTL/rate; reorg rewind deletes orphan heights (cascades offers/rejections).
+- **Residual:** lightwalletd is trusted for chain data; scanner is not a consensus-validating full node. Full-transaction requests can reveal which transactions interest the indexer.
 
 ### Compromised indexer
 
-- **Risk:** Censorship, injection of fake offers, selective omission, surveil query patterns.
-- **Mitigations:** Clients can verify offer signatures independently of indexer trust; multiple indexers possible later; viewing key compromise does not equal spending compromise.
-- **Residual:** A malicious indexer can still lie by omission or serve only attacker-favored valid offers.
+- **Risk:** Censorship, selective omission, query surveillance.
+- **Implemented / design:** Clients can verify signatures independently; anyone can run another indexer from the same public descriptor; DB pins board fingerprint (silent descriptor swap refuses open).
+- **Residual:** Omission and query logging remain possible for a malicious operator. Operator signatures authenticate a pinned key, not a real-world identity; pin the descriptor fingerprint through a trusted channel.
 
-### Leaked viewing capability
+### Viewing / spending key exposure
 
-- **Risk:** Third party can read ZADP board memos / payment memos visible to that view authority.
-- **Mitigations:** Separate viewing from spending; minimize who holds view material; treat board as pseudonymous public discovery surface for offers (offers are meant to be discoverable). Payment memos should remain limited to parties with payment view rights — exact Zcash key topology unresolved.
+- **Risk:** UIVK leak exposes board discovery traffic; spending key leak drains funds.
+- **Implemented:** Dedicated board accounts recommended; UIVK ≠ spend; seller identity and wallet auth files are owner-only, regular, symlink-resistant (`O_NOFOLLOW`), never printed; publish path keeps spending in local Zallet; RPC bodies/errors suppressed to avoid wallet leaks.
+- **Remaining:** Hardware-backed seller/buyer wallets; broader OS secret-store guidance.
+- **Residual:** Public UIVK is an intentional discovery surface — board traffic is not private from descriptor holders. Use a dedicated board account to isolate discovery from personal and purchase traffic.
 
-### Leaked spending key
+### Spam / Sybil on open boards
 
-- **Risk:** Total loss of funds.
-- **Mitigations:** Spending keys only in payment controller / wallet process; never in LLM context, logs, or indexer; mock adapter uses fake keys; real integration must use OS secret storage / hardware where possible.
+- **Risk:** Flood board with validly signed junk; many identities bypass per-seller caps.
+- **Implemented:** `min_listing_value_zat`, per-seller active and rate-window limits, optional `authorized` allowlist.
+- **Remaining:** Stronger economic admission controls, global quotas, and operator tooling; the listing-value requirement is already enforced.
+- **Residual:** `open` admission remains Sybil-vulnerable; disk/network DoS via many incoming txs still possible.
 
-### Excessive autonomous spending
+### Malicious endpoints / SSRF-style abuse
 
-- **Risk:** Runaway agent drains wallet.
-- **Mitigations:** Policy engine (`ALLOW` / `DENY` / `REQUIRE_APPROVAL`); configurable ceilings; structured audit log of payment requests and decisions.
+- **Risk:** Offer `endpoint` points at internal resources; buyers fetch unsafely.
+- **Implemented:** Indexer never fetches endpoints; board admission requires HTTPS.
+- **Remaining:** Buyer clients should restrict schemes/hosts and not follow arbitrary redirects with secrets.
 
-### Denial-of-service / spam offers
+### Denial of service (API / DB)
 
-- **Risk:** Flood board with validly signed junk offers.
-- **Mitigations (MVP):** In-memory limits only. Future: proof-of-payment to publish, rate limits, stake, capability allowlists, indexer policy filters.
+- **Risk:** Overwhelm loopback or public API, fill SQLite, stall sync.
+- **Partial:** Default listen `127.0.0.1:8080`; no sync-readiness on `/healthz` (liveness only).
+- **Remaining:** Auth/TLS for non-loopback deploys, connection limits, metrics, operational runbooks.
 
-### Endpoint / SSRF style abuse
+### Publication path abuse / mistakes
 
-- **Risk:** Offer points `endpoint` at internal resources; buyer/indexer fetch unsafely.
-- **Mitigations:** Demo uses localhost; production clients should restrict schemes/hosts and not follow arbitrary redirects with secrets.
+- **Risk:** Wrong destination, fee surprise, double broadcast after timeout.
+- **Implemented:** Library-derived fee preview; explicit `Proceed? [y/N]` (or `--dry-run`); final extracted tx verified (board output, memo, Orchard-only, value, fee, txid) before broadcast; public receipt option without wallet data.
+- **Residual:** Network timeout can leave broadcast status unknown — check txid before retry.
 
-## Explicit non-protections in Phase 1
+## Explicit non-protections (current)
 
 - No escrow or payment-vs-delivery atomicity.
-- No formal reputation or identity beyond pubkey.
-- Mock Zcash provides **no** real privacy.
-- No consensus-level spam resistance.
+- No formal reputation beyond pubkey / board allowlist.
+- Mock commerce provides **no** real privacy or settlement.
+- No consensus-level spam resistance on `open` boards.
+- No production API authentication or TLS termination in-tree.
+- Live funded mainnet acceptance evidence not yet produced.
 
 ## Security checklist for contributors
 
@@ -111,13 +141,5 @@ flowchart LR
 - [ ] Enforce invoice and offer expiry before payment.
 - [ ] Keep policy decisions outside the model.
 - [ ] Log payment *decisions* without logging secrets.
-
-## Real board discovery boundary
-
-Public UIVK gives anyone incoming board values/memos; dedicated board accounts are mandatory for privacy isolation. Publishing a signature does not make arbitrary incoming content admissible. The scanner requires the exact receiver, supported protocol, strict signature, board binding, HTTPS endpoint, nonexpired bounded TTL, listing value, allowlist (if enabled), rate and active limits. No endpoint is fetched by the indexer. Rejections store reason codes/output identifiers, not raw private memo content.
-
-Operator signatures authenticate a pinned key, not an operator's real-world identity. Pin a descriptor fingerprint through a trusted channel. A compromised operator can change a descriptor, but databases reject silently changed fingerprints. An open board remains vulnerable to Sybil sellers and disk/network DoS via many incoming transactions. Per-seller limits do not solve Sybil spam; use authorized admission and service/database resource limits. Public text/URLs remain untrusted: consumers must escape them and never treat them as instructions.
-
-The lightwalletd service is trusted for canonical chain data and availability; the scanner is not a consensus-validating full node. Reorg handling does not remove that trust. Full-transaction requests can reveal interest to the service. The API defaults to loopback and does not implement deployment authentication/TLS. `/healthz` is liveness, not sync readiness.
-
-Publication trusts the local wallet for account spending/change and supported fee calculation. Auth files and Ed25519 identity files are owner-only, regular, symlink-resistant, and never printed. Final transaction parsing verifies exact board output/memo/value and the confirmed fee before broadcasting. RPC bodies/errors are suppressed to avoid wallet data leaks. Review a funded dry run locally. A network timeout can leave broadcast status unknown; check the txid before any retry. Normal tests cannot broadcast and do not access real wallet secrets.
+- [ ] Treat public offer text/URLs as untrusted input.
+- [ ] Pin board descriptor fingerprints through a trusted channel.

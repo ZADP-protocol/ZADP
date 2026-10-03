@@ -1,29 +1,70 @@
-# Zcash Integration TODOs (future real adapter)
+# Zcash Integration TODOs
 
-Phase 1 ships `MockZcashAdapter` only. **Do not invent real Zcash RPC method shapes** in application code until validated against current zcashd / zebrad / lightwalletd / librustzcash APIs.
+Audit of Zcash-facing work against the **current** codebase. Do not treat offline fixtures or transport probes as live mainnet acceptance.
 
-## Required capabilities (real adapter)
+**Hard rules (unchanged):** indexer never gets a spending key; no Zcash secrets in LLM/agent processes; do not invent unverified RPC shapes in app code without checking the pinned wallet/lightwalletd APIs.
 
-- [ ] Shielded transaction publishing carrying ZADP offer payloads
-- [ ] Memo encoding/decoding (`zadp1-cbor-v1` + framing)
-- [ ] Read-only scanning for indexer (viewing authority only)
-- [ ] Shielded payments from buyer wallet
-- [ ] Payment observation for sellers
-- [ ] Strict separation of viewing vs spending authority
+## Discovery / publication (code status)
 
-## Unresolved questions
+| Item | Status | Notes |
+| --- | --- | --- |
+| Memo encode/decode + 512-byte framing | **Done** | `zadp-protocol` memo module; max CBOR payload 504 |
+| Board addressing (Orchard-only UA + UIVK + birthday) | **Done in code** | Live dedicated board still **unprovisioned** for acceptance |
+| Read-only CompactTxStreamer scanning | **Done** | `RealZcashScanner`; viewing only |
+| Reorg-aware SQLite indexing | **Done** | Cursor + rewind; confirmations vs policy |
+| Shielded OFFER publish (Zallet PCZT) | **Done (developer preview)** | Local wallet RPC; dry-run / confirm / final-tx verify |
+| View vs spend separation | **Done** | Scanner/API vs Zallet publish boundary |
+| Live mainnet publish → mine → scan → API | **Pending** | Required; see below |
+| Independent second empty-DB indexer on live tx | **Pending** | Required acceptance criterion |
 
-1. **Memo capacity:** Confirm usable memo bytes for the chosen pool (Sapling vs Orchard) and any library framing overhead. Is 512 bytes the hard ceiling for our payload?
-2. **Board addressing:** How is the “ZADP board” represented on-chain (fixed UA, multipool receiver, ZIP convention)? Who holds the board viewing key?
-3. **Scan model:** Full node, light client, or hosted scanner? Reorg handling for offer finality?
-4. **Payment correlation:** Canonical way to bind `invoice_id` inside encrypted memo so seller can observe without leaking to third parties.
-5. **Fee / change / UA:** How invoices express `pay_to` for shielded receivers across wallet implementations.
-6. **Library choice:** Prefer `librustzcash` / `zebra` ecosystem crates vs wallet RPC — evaluate maintenance and key-management fit.
-7. **Testnet ops:** Faucet, confirmations required before fulfillment, chain tip lag SLOs.
-8. **Spam resistance:** Economic cost to publish offers when memos are cheap to broadcast.
+## Settlement / commerce (real chain)
 
-## Non-goals for the real adapter wrapper
+| Item | Status |
+| --- | --- |
+| Shielded buyer payments | **Open** (mock `ZcashAdapter` only) |
+| Seller payment observation on chain | **Open** (mock observe/fulfill) |
+| Invoice `pay_to` / UA conventions across wallets | **Open** |
+| Binding `invoice_id` inside encrypted payment memo | **Open** |
 
-- Do not redesign domain types when swapping mock → real.
-- Do not give indexer a spending key.
-- Do not pass any Zcash secrets into LLM/agent processes.
+## Live acceptance checklist (still pending)
+
+After the wallet is synchronized to a real chain tip:
+
+1. Provision dedicated **board** and **seller** accounts (not reused personal wallets).
+2. Create Orchard-only board UA + incoming viewing capability; capture birthday height.
+3. Sign and pin the public board descriptor (fingerprint via a trusted channel).
+4. Human seller funding; library-derived fee preview; explicit publication confirmation (or documented `--dry-run` then confirm).
+5. Broadcast; wait for mining/inclusion; record txid, fingerprint, height.
+6. Run scanner → query `GET /offers?capability=…` and match the signed offer + chain metadata.
+7. Start a **second** scanner with the same descriptor and a **fresh empty database**; verify identical offer identity and inclusion metadata (scanned heights/confirmations may differ).
+8. Archive **public** evidence only — never wallet credentials, seeds, or auth files.
+
+A local encrypted fixture is **not** a substitute. Details: [mainnet-publishing.md](./mainnet-publishing.md).
+
+## Previously unresolved questions (updated)
+
+1. **Memo capacity:** Closed in code for this path — fixed 512-byte ZIP 302 memo, 504-byte CBOR budget. Revisit only if pool/library framing changes.
+2. **Board addressing:** Closed in code — Orchard-only UA + UIVK in signed descriptor. Live board provisioning still required.
+3. **Scan model:** Closed in code for reference — lightwalletd CompactTxStreamer + SQLite reorg handling. Residual: trust in the lightwalletd service (not a validating full node).
+4. **Payment correlation:** Still open for real settlement.
+5. **Fee / change / UA for purchases:** Still open for real settlement; publish path uses Zallet PCZT fee inspect today.
+6. **Library / process choice:** Partially decided — `librustzcash` decrypt path, Zallet PCZT for publish, lightwalletd for compact blocks/broadcast. Re-evaluate if upstream APIs shift.
+7. **Testnet / ops SLOs:** Open (confirmations, tip lag, runbooks).
+8. **Spam resistance:** Partial — listing value + per-seller limits + optional allowlist; open-board Sybil and global DoS remain.
+
+## Repository polish (observed, not modified by doc tasks)
+
+| Item | Observation |
+| --- | --- |
+| License texts | Workspace declares `MIT OR Apache-2.0`; standalone `LICENSE` / `LICENSE-*` files **absent** |
+| CI | `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, `cargo test --workspace`, `zadp-demo` smoke |
+| Ignore rules | Local agent inbox under `/assistant-agent/` is gitignored |
+| Examples | `examples/README.md` → `zadp-demo`; `crates/zadp-zcash/examples/network_probe.rs` (probe ≠ acceptance) |
+| Deploy packaging | No in-tree Docker/systemd/TLS termination for public API |
+
+## Non-goals for Zcash wrappers
+
+- Do not redesign domain types when swapping mock commerce → real settlement.
+- Do not give the indexer a spending key.
+- Do not pass Zcash secrets into LLM/agent processes.
+- Do not claim production readiness from unbroadcastable fixtures or network probes alone.

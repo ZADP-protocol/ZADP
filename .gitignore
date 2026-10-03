@@ -20,3 +20,6 @@
 *.sqlite
 *.sqlite-*
 *.publication.json
+
+# Local Codex ↔ Cursor task inbox (runtime queue + docs stay local)
+/assistant-agent/
