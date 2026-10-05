@@ -11,7 +11,7 @@ This threat model covers the **current** ZADP reference implementation: real Com
 | Board UIVK / public board descriptor | High (intentional discovery surface) |
 | Seller Ed25519 identity private key | High |
 | Offer authenticity and freshness | High |
-| Invoice / order metadata (future real settlement) | High |
+| Invoice / order metadata (experimental local service) | High |
 | Buyer purchase graph | High (privacy) |
 | Indexed offer catalog integrity | Medium |
 
@@ -49,14 +49,14 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 - **Risk:** Agent is manipulated into requesting many payments, wrong sellers, or exfiltrating data it can see. Public offer text/URLs may contain adversarial instructions.
 - **Implemented:** Spending keys never in the model; mock path uses `request_payment` + policy (`ALLOW` / `DENY` / `REQUIRE_APPROVAL`) with ceilings; consumers must treat offer fields as untrusted text (escape, never execute as instructions).
 - **Remaining:** Production AI buyer tooling, stronger human-approval UX, hosted gateway hardening.
-- **Residual:** Agent can still spam invoice requests (mock) and leak non-secret offer data.
+- **Residual:** Agent can still spam invoice requests and leak offer or invoice inputs.
 
 ### Malicious seller
 
 - **Risk:** Fake capability, bait pricing, non-delivery after payment, malicious HTTPS endpoint.
 - **Implemented:** Ed25519 offer identity; endpoint bound into signed offer; board admission requires HTTPS with host and without userinfo; indexer does **not** fetch endpoints.
 - **Remaining:** Escrow, reputation, bonds, dispute flows (out of scope).
-- **Residual:** No service-quality guarantee; buyer accepts counterparty risk for real purchases (not implemented on-chain yet).
+- **Residual:** No service-quality guarantee; buyer accepts counterparty risk for real purchases (live buyer acceptance still pending).
 
 ### Malicious buyer
 
@@ -132,7 +132,7 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 - No formal reputation beyond pubkey / board allowlist.
 - Mock commerce provides **no** real privacy or settlement.
 - No consensus-level spam resistance on `open` boards.
-- No production API authentication or TLS termination in-tree.
+- No production board API authentication or TLS termination in-tree; local text TLS is development-only.
 
 ## Security checklist for contributors
 
@@ -160,3 +160,12 @@ reorg/recovery policy, abuse/resource limits and privacy/retention controls.
 A previously released result cannot be recalled after a later chain reorg;
 subsequent retrievals can only withhold it. A mainnet invoice is not a buyer
 transaction fee preview and must not be interpreted as permission to pay.
+
+HTTP repository failures now return a generic error; detailed database errors
+stay in operator logs. UI validates nested response shapes and does not claim
+browser signature verification. Python wallet responses have bounded reads;
+protected configuration/auth/database files require current-user ownership.
+The text service caps stored invoices at 10,000 in addition to 100 active slots.
+SQLite board history/rejections and public API concurrency remain unbounded over
+long operation; production quotas/monitoring are still needed. Local TLS and
+Origin/Host checks do not defend against a compromised local OS/user process.

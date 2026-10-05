@@ -157,9 +157,9 @@ Non-matching magic → ignore (not a ZADP memo). Wrong length/version/padding/pa
 )
 ```
 
-Wire `type` and ZEC currency are **implicit**. This tuple is **not** what is signed. Signatures cover the canonical typed OFFER map (including `board_id` / `issued_at` when bound). Encode path re-binds/normalizes and round-trips before accepting the memo.
+Wire `type` and ZEC currency are **implicit**. This tuple is **not** what is signed. Signatures cover the canonical typed OFFER map (including `board_id` / `issued_at` when bound). The publication caller binds/normalizes before signing; the encoder round-trips and compares signed fields before accepting the memo.
 
-**TODO / discrepancy note:** fractional zatoshis and subsecond timestamps cannot be memo-encoded; amounts must normalize to 8 decimal places and whole-second times.
+**Enforced transport normalization:** fractional zatoshis and subsecond timestamps are rejected. Amounts must represent an exact integer zatoshi value (at most eight meaningful decimals) and whole-second times. `bind_offer` normalizes the decimal before signing; the memo encoder does not silently normalize signed fields. Bare legacy JSON validation is less restrictive than memo transport.
 
 ## Board descriptor and binding
 
@@ -307,5 +307,27 @@ There is **no** `GET /offers/{id}` on `board_router`.
 | Board descriptor + admission | Implemented |
 | CompactTxStreamer scan + SQLite index | Implemented |
 | Live mainnet discovery acceptance | **Verified 2026-10-05** — mined OFFER and two independent indices; [public evidence](./mainnet-acceptance.md) |
-| Real shielded settlement | **Not implemented** (mock only) |
+| Real shielded settlement | Buyer proposal/payment acceptance pending; experimental seller observation/gate implemented and synthetically tested |
 | OFFER_UPDATE / OFFER_REVOKE wire | **Not implemented** |
+
+## Experimental service integration boundary
+
+The Python [paid text service](../services/text/README.md) uses exact integer
+zatoshis and a text invoice memo, not the Rust mock invoice schema above.
+See [paid-service design](paid-service-flow.md). Neither schema is a standardized
+ZADP/1 purchase message; no purchase wire semantics changed in this stabilization.
+
+Compatibility details: OFFER JSON ignores unknown properties during typed
+Serde decoding; they do not enter the known-field signature preimage. A board
+descriptor instead rejects unknown properties. Consumers must not assign trusted
+meaning to unsigned JSON extensions. Empty descriptions are omitted from the
+signature map but may be represented as empty text or null in the memo. The wire
+decoder accepts CBOR forms supported by ciborium and validates tuple types,
+bounds and complete consumption; it does not independently enforce shortest
+CBOR integer encoding. Emitted memos use the current definite-length serializer.
+Tightening decoder canonicality or JSON unknown-field rules needs an explicit
+compatibility review/version decision rather than a silent overnight change.
+
+A signature authenticates the reconstructed canonical typed OFFER, not transport
+bytes or service quality. The bytewise encoded-key ordering and timestamp/decimal
+string conventions used by this implementation are normative for ZADP/1.

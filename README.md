@@ -50,7 +50,7 @@ flowchart LR
 
 ![ZADP discovery and future direct buyer-to-seller shielded settlement](docs/images/zadp-discovery-and-settlement.jpg)
 
-These are conceptual diagrams, not implementation specifications. Their illustrative JSON uses a legacy `zap` field; the actual protocol uses `zadp` and compact binary memo encoding. The current board API provides `GET /offers` and `GET /healthz`; the pictured `/offers/{id}` and `/search` endpoints are not implemented. Board offers are readable by holders of the public board incoming viewing capability, despite the encrypted transport. Real purchase settlement and the pictured client interfaces remain future work. See [Protocol](docs/protocol.md) and the status checklist below for current behavior.
+These are conceptual diagrams, not implementation specifications. Their illustrative JSON uses a legacy `zap` field; the actual protocol uses `zadp` and compact binary memo encoding. The current board API provides `GET /offers` and `GET /healthz`; the pictured `/offers/{id}` and `/search` endpoints are not implemented. Board offers are readable by holders of the public board incoming viewing capability, despite the encrypted transport. Live buyer payment acceptance remains future work; the local UI and experimental service implement only the boundaries described below. See [Protocol](docs/protocol.md) and the status checklist below for current behavior.
 
 ## Current status
 
@@ -247,3 +247,15 @@ Operators may use a local file inbox for handing tasks between agents (pending â
 ## License
 
 Workspace `Cargo.toml` declares **`MIT OR Apache-2.0`**. Standalone `LICENSE` / `LICENSE-*` files are **not** present in the repository yet; treat SPDX as intended dual-licensing pending finalized license text files.
+
+
+## Developer and release documents
+
+- [Development and troubleshooting](docs/development.md)
+- [Paid-service milestone design](docs/paid-service-flow.md)
+- [Dependency review](docs/dependencies.md)
+- [Two-minute demo](docs/hackathon-demo.md) and [submission draft](docs/hackathon-submission-draft.md)
+- [Security reporting](SECURITY.md), [contributing](CONTRIBUTING.md), [dual license](LICENSE)
+
+These are preparation materials, not a public deployment, hackathon submission
+or claim that real buyer settlement is complete.

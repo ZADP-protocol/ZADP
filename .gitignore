@@ -27,3 +27,13 @@
 # Local Python caches
 __pycache__/
 *.pyc
+
+# Protected local runtime/service artifacts (examples use .example.json)
+*.key
+*.pem
+*.seed
+.cookie
+*operator-config.json
+*seller-config.json
+/private/
+/runtime/

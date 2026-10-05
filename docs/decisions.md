@@ -125,7 +125,7 @@ Publication previews call the actual CLI with `--dry-run --preview-output`; boar
 verification and library fee policy remain authoritative. There is no browser
 route for transaction signing, broadcasting or automatic approval.
 
-The JavaScript memo counter is tested against the Rust encoder in 37 cases.
+The JavaScript memo counter is tested against the Rust encoder in 44 cases.
 Shared payload and per-field UTF-8 limits both apply; character limits alone
 cannot ensure a valid memo.
 

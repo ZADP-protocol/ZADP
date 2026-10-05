@@ -20,7 +20,7 @@ buyer payment and paid fulfillment acceptance remain pending.
 - First mined mainnet OFFER, independently reconstructed by two fresh indices.
 - Reviewed Zallet library scan fixes with pinned sources and regression tests.
 - English local UI: discovery/details, unsigned drafts and exact memo byte budget.
-- 37 cross-language cases compared with the actual Rust memo encoder, including
+- 44 cross-language cases compared with the actual Rust memo encoder, including
   UTF-8 field limits (title 128, capability/board ID 64 bytes) and 504-byte payload.
 - Optional filtered wallet balances/sync/receive QR and authoritative unsigned
   publication preview with signed-board validation.

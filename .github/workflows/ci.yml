@@ -24,8 +24,11 @@ jobs:
         run: |
           python3 -m unittest discover -s ui -p 'test_*.py'
           python3 -m unittest discover -s services/text -p 'test_*.py'
+          node ui/test_offers.js
           node ui/test_memo_budget.js
           node ui/test_memo_rust_parity.js
+      - name: Documentation links
+        run: python3 scripts/check_doc_links.py
       - name: fmt
         run: cargo fmt --all -- --check
       - name: clippy

@@ -1,6 +1,6 @@
 # Explicit mainnet publication
 
-**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. Paid fulfillment remains mocked.
+**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. The Rust commerce demo remains mocked; a separate local text service has an experimental authenticated payment gate. Live buyer settlement and delivery acceptance remain pending.
 
 ## Wallet version and verification status
 
@@ -44,6 +44,8 @@ cargo run -p zadp-seller -- publish \
   --lightwalletd https://YOUR-SERVICE:PORT \
   --receipt demo.publication.json
 ```
+
+The optional `--description` is carried in the OFFER and shares the 504-byte payload budget. Use `--dry-run --preview-output /local/preview.json` to export public structured fee/board/memo information without a signed Zcash transaction. The output file must not already exist.
 
 First run with `--dry-run`: it builds an unsigned wallet proposal and shows the fee without proving, signing or broadcasting. The displayed service price is not paid during publication. The listing value defaults to the descriptor's configurable minimum, or pass `--listing-value-zat`. The wallet's supported fee calculation provides `fee_zat`; ZADP contains no invented constant network fee.
 

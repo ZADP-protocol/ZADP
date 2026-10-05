@@ -16,7 +16,9 @@ Implemented flow:
    matching value and memo, mined during the invoice window and with at least
    three confirmations, releases the deterministic result.
 
-Invoices/results persist in owner-only SQLite. Results are idempotent and each
+Invoices/results persist in owner-only SQLite. Active invoice capacity is 100;
+a 10,000-row total cap requires operator retention review rather than silently
+deleting private data. Results are idempotent and each
 retrieval rechecks chain evidence, so lost confirmations withhold cached results.
 Unsynchronized/unavailable wallets fail closed. One payment output cannot be
 consumed by multiple invoices. Underpayment, overpayment, wrong receiver/memo,
@@ -24,6 +26,8 @@ transparent outputs and late mining are rejected. Late/incorrect payments are
 not automatically refunded; operators need a separate human refund policy.
 
 ## Verification and limits
+
+Protected file checks require Linux/Unix ownership semantics.
 
 Run `python3 -m unittest discover -s services/text -p 'test_*.py'`.
 Tests use trusted synthetic wallet observations and temporary private databases.

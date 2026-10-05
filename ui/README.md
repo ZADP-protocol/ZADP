@@ -87,3 +87,11 @@ This is an unpublished local test, separate from the placeholder mainnet offer.
 There is no buyer payment-signing path and no live paid acceptance claim. Obtain
 separate human approval before any mainnet transfer. Keep invoice inputs, tokens,
 SQLite files, TLS private keys and wallet/operator configuration out of Git.
+
+
+The UI derives network labels from validated chain metadata rather than assuming
+mainnet. With no offers, the current API supplies no network metadata and the
+label is unavailable. Invalid nested offer/price/chain data is rejected. Details
+show network, txid, inclusion height, confirmations, seller and expiry; signature
+status is explicitly the indexer's acceptance, not browser-side cryptographic
+verification. Run `node ui/test_offers.js` for these response boundaries.

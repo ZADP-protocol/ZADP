@@ -22,9 +22,9 @@ Audit of Zcash-facing work against the **current** codebase. Do not treat offlin
 | Item | Status |
 | --- | --- |
 | Shielded buyer payments | **Open** (mock `ZcashAdapter` only) |
-| Seller payment observation on chain | **Open** (mock observe/fulfill) |
+| Seller payment observation on chain | **Experimental code + synthetic tests** — authenticated read-only Zallet observer; real paid acceptance pending |
 | Invoice `pay_to` / UA conventions across wallets | **Open** |
-| Binding `invoice_id` inside encrypted payment memo | **Open** |
+| Binding `invoice_id` inside encrypted payment memo | **Experimental code** — exact text memo; cross-wallet live acceptance pending |
 
 ## Live acceptance checklist (first run completed)
 
@@ -46,7 +46,7 @@ A local encrypted fixture is **not** a substitute. Details: [mainnet-publishing.
 1. **Memo capacity:** Closed in code for this path — fixed 512-byte ZIP 302 memo, 504-byte CBOR budget. Revisit only if pool/library framing changes.
 2. **Board addressing:** Closed in code — Orchard-only UA + UIVK in signed descriptor. Live dedicated board provisioning and signed descriptor verified.
 3. **Scan model:** Closed in code for reference — lightwalletd CompactTxStreamer + SQLite reorg handling. Residual: trust in the lightwalletd service (not a validating full node).
-4. **Payment correlation:** Still open for real settlement.
+4. **Payment correlation:** Implemented in the experimental local text service; live buyer settlement, standardized invoice semantics and wallet interoperability remain open.
 5. **Fee / change / UA for purchases:** Still open for real settlement; publish path uses Zallet PCZT fee inspect today.
 6. **Library / process choice:** Partially decided — `librustzcash` decrypt path, Zallet PCZT for publish, lightwalletd for compact blocks/broadcast. Re-evaluate if upstream APIs shift.
 7. **Testnet / ops SLOs:** Open (confirmations, tip lag, runbooks).
@@ -56,8 +56,8 @@ A local encrypted fixture is **not** a substitute. Details: [mainnet-publishing.
 
 | Item | Observation |
 | --- | --- |
-| License texts | Workspace declares `MIT OR Apache-2.0`; standalone `LICENSE` / `LICENSE-*` files **absent** |
-| CI | `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, `cargo test --workspace`, `zadp-demo` smoke |
+| License texts | Dual-license declaration with `LICENSE`, `LICENSE-MIT` and `LICENSE-APACHE` present |
+| CI | `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, `cargo test --workspace`, `zadp-demo` smoke, Python/Node suites, Rust memo parity and relative doc links |
 | Ignore rules | Local agent inbox under `/assistant-agent/` is gitignored |
 | Examples | `examples/README.md` → `zadp-demo`; `crates/zadp-zcash/examples/network_probe.rs` (probe ≠ acceptance) |
 | Deploy packaging | No in-tree Docker/systemd/TLS termination for public API |

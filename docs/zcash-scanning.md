@@ -1,6 +1,6 @@
 # Actual Zcash scanning
 
-The production scanner uses official `zcash_client_backend` 0.24, `zcash_keys` 0.16, `zcash_primitives` 0.30, `zcash_protocol` 0.10 and Orchard 0.15 (exact resolutions in Cargo.lock). APIs were checked against downloaded official library source and the official [librustzcash repository](https://github.com/zcash/librustzcash). Both mainnet and testnet are selected explicitly; mainnet is the documented demo path.
+The real reference scanner uses official `zcash_client_backend` 0.24, `zcash_keys` 0.16, `zcash_primitives` 0.30, `zcash_protocol` 0.10 and Orchard 0.15 (exact resolutions in Cargo.lock). APIs were checked against downloaded official library source and the official [librustzcash repository](https://github.com/zcash/librustzcash). Both mainnet and testnet are selected explicitly; mainnet is the documented demo path.
 
 ```sh
 cargo run -p zadp-api -- --network mainnet --board board.json --lightwalletd https://YOUR-SERVICE:PORT --database board.sqlite --listen 127.0.0.1:8080
