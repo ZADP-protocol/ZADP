@@ -4,7 +4,7 @@ const {spawnSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 const {memoBudget} = require('./memo-budget.js');
 const base = {board_id:'ai-services',title:'Test',capability:'llm',price:'0.01',endpoint:'https://example.com/zadp',issued_at:1791228000};
-const cases = [base];
+const cases = [base,{...base,title:'t',capability:'x',board_id:'x',price:'0.00000001',endpoint:'https://x.example'},...([23,24,255,256,300,400].map(n=>({...base,endpoint:'https://example.com/'+ 'x'.repeat(n)})))];
 for (const n of [1,23,24,25,127,128,129,255,256]) cases.push({...base,title:'x'.repeat(n)});
 for (const title of ['äö你好','😀'.repeat(60),'😀'.repeat(80)]) cases.push({...base,title});
 for (const description of ['', 'a'.repeat(23), 'a'.repeat(24), 'a'.repeat(255), 'a'.repeat(256), 'a'.repeat(292), 'a'.repeat(293), '😀'.repeat(100)]) cases.push({...base,description});

@@ -117,3 +117,79 @@ fn oversized_offer_and_fractional_zatoshi_are_rejected() {
     assert!(encode_offer_memo(&o).is_err());
     assert!(zec_to_zat(Decimal::new(1, 9)).is_err());
 }
+
+#[test]
+fn memo_padding_truncation_and_trailing_cbor_are_rejected() {
+    let original = encode_offer_memo(&offer(&SellerKeyPair::generate())).unwrap();
+    let length = usize::from(u16::from_be_bytes([original[6], original[7]]));
+    assert_eq!(original[8], 0x8d); // definite 13-field array
+    assert!(original[8 + length..].iter().all(|byte| *byte == 0));
+    for end in [5, 6, 7, 8, 64, 511] {
+        assert!(decode_offer_memo(&original[..end]).is_err());
+    }
+    let mut padding = original;
+    padding[511] = 1;
+    assert!(decode_offer_memo(&padding).is_err());
+    let mut trailing = original;
+    trailing[6..8].copy_from_slice(&((length + 1) as u16).to_be_bytes());
+    assert!(decode_offer_memo(&trailing).is_err());
+    let mut malformed = original;
+    malformed[8] = 0xff;
+    assert!(decode_offer_memo(&malformed).is_err());
+}
+
+#[test]
+fn exact_payload_boundary_and_multibyte_field_bounds() {
+    let keys = SellerKeyPair::generate();
+    let mut o = offer(&keys);
+    let mut found = false;
+    for n in 0..=504 {
+        o.description = Some("x".repeat(n));
+        if let Ok(memo) = encode_offer_memo(&o) {
+            if u16::from_be_bytes([memo[6], memo[7]]) == 504 {
+                let rebound =
+                    bind_offer(o.clone(), "ai-services", o.issued_at.unwrap(), &keys).unwrap();
+                verify_offer(
+                    &decode_offer_memo(&encode_offer_memo(&rebound).unwrap())
+                        .unwrap()
+                        .unwrap(),
+                    Utc::now(),
+                )
+                .unwrap();
+                o.description = Some("x".repeat(n + 1));
+                assert!(encode_offer_memo(&o).is_err());
+                found = true;
+                break;
+            }
+        }
+    }
+    assert!(found, "fixture must exercise exact 504-byte budget");
+    o = offer(&keys);
+    o.title = "😀".repeat(32);
+    assert!(encode_offer_memo(&o).is_ok());
+    o.title.push('a');
+    assert!(encode_offer_memo(&o).is_err());
+}
+
+#[test]
+fn nonce_lengths_precision_and_wrong_board_are_checked_at_the_right_boundary() {
+    let keys = SellerKeyPair::generate();
+    for length in [15, 16, 32, 33] {
+        let mut o = offer(&keys);
+        o.nonce = B64.encode(vec![7u8; length]);
+        assert_eq!(encode_offer_memo(&o).is_ok(), (16..=32).contains(&length));
+    }
+    let mut o = offer(&keys);
+    o.expires_at += Duration::nanoseconds(1);
+    assert!(encode_offer_memo(&o).is_err());
+    let o = bind_offer(
+        offer(&keys),
+        "another-board",
+        chrono::DateTime::from_timestamp(Utc::now().timestamp() - 1, 0).unwrap(),
+        &keys,
+    )
+    .unwrap();
+    assert!(board(&keys).validate_offer(&o, 1000, Utc::now()).is_err());
+    let other = SellerKeyPair::generate();
+    assert!(bind_offer(offer(&keys), "ai-services", Utc::now(), &other).is_err());
+}
