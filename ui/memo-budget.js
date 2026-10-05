@@ -24,6 +24,9 @@ function memoBudget(draft, issuedAt = Math.floor(Date.now() / 1000)) {
     if (typeof draft[key] !== 'string' || !draft[key].trim()) throw Error('Complete the board, name, capability and endpoint fields.');
     if (/[\u0000-\u001f\u007f]/.test(draft[key])) throw Error('Fields cannot contain control characters.');
   }
+  for (const [key, limit] of [['title',128],['capability',64],['board_id',64]]) {
+    if (new TextEncoder().encode(draft[key]).length > limit) throw Error(`${key} exceeds its ${limit}-byte UTF-8 limit.`);
+  }
   let endpoint;
   try { endpoint = new URL(draft.endpoint); } catch { throw Error('Enter a valid HTTPS service endpoint.'); }
   if (endpoint.protocol !== 'https:' || !endpoint.hostname || endpoint.username || endpoint.password) throw Error('Use an HTTPS endpoint without embedded credentials.');

@@ -65,6 +65,8 @@ struct Publish {
     #[arg(long)]
     title: String,
     #[arg(long)]
+    description: Option<String>,
+    #[arg(long)]
     price_zec: Decimal,
     #[arg(long)]
     endpoint: String,
@@ -87,6 +89,9 @@ struct Publish {
     /// Build and inspect the unsigned proposal; never prove, sign, extract or broadcast.
     #[arg(long)]
     dry_run: bool,
+    /// Save a public unsigned-transaction preview; requires --dry-run.
+    #[arg(long, requires = "dry_run")]
+    preview_output: Option<PathBuf>,
     /// Save signed OFFER + txid as a public acceptance-test receipt, never wallet data.
     #[arg(long)]
     receipt: Option<PathBuf>,
@@ -164,7 +169,7 @@ async fn publish(args: Publish) -> Result<()> {
     let now = DateTime::from_timestamp(Utc::now().timestamp(), 0).context("invalid clock")?;
     let mut nonce = [0u8; 16];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
-    let draft = OfferDraft::new_ulid(
+    let mut draft = OfferDraft::new_ulid(
         keys.id.clone(),
         args.capability,
         args.title,
@@ -172,9 +177,9 @@ async fn publish(args: Publish) -> Result<()> {
         args.endpoint,
         now + Duration::seconds(i64::from(args.ttl_seconds)),
         B64.encode(nonce),
-    )
-    .sign(&keys)?;
-    let offer = bind_offer(draft, &board.board.board_id, now, &keys)?;
+    );
+    draft.description = args.description.filter(|s| !s.is_empty());
+    let offer = bind_offer(draft.sign(&keys)?, &board.board.board_id, now, &keys)?;
     board.validate_offer(&offer, value, now)?;
     let memo = encode_offer_memo(&offer)?;
     let wallet = LocalWallet::connect(&args.wallet_rpc, &args.wallet_auth_file)?;
@@ -215,6 +220,23 @@ async fn publish(args: Publish) -> Result<()> {
         .context("spend exceeds Zcash money range")?;
     println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.price.amount,zec(value),zec(fee),zec(total),network,memo.len());
     if args.dry_run {
+        if let Some(path) = args.preview_output {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)?;
+            file.write_all(
+                serde_json::to_string_pretty(&json!({
+                    "kind":"unsigned-publication-preview", "network": network,
+                    "board_fingerprint":board.fingerprint()?, "board_id":board.board.board_id,
+                    "offer":offer, "payload_bytes":u16::from_be_bytes([memo[6],memo[7]]),
+                    "listing_value_zat":value, "network_fee_zat":fee, "total_cost_zat":total,
+                    "zcash_transaction_signed":false, "broadcast":false
+                }))?
+                .as_bytes(),
+            )?;
+            file.sync_all()?;
+        }
         println!("DRY RUN: unsigned proposal only; nothing signed or broadcast.");
         return Ok(());
     }

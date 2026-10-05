@@ -12,12 +12,15 @@ assert.equal(cborHeadBytes(65536),5);
 const result=memoBudget(draft,now);
 // Independently counted CBOR: 1+1+12+28+34+4+5+1+5+26+5+5+17+66.
 assert.equal(result.used,210);
-let atLimit={...draft,title:'x'.repeat(296)};
+let atLimit={...draft,description:'x'.repeat(292)};
 assert.equal(memoBudget(atLimit,now).used,504);
 assert.equal(memoBudget(atLimit,now).fits,true);
-assert.equal(memoBudget({...atLimit,title:atLimit.title+'x'},now).fits,false);
+assert.equal(memoBudget({...atLimit,description:atLimit.description+'x'},now).fits,false);
 assert.equal(memoBudget({...draft,title:'ä'},now).used,memoBudget({...draft,title:'aa'},now).used);
 assert.equal(memoBudget({...draft,description:'hello'},now).used,result.used+5);
 for(const price of ['0','-1','0.000000001','1e-8','21000001'])assert.throws(()=>memoBudget({...draft,price},now));
 for(const endpoint of ['http://example.com','https://user:password@example.com','bad'])assert.throws(()=>memoBudget({...draft,endpoint},now));
+assert.throws(()=>memoBudget({...draft,title:'😀'.repeat(33)},now));
+assert.throws(()=>memoBudget({...draft,capability:'x'.repeat(65)},now));
+assert.throws(()=>memoBudget({...draft,board_id:'x'.repeat(65)},now));
 console.log('Memo budget: UTF-8, CBOR boundaries, exact 504-byte limit, overflow, price and HTTPS checks passed.');

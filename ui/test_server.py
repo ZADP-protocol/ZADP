@@ -20,6 +20,7 @@ class ServerTests(unittest.TestCase):
     def setUpClass(cls):
         cls.upstream = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
         cls.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        cls.server.operator=None
         cls.server.upstream = f'http://127.0.0.1:{cls.upstream.server_port}'
         cls.url = f'http://127.0.0.1:{cls.server.server_port}'
         for server in (cls.upstream, cls.server):

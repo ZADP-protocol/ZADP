@@ -17,6 +17,15 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Local UI and memo encoder parity
+        run: |
+          python3 -m unittest discover -s ui -p 'test_*.py'
+          python3 -m unittest discover -s services/text -p 'test_*.py'
+          node ui/test_memo_budget.js
+          node ui/test_memo_rust_parity.js
       - name: fmt
         run: cargo fmt --all -- --check
       - name: clippy

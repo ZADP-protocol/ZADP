@@ -1,6 +1,8 @@
 # ZADP Roadmap
 
-Status labels reflect the **reference repository today**. First live mainnet publish → mine → scan → API acceptance completed on 2026-10-05; [public evidence](./mainnet-acceptance.md). Paid fulfillment remains mocked.
+Status labels reflect the **reference repository today**. First live mainnet publish → mine → scan → API acceptance completed on 2026-10-05; [public evidence](./mainnet-acceptance.md). The retained Rust commerce demo is mocked; the experimental local text service
+has an authenticated payment gate tested with synthetic observations. A live
+buyer payment and paid fulfillment acceptance remain pending.
 
 ## DONE
 
@@ -17,19 +19,30 @@ Status labels reflect the **reference repository today**. First live mainnet pub
 - Docs + CI (fmt, clippy, workspace tests, demo smoke).
 - First mined mainnet OFFER, independently reconstructed by two fresh indices.
 - Reviewed Zallet library scan fixes with pinned sources and regression tests.
-- Local UI: offer browsing/search/details and browser-local unsigned drafts.
+- English local UI: discovery/details, unsigned drafts and exact memo byte budget.
+- 37 cross-language cases compared with the actual Rust memo encoder, including
+  UTF-8 field limits (title 128, capability/board ID 64 bytes) and 504-byte payload.
+- Optional filtered wallet balances/sync/receive QR and authoritative unsigned
+  publication preview with signed-board validation.
+- Experimental local TLS text service: durable invoices, exact shielded-payment
+  correlation, three-confirmation gate, reorg rechecks and idempotent results.
+- Local UI invoice instructions and read-only fulfillment checks; no spending route.
 
 ## IN PROGRESS
 
-- Extend locally tested UI with reviewed wallet readiness and unsigned fee preview; neither is connected yet.
+- Prepare a separately approved mainnet paid test. No new publication or buyer
+  payment has been authorized; loopback endpoint is not publicly reachable.
 
 ## NEXT (priority order)
 
-1. **Local UI integration** — real wallet readiness and fee preview without browser custody; keep any publication behind explicit human review.
+1. **Paid service acceptance** — review a real endpoint and fresh publication
+   preview, obtain explicit approval, then separately review buyer payment costs;
+   verify discovery → invoice → shielded payment → seller observation → result.
 2. Stable self-hosted API / ops docs (bind, TLS termination, sync readiness beyond `/healthz`).
 3. Optional hosted indexing / high-availability API (commercial; protocol stays self-hostable).
 4. Agent / MCP buyer tools with strict schemas (still no spending keys in the model).
-5. Real shielded settlement beyond the mock demo (buyer pay + seller observe on chain).
+5. Broader buyer wallet integration, service expiry/refund policies and repeatable
+   real-network acceptance beyond the first text service.
 
 ## LATER
 

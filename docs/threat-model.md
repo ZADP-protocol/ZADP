@@ -1,6 +1,6 @@
 # ZADP Threat Model
 
-This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, and the retained mock commerce demo. First live mainnet discovery acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
+This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, the retained mock commerce demo, optional local operator UI and experimental payment-gated text endpoint. First live mainnet discovery acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
 
 ## Assets
 
@@ -61,8 +61,9 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 ### Malicious buyer
 
 - **Risk:** Abuse seller endpoints, unpaid load, scrape or DoS seller APIs.
-- **Partial:** Discovery is read-only; commerce is mock-only today.
-- **Remaining:** Seller-side auth, rate limits, and real payment-gated fulfillment.
+- **Partial:** Discovery is read-only. Rust commerce remains mocked; the separate local text service authenticates seller observations and gates results on exact confirmed shielded outputs. Synthetic tests do not prove live paid acceptance.
+- **Implemented local gate:** Exact account/receiver/amount/memo, non-change shielded output, invoice mining window, three confirmations, single-output use and reorg rechecks. TLS verification and fixed loopback routing prevent arbitrary offer-controlled requests.
+- **Remaining:** Public service deployment/auth, stronger rate limits, retention/refund policy and live buyer payment acceptance.
 
 ### Forgery / modified offer
 
@@ -142,3 +143,20 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 - [ ] Log payment *decisions* without logging secrets.
 - [ ] Treat public offer text/URLs as untrusted input.
 - [ ] Pin board descriptor fingerprints through a trusted channel.
+
+## Local operator UI boundary
+
+Owner-only configuration and authentication remain in protected local processes.
+The browser gets only filtered seller balance/synchronization/receiver data and
+public unsigned publication previews. There is no sign/spend/broadcast route.
+Cross-origin writes and unexpected Host headers are rejected; invoice tokens
+stay in memory rather than localStorage or URLs. Draft offer strings remain
+untrusted. A preview can sign an Ed25519 offer but never a Zcash transaction.
+
+The paid service stores inputs privately in SQLite and cannot automatically
+refund incorrect/late payments. Its bounded 1,000-transaction observer fails
+closed on truncation or synchronization changes. Production needs durable
+reorg/recovery policy, abuse/resource limits and privacy/retention controls.
+A previously released result cannot be recalled after a later chain reorg;
+subsequent retrievals can only withhold it. A mainnet invoice is not a buyer
+transaction fee preview and must not be interpreted as permission to pay.

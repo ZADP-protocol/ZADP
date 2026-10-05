@@ -2,7 +2,8 @@
 
 Updated 2026-10-05. These decisions distinguish live discovery from the retained
 mock commerce demo. First mainnet publication and discovery are verified;
-real buyer payment and paid fulfillment remain unimplemented.
+an experimental local payment-gated text service is implemented with synthetic
+acceptance tests. A live buyer payment and delivered result remain unverified.
 
 ## ADR-001: Rust workspace with domain crates — retained
 
@@ -116,11 +117,38 @@ without an AI provider, payment or blockchain publication.
 The demo is separate from the mainnet test offer's placeholder endpoint.
 See [UI instructions](../ui/README.md).
 
+## ADR-010: Read-only operator boundary and exact unsigned previews
+
+**Decision:** Optional owner-only configuration connects a local server to the
+existing seller wallet. Only filtered balances/sync/receive address reach the UI.
+Publication previews call the actual CLI with `--dry-run --preview-output`; board
+verification and library fee policy remain authoritative. There is no browser
+route for transaction signing, broadcasting or automatic approval.
+
+The JavaScript memo counter is tested against the Rust encoder in 37 cases.
+Shared payload and per-field UTF-8 limits both apply; character limits alone
+cannot ensure a valid memo.
+
+## ADR-011: Deterministic local service with seller-observed payment
+
+**Decision:** The initial paid service returns the first three sentences without
+external APIs. Private persistent invoices bind exact seller account, receiver,
+amount and memo. Only an authenticated read-only Zallet observer supplies chain
+evidence. Require three confirmations, invoice-window mining, shielded non-change
+outputs, single-output consumption and evidence rechecks before each retrieval.
+Tokens are hashed at rest; client-supplied payment evidence is rejected.
+
+**Why:** A client assertion or a mempool transaction is insufficient to release
+paid output. Synthetic tests prove the gate and restart behavior, not mainnet
+settlement. The UI bridge is fixed loopback HTTPS with certificate verification;
+it never follows untrusted advertised endpoints. Deployment, a new valid offer,
+buyer fee preview and live payment require separate human review.
+
 ## Remaining decisions
 
-- Real buyer payment observation, invoice correlation and paid fulfillment.
+- Live buyer payment acceptance and public deployment of the experimental service.
 - Actual service endpoint/protocol and integration with a real service provider.
-- UI wallet readiness and authoritative unsigned fee preview integration.
+- Buyer wallet proposal preparation and approval UX; refund and retention policy.
 - Update/revoke transport and conflict handling beyond current OFFER replay rules.
 - Public API authentication, TLS, resource limits and operational readiness.
 

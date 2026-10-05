@@ -65,8 +65,8 @@ These are conceptual diagrams, not implementation specifications. Their illustra
 | Seller CLI: `identity-*`, `board-sign`, `publish` (Zallet PCZT) | **Implemented** (developer preview) |
 | Mock demo: invoice / policy / mock pay / fulfill | **Implemented** (local only) |
 | Live mainnet publish → mine → scan → API acceptance | **Verified 2026-10-05** — mined OFFER + two independent indices; [public evidence](docs/mainnet-acceptance.md) |
-| Real shielded purchase settlement | **Not implemented** (mock only) |
-| Local web UI | **Implemented** — read-only offers, search, details, browser-local unsigned drafts |
+| Payment-gated text service | **Implemented experimental local path** — authenticated seller observer + persistent invoices; synthetic tests, live buyer payment still pending |
+| Local web UI | **Implemented** — discovery, drafts, exact memo budget, optional read-only wallet/QR, unsigned publication costs and local invoice instructions |
 | MCP / reputation / hosted marketplace | **Not implemented** |
 | `offer_update` / `offer_revoke` | **Specified only** |
 
@@ -206,17 +206,18 @@ ZADP is a **protocol**, not a mandatory marketplace. Operators can publish board
 ## Roadmap (summary)
 
 1. **Done:** first live mainnet offer publication and independent discovery; [evidence](docs/mainnet-acceptance.md)
-2. **Next:** extend and locally test the UI; add reviewed wallet readiness and unsigned fee previews
-3. Stable self-hosted API / ops docs
-4. Optional hosted indexing
-5. Agent/MCP buyer tools (still no spending keys in the model)
-6. Real shielded settlement beyond the mock demo
+2. **Done:** locally tested English UI, Rust memo parity, read-only wallet and unsigned fee previews
+3. **Next:** approve a real paid service test after reviewing endpoint, invoice and transaction costs
+4. Stable self-hosted API / ops docs
+5. Optional hosted indexing
+6. Agent/MCP buyer tools (still no spending keys in the model)
+7. Production hardening and broader shielded purchase support
 
 Details: [docs/roadmap.md](docs/roadmap.md).
 
 ## Local interface
 
-Run `python3 ui/server.py` and open http://127.0.0.1:8090 with a local indexer on port 8080. The English-only UI shows real indexed offers, saves unsigned drafts in the browser, and includes a free local text-shortening test service (no AI model or payment). It does not connect to the wallet, publish offers or execute purchases. See [UI instructions](ui/README.md).
+Run `python3 ui/server.py` and open http://127.0.0.1:8090 with a local indexer on port 8080. The English-only UI shows real indexed offers, saves unsigned drafts in the browser, and includes a free local text-shortening test service (no AI model or payment). Optional protected operator integration shows filtered seller wallet readiness and a receive QR, prepares authoritative unsigned publication costs, and bridges invoices/payment checks to the local TLS text service. No UI route signs, broadcasts or transfers funds. Live buyer payment remains pending separate approval. See [UI instructions](ui/README.md).
 
 ## Development
 

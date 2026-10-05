@@ -42,7 +42,9 @@ flowchart TB
   discovery -.-> commerce -.-> settlement
 ```
 
-Discovery is the production path under active implementation. Commerce and settlement remain mock-only except where explicitly noted.
+Discovery is the production path under active implementation. The Rust commerce demo remains mocked. A separate experimental Python text
+service implements an authenticated seller-observed payment gate, with synthetic
+acceptance tests; live buyer payment and delivery remain unverified.
 
 ## Current publication path
 
@@ -192,8 +194,22 @@ The open protocol and reference crates must remain useful without any hosted ser
 | CompactTxStreamer scanner + SQLite indexer + `board_router` | Implemented (code + offline tests) |
 | Seller CLI publish (Zallet PCZT) | Implemented (developer preview) |
 | Live mainnet acceptance evidence | **Verified 2026-10-05**, two independent indices |
-| Local web UI | Read-only offers + browser-local unsigned drafts; no wallet or purchase integration |
-| Real shielded purchase settlement | **Not implemented** (mock only) |
+| Local web UI | Discovery/drafts + optional filtered wallet/QR, authoritative unsigned preview, local invoice/fulfillment bridge |
+| Real shielded purchase settlement | Experimental seller observation/gate implemented; real buyer payment acceptance pending |
 | `offer_update` / `offer_revoke` | Specified only |
 
 Unresolved integration work: [zcash-integration-todos.md](./zcash-integration-todos.md), [roadmap.md](./roadmap.md).
+
+## Experimental local paid text service
+
+`services/text` is separate from the board indexer and the Rust mock demo.
+Invoices bind exact seller account, receiver, amount, memo and mining window;
+only authenticated local Zallet observations can release a result after three
+confirmations. The service rechecks evidence on retrieval and persists private
+inputs/results in owner-only SQLite. It neither signs nor broadcasts.
+
+The optional UI bridge uses a fixed loopback HTTPS target and explicit certificate
+verification, rejects redirects and never follows advertised offer URLs. A
+local unpublished test identifier is deliberately separate from a signed,
+discoverable OFFER. Public endpoint deployment, a new separately approved
+publication, buyer fee/proposal review and a real paid result are still pending.
