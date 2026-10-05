@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {parseOffersResponse,offersNetwork}=require('./offers.js');
+const offer={id:'fixture',seller:'ed25519:fixture',title:'A'.repeat(1000),capability:'text.shorten',endpoint:'https://example.com',expires_at:'2030-01-01T00:00:00Z',price:{amount:'0.01',currency:'ZEC'},chain:{network:'mainnet',block_height:1,scanned_height:3,confirmations:3,transaction_id:'a'.repeat(64)}};
+assert.deepEqual(parseOffersResponse({offers:[]}),[]);
+assert.equal(offersNetwork([]),'Network unavailable');
+assert.equal(parseOffersResponse({offers:[offer]}).length,1);
+assert.equal(parseOffersResponse({offers:[offer,offer]}).length,2);
+assert.equal(offersNetwork([offer]),'mainnet');
+assert.equal(offersNetwork([{...offer,chain:{...offer.chain,network:'testnet'}}]),'testnet');
+assert.equal(offersNetwork([offer,{...offer,chain:{...offer.chain,network:'testnet'}}]),'Mixed networks');
+for(const data of [null,{}, {offers:[null]}, {offers:[{...offer,price:null}]}, {offers:[{...offer,price:{amount:'NaN',currency:'ZEC'}}]}, {offers:[{...offer,chain:{...offer.chain,confirmations:-1}}]}, {offers:[{...offer,chain:{...offer.chain,network:'wrong'}}]}, {offers:[{...offer,expires_at:'invalid'}]}]) assert.throws(()=>parseOffersResponse(data));
+console.log('Offer UI: empty/single/multiple/long-text, invalid nested JSON and network labels passed.');

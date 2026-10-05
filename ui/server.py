@@ -8,7 +8,7 @@ from urllib.request import urlopen
 from operator_boundary import Operator
 
 ROOT = Path(__file__).resolve().parent
-ASSETS = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css'), '/memo-budget.js': ('memo-budget.js', 'text/javascript')}
+ASSETS = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css'), '/memo-budget.js': ('memo-budget.js', 'text/javascript'), '/offers.js': ('offers.js', 'text/javascript')}
 
 def summarize(text):
     """Extract up to three leading sentences. This is not an AI model."""

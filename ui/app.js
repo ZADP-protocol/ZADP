@@ -9,7 +9,7 @@ function element(tag, text, cls) { const e = document.createElement(tag); e.text
 function details(o) {
   $('detail-title').textContent = o.title;
   const dl = $('detail-fields'); dl.replaceChildren();
-  const values = {'Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Index acceptance':'Signature and board policy accepted','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : 'Purchasing is not yet available.'};
+  const values = {'Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : 'Purchasing is not yet available.'};
   for (const [key,value] of Object.entries(values)) dl.append(element('dt',key),element('dd',String(value)));
   $('detail').showModal();
 }
@@ -22,7 +22,7 @@ function render() {
     const price = element('p',`${o.price.amount} `,'price'); price.append(element('small',o.price.currency));
     const btn = element('button','View details','secondary'); btn.addEventListener('click',()=>details(o));
     const active = o.chain?.offer_status === 'active';
-    card.append(element('span',o.capability,'badge'),element('h2',o.title),element('p',active ? `${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Active` : 'Offer is inactive'),price,btn);
+    card.append(element('span',o.capability,'badge'),element('h2',o.title),element('p',active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
     if(o.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
     $('offers').append(card);
   }
@@ -33,14 +33,15 @@ async function refresh() {
   try {
     const [health,response] = await Promise.all([fetch('/api/healthz'),fetch('/api/offers')]);
     if(!health.ok || !response.ok) throw Error();
-    const data = await response.json(); if(!Array.isArray(data.offers)) throw Error();
-    offers = data.offers; render();
-    $('connection').textContent = '● Index connected'; $('index-status').textContent = 'Connected. Offers are read from the local mainnet index.';
+    const data = await response.json();
+    offers = parseOffersResponse(data);
+    $('network-label').textContent=offersNetwork(offers); render();
+    $('connection').textContent = '● Index connected'; $('index-status').textContent = 'Connected. Offers are read from the local Zcash index.';
     const heights = offers.map(o=>o.chain?.scanned_height).filter(Number.isFinite);
     $('height').textContent = heights.length ? `Scanned block height: ${Math.max(...heights).toLocaleString('en')}` : 'Block height unavailable.';
   } catch {
-    offers = []; $('offers').replaceChildren(); $('count').textContent = '';
-    $('message').textContent = 'Cannot connect to the index. Check the local indexer and try again.';
+    offers = []; $('network-label').textContent='Network unavailable'; $('offers').replaceChildren(); $('count').textContent = '';
+    $('message').textContent = 'Index unavailable or response invalid. Check the local indexer and try again.';
     $('connection').textContent = '○ Index disconnected'; $('index-status').textContent = 'Index unavailable.'; $('height').textContent = '';
   } finally { $('refresh').disabled = false; }
 }
