@@ -1,6 +1,6 @@
 # Explicit mainnet publication
 
-**Implementation status:** real network transport, decryption and publication code exist; the funded mainnet acceptance demonstration has not been performed. No transaction id or successful production broadcast is claimed.
+**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. Paid fulfillment remains mocked.
 
 ## Wallet version and verification status
 
@@ -13,7 +13,7 @@ The MVP wallet integration targets local [Zallet PCZT RPC](https://zcash.github.
 
 **Verified (source / RPC surface against beta.3):** argument order and field names for `getwalletstatus`, `pczt_create`, `pczt_inspect`, `pczt_prove`, `pczt_sign`, and `pczt_extract` match ZADP seller expectations. Public board-provisioning helpers (`z_getnewaccount`, Orchard-only `z_getaddressforaccount`, `z_exportviewingkey` with `ivk=true`) exist in that release.
 
-**Still pending:** a funded proposal, dry-run fee review against a live wallet, explicit confirm, broadcast, mined inclusion, and independent scanner discovery. Do not treat source compatibility as mainnet acceptance.
+**Live verified:** funded proposal, library-derived fee preview, human confirmation, broadcast, mined inclusion and independent discovery. The beta.3 runtime used two reviewed librustzcash scan fixes; see [pins, patches, tests and build instructions](../integrations/zallet/README.md). `getwalletstatus.locked` describes a synchronization lock, not a keystore lock.
 
 Zallet is evolving; prefer a build that exposes these methods. Keep wallet seeds and spending keys inside the wallet process, outside the repository and agent context.
 
@@ -51,7 +51,7 @@ The CLI verifies the wallet and network-service block hash agree, builds a signe
 
 A proposal cannot broadcast from any automated test. Tests never access a funded wallet. If broadcast times out, acceptance may be unknown: consult the printed txid before retrying, or you could pay twice. A receipt is written before transmission with `broadcast_status: prepared; verify on chain`; it is evidence of the intended transaction, not proof of network acceptance. TTL may expire while wallet processing takes time; confirm clock, wallet sync and eventual block inclusion.
 
-## Required live acceptance (still pending)
+## Live acceptance procedure (first run completed)
 
 1. Provision and pin the dedicated signed mainnet board descriptor.
 2. Dry-run and review the real fee/destination locally; explicitly invoke and confirm publication.
@@ -60,4 +60,4 @@ A proposal cannot broadcast from any automated test. Tests never access a funded
 5. Start another scanner with the same descriptor and a fresh database; verify identical offer identity and inclusion metadata (scanned heights/confirmations can differ).
 6. Archive public evidence only; never wallet credentials/seeds. A local encrypted fixture is not a substitute for these steps.
 
-Until all steps succeed, the mainnet milestone is incomplete. Purchase settlement, AI purchasing, reputation and hosted marketplace are outside this milestone.
+All steps succeeded for the first test OFFER; see the linked public evidence. Do not retry that publication. Purchase settlement, AI purchasing, reputation and hosted marketplace are outside this milestone.

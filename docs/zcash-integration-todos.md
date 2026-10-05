@@ -9,13 +9,13 @@ Audit of Zcash-facing work against the **current** codebase. Do not treat offlin
 | Item | Status | Notes |
 | --- | --- | --- |
 | Memo encode/decode + 512-byte framing | **Done** | `zadp-protocol` memo module; max CBOR payload 504 |
-| Board addressing (Orchard-only UA + UIVK + birthday) | **Done in code** | Live dedicated board still **unprovisioned** for acceptance |
+| Board addressing (Orchard-only UA + UIVK + birthday) | **Done in code** | Dedicated signed board provisioned; first live acceptance verified |
 | Read-only CompactTxStreamer scanning | **Done** | `RealZcashScanner`; viewing only |
 | Reorg-aware SQLite indexing | **Done** | Cursor + rewind; confirmations vs policy |
 | Shielded OFFER publish (Zallet PCZT) | **Done (developer preview)** | Local wallet RPC; dry-run / confirm / final-tx verify |
 | View vs spend separation | **Done** | Scanner/API vs Zallet publish boundary |
-| Live mainnet publish → mine → scan → API | **Pending** | Required; see below |
-| Independent second empty-DB indexer on live tx | **Pending** | Required acceptance criterion |
+| Live mainnet publish → mine → scan → API | **Verified 2026-10-05** | [Public evidence](./mainnet-acceptance.md) |
+| Independent second empty-DB indexer on live tx | **Verified 2026-10-05** | Matching offer, transaction, policy acceptance and listing value |
 
 ## Settlement / commerce (real chain)
 
@@ -26,9 +26,9 @@ Audit of Zcash-facing work against the **current** codebase. Do not treat offlin
 | Invoice `pay_to` / UA conventions across wallets | **Open** |
 | Binding `invoice_id` inside encrypted payment memo | **Open** |
 
-## Live acceptance checklist (still pending)
+## Live acceptance checklist (first run completed)
 
-After the wallet is synchronized to a real chain tip:
+The following procedure completed on 2026-10-05. It remains a checklist for new deployments, not instructions to recreate the existing wallet or replay the test publication:
 
 1. Provision dedicated **board** and **seller** accounts (not reused personal wallets).
 2. Create Orchard-only board UA + incoming viewing capability; capture birthday height.
@@ -44,7 +44,7 @@ A local encrypted fixture is **not** a substitute. Details: [mainnet-publishing.
 ## Previously unresolved questions (updated)
 
 1. **Memo capacity:** Closed in code for this path — fixed 512-byte ZIP 302 memo, 504-byte CBOR budget. Revisit only if pool/library framing changes.
-2. **Board addressing:** Closed in code — Orchard-only UA + UIVK in signed descriptor. Live board provisioning still required.
+2. **Board addressing:** Closed in code — Orchard-only UA + UIVK in signed descriptor. Live dedicated board provisioning and signed descriptor verified.
 3. **Scan model:** Closed in code for reference — lightwalletd CompactTxStreamer + SQLite reorg handling. Residual: trust in the lightwalletd service (not a validating full node).
 4. **Payment correlation:** Still open for real settlement.
 5. **Fee / change / UA for purchases:** Still open for real settlement; publish path uses Zallet PCZT fee inspect today.

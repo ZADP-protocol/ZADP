@@ -9,7 +9,7 @@ This document defines discovery message semantics, signing, memo wire format, bo
 2. **Canonical signing representation** — deterministic CBOR **map** + domain prefix (`zadp1-sign-v1`).
 3. **Memo wire representation** — fixed 512-byte ZIP 302 framing + CBOR **tuple** (implemented for `offer`).
 
-Live mainnet publish → scan → index → API acceptance is **not** claimed complete by this document.
+Live mainnet publish → scan → index → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
 
 ## Design constraints
 

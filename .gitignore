@@ -23,3 +23,7 @@
 
 # Local Codex ↔ Cursor task inbox (runtime queue + docs stay local)
 /assistant-agent/
+
+# Local Python caches
+__pycache__/
+*.pyc

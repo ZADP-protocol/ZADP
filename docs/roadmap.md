@@ -1,6 +1,6 @@
 # ZADP Roadmap
 
-Status labels reflect the **reference repository today**. Live mainnet publish → mine → scan → API acceptance is **not** complete.
+Status labels reflect the **reference repository today**. First live mainnet publish → mine → scan → API acceptance completed on 2026-10-05; [public evidence](./mainnet-acceptance.md). Paid fulfillment remains mocked.
 
 ## DONE
 
@@ -15,19 +15,17 @@ Status labels reflect the **reference repository today**. Live mainnet publish �
 - Mock vertical slice: invoice / policy / mock pay / fulfill (`zadp-demo`).
 - Offline tests including real Orchard note encryption and independent SQLite reconstructions.
 - Docs + CI (fmt, clippy, workspace tests, demo smoke).
+- First mined mainnet OFFER, independently reconstructed by two fresh indices.
+- Reviewed Zallet library scan fixes with pinned sources and regression tests.
+- Local UI: offer browsing/search/details and browser-local unsigned drafts.
 
 ## IN PROGRESS
 
-- Operator prep for funded local Zallet + lightwalletd against a dedicated board (no acceptance claimed yet).
+- Extend locally tested UI with reviewed wallet readiness and unsigned fee preview; neither is connected yet.
 
 ## NEXT (priority order)
 
-1. **Live mainnet acceptance** — see checklist in [mainnet-publishing.md](./mainnet-publishing.md):
-   - provision dedicated board/seller accounts, Orchard-only UA + UIVK, signed descriptor + birthday
-   - human seller funding; dry-run fee preview; explicit publication confirmation
-   - broadcast → mine → scanner → `/offers`
-   - **second scanner with the same descriptor and a fresh empty database** must reconstruct the same offer identity/inclusion metadata
-   - archive public evidence only (no wallet secrets)
+1. **Local UI integration** — real wallet readiness and fee preview without browser custody; keep any publication behind explicit human review.
 2. Stable self-hosted API / ops docs (bind, TLS termination, sync readiness beyond `/healthz`).
 3. Optional hosted indexing / high-availability API (commercial; protocol stays self-hostable).
 4. Agent / MCP buyer tools with strict schemas (still no spending keys in the model).
@@ -38,7 +36,7 @@ Status labels reflect the **reference repository today**. Live mainnet publish �
 - `offer_update` / `offer_revoke` wire acceptance.
 - Portable delegated seller authorization beyond operator allowlists.
 - Stronger spam economics (proof-of-payment-to-publish, global quotas).
-- Web marketplace UI (no custody of user spending keys in the web tier).
+- Full marketplace purchasing UI beyond the current local discovery/draft interface (no custody of user spending keys in the web tier).
 - Reputation / trust data, private enterprise marketplaces.
 - Broader ecosystem: independent indexers, alternate wallets, community boards.
 

@@ -64,9 +64,10 @@ These are conceptual diagrams, not implementation specifications. Their illustra
 | Mainnet board HTTP: `GET /offers`, `GET /healthz` | **Implemented** |
 | Seller CLI: `identity-*`, `board-sign`, `publish` (Zallet PCZT) | **Implemented** (developer preview) |
 | Mock demo: invoice / policy / mock pay / fulfill | **Implemented** (local only) |
-| Live mainnet publish → mine → scan → API acceptance | **Pending** — not demonstrated |
+| Live mainnet publish → mine → scan → API acceptance | **Verified 2026-10-05** — mined OFFER + two independent indices; [public evidence](docs/mainnet-acceptance.md) |
 | Real shielded purchase settlement | **Not implemented** (mock only) |
-| MCP / web UI / reputation / hosted marketplace | **Not implemented** |
+| Local web UI | **Implemented** — read-only offers, search, details, browser-local unsigned drafts |
+| MCP / reputation / hosted marketplace | **Not implemented** |
 | `offer_update` / `offer_revoke` | **Specified only** |
 
 Do **not** treat CompactTxStreamer support or offline fixtures as proof of live-network acceptance.
@@ -191,13 +192,18 @@ ZADP is a **protocol**, not a mandatory marketplace. Operators can publish board
 
 ## Roadmap (summary)
 
-1. **Next:** live mainnet acceptance (publish → mine → scan → API), public evidence without wallet secrets
-2. Stable self-hosted API / ops docs
-3. Optional hosted indexing
-4. Agent/MCP buyer tools (still no spending keys in the model)
-5. Real shielded settlement beyond the mock demo
+1. **Done:** first live mainnet offer publication and independent discovery; [evidence](docs/mainnet-acceptance.md)
+2. **Next:** extend and locally test the UI; add reviewed wallet readiness and unsigned fee previews
+3. Stable self-hosted API / ops docs
+4. Optional hosted indexing
+5. Agent/MCP buyer tools (still no spending keys in the model)
+6. Real shielded settlement beyond the mock demo
 
 Details: [docs/roadmap.md](docs/roadmap.md).
+
+## Local interface
+
+Run `python3 ui/server.py` and open http://127.0.0.1:8090 with a local indexer on port 8080. The UI shows real indexed offers and saves unsigned drafts in the browser. It does not connect to the wallet, publish offers or execute purchases. See [UI instructions](ui/README.md).
 
 ## Development
 

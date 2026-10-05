@@ -8,7 +8,7 @@ Policy fields: `admission` (`open`/`authorized`), `authorized_sellers` (`ed25519
 
 ## Provisioning
 
-Use a **dedicated** local wallet account (separate from the seller spend account) to derive an Orchard-only UA and corresponding UIVK. The scanner must never receive a spending key, seed, or wallet credential. This implementation does not create or fund a production board wallet. Do not paste wallet secrets into an agent/chat.
+Use a **dedicated** local wallet account (separate from the seller spend account) to derive an Orchard-only UA and corresponding UIVK. The scanner must never receive a spending key, seed, or wallet credential. The first dedicated mainnet board was provisioned locally for the verified discovery test; the CLI does not automatically create or fund production wallets. Do not paste wallet secrets into an agent/chat.
 
 ### Human backup and sync (Zallet)
 

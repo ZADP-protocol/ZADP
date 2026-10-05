@@ -1,6 +1,6 @@
 # ZADP Threat Model
 
-This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, and the retained mock commerce demo. Live mainnet acceptance is **not** claimed complete.
+This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, and the retained mock commerce demo. First live mainnet discovery acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
 
 ## Assets
 

@@ -2,7 +2,7 @@
 
 **ZADP** (Zcash Agent Discovery Protocol) is an open protocol and reference implementation for discovering signed service offers published through Zcash shielded memos.
 
-This document describes the **current** architecture: real CompactTxStreamer scanning + SQLite indexing + read-only board API, plus a retained **mock** commerce vertical slice. Live mainnet publish → mine → scan → API acceptance is **not** claimed complete.
+This document describes the **current** architecture: real CompactTxStreamer scanning + SQLite indexing + read-only board API, plus a retained **mock** commerce vertical slice. The first live mainnet publish → mine → scan → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
 
 ## Goals
 
@@ -13,7 +13,7 @@ This document describes the **current** architecture: real CompactTxStreamer sca
 
 ## Non-goals (current milestone)
 
-Marketplace UI, reputation, escrow, DID, production hosted wallets, tokens, DAO governance, recommendation engines, and blockchain abstraction frameworks are out of scope.
+A local read-only UI is available in `ui/`; it proxies only public offers/health and stores unsigned drafts in the browser. Full marketplace purchasing, reputation, escrow, DID, production hosted wallets, tokens, DAO governance, recommendation engines, and blockchain abstraction frameworks remain out of scope.
 
 ## Conceptual layers
 
@@ -191,7 +191,8 @@ The open protocol and reference crates must remain useful without any hosted ser
 | Signed OFFER + memo framing + board binding | Implemented |
 | CompactTxStreamer scanner + SQLite indexer + `board_router` | Implemented (code + offline tests) |
 | Seller CLI publish (Zallet PCZT) | Implemented (developer preview) |
-| Live mainnet acceptance evidence | **Pending** |
+| Live mainnet acceptance evidence | **Verified 2026-10-05**, two independent indices |
+| Local web UI | Read-only offers + browser-local unsigned drafts; no wallet or purchase integration |
 | Real shielded purchase settlement | **Not implemented** (mock only) |
 | `offer_update` / `offer_revoke` | Specified only |
 
