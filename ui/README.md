@@ -7,7 +7,7 @@ Alternative ports: `--port 8091 --indexer-port 8081`.
 The interface is English-only.
 
 No npm packages or build step are needed. The server binds to loopback only,
-serves three fixed assets, and proxies only GET /offers and GET /healthz to a
+serves fixed assets, and proxies only GET /offers and GET /healthz to a
 fixed loopback indexer. It has no wallet credentials or publication routes.
 Offers are rendered as text, never HTML. Drafts stay in browser localStorage
 and can be downloaded as unsigned JSON; they are not protocol publications.
@@ -26,3 +26,16 @@ submissions rejected. The server never fetches offer endpoints.
 
 It is not the service advertised by the existing mainnet placeholder OFFER.
 Actual payment verification and paid fulfillment are still unimplemented.
+
+## Unsigned memo size preview
+
+The draft form counts the CBOR-encoded UTF-8 payload against its 504-byte
+budget. It includes the board ID, 26-character ULID, 32-byte public identity,
+16-byte nonce, 64-byte signature and a 24-hour lifetime. Positive ZEC amounts
+must have at most eight decimal places; endpoints must use HTTPS without
+embedded credentials. Oversized or invalid drafts cannot be saved/exported.
+Optional descriptions use the same shared byte budget.
+
+This is a protocol-v1 size preview, not a signed-board policy check, fee quote
+or publication approval. The Rust publication encoder remains authoritative.
+Run `node ui/test_memo_budget.js` for boundary and Unicode tests.

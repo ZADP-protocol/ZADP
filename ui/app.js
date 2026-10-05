@@ -48,9 +48,25 @@ for(const button of document.querySelectorAll('[data-tab]')) button.addEventList
 });
 $('search').addEventListener('input',render); $('refresh').addEventListener('click',refresh); $('close').addEventListener('click',()=>$('detail').close());
 function draft() { return Object.fromEntries(new FormData(form)); }
+function checkBudget() {
+  try {
+    const budget = memoBudget(draft());
+    $('memo-budget').textContent = budget.fits
+      ? `${budget.used} / ${budget.limit} payload bytes · ${budget.remaining} bytes available`
+      : `${budget.used} / ${budget.limit} payload bytes · ${-budget.remaining} bytes over the limit. Shorten the name, description or endpoint.`;
+    $('save-draft').disabled = !budget.fits; $('export').disabled = !budget.fits;
+    return budget.fits;
+  } catch (error) {
+    $('memo-budget').textContent = error.message;
+    $('save-draft').disabled = true; $('export').disabled = true;
+    return false;
+  }
+}
+form.addEventListener('input', checkBudget);
 try { const saved=JSON.parse(localStorage.getItem(draftKey)); if(saved) for(const [key,value] of Object.entries(saved)) if(form.elements.namedItem(key)) form.elements.namedItem(key).value=value; } catch {}
-form.addEventListener('submit',event=>{event.preventDefault();try { localStorage.setItem(draftKey,JSON.stringify(draft())); $('draft-message').textContent='Draft saved in this browser. It has not been published.'; } catch { $('draft-message').textContent='Could not save the draft. You can download it as a file.'; }});
-$('export').addEventListener('click',()=>{if(!form.reportValidity())return; const url=URL.createObjectURL(new Blob([JSON.stringify({type:'unsigned-ui-draft',...draft()},null,2)],{type:'application/json'}));const a=element('a','');a.href=url;a.download='zadp-offer-draft.json';a.click();URL.revokeObjectURL(url);});
+checkBudget();
+form.addEventListener('submit',event=>{event.preventDefault();if(!checkBudget())return;try { localStorage.setItem(draftKey,JSON.stringify(draft())); $('draft-message').textContent='Draft saved in this browser. It has not been published.'; } catch { $('draft-message').textContent='Could not save the draft. You can download it as a file.'; }});
+$('export').addEventListener('click',()=>{if(!form.reportValidity() || !checkBudget())return; const url=URL.createObjectURL(new Blob([JSON.stringify({type:'unsigned-ui-draft',...draft()},null,2)],{type:'application/json'}));const a=element('a','');a.href=url;a.download='zadp-offer-draft.json';a.click();URL.revokeObjectURL(url);});
 refresh();
 
 $('test-form').addEventListener('submit', async event => {
