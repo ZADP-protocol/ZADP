@@ -1,3 +1,4 @@
+import json
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -37,7 +38,25 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 404)
         with self.assertRaises(HTTPError) as error:
             urlopen(Request(self.url + '/api/offers', data=b'{}'))
-        self.assertEqual(error.exception.code, 501)
+        self.assertEqual(error.exception.code, 404)
+    def test_local_service_limits_and_no_payment(self):
+        request = Request(self.url + '/api/test-service/summarize',
+                          data=json.dumps({'text': 'One. Two! Three? Four.'}).encode(),
+                          headers={'Content-Type': 'application/json'})
+        with urlopen(request) as response:
+            result = json.load(response)
+        self.assertEqual(result['summary'], 'One. Two! Three?')
+        self.assertFalse(result['payment_required'])
+        self.assertFalse(result['published_on_chain'])
+        for text in ('', 'x' * 4001):
+            request.data = json.dumps({'text': text}).encode()
+            with self.assertRaises(HTTPError) as error: urlopen(request)
+            self.assertEqual(error.exception.code, 400)
+        request.data = json.dumps({'text': 'Hello.'}).encode()
+        request.add_header('Origin', 'https://untrusted.example')
+        with self.assertRaises(HTTPError) as error: urlopen(request)
+        self.assertEqual(error.exception.code, 403)
+
     def test_asset_has_security_headers(self):
         with urlopen(self.url) as response:
             self.assertIn(b'ZADP', response.read())

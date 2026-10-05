@@ -79,7 +79,20 @@ Do **not** treat CompactTxStreamer support or offline fixtures as proof of live-
 3. **Commerce** — buyer contacts the seller `endpoint` directly (HTTP).
 4. **Settlement** — future/related flow: shielded ZEC buyer→seller; not the board-discovery path.
 
-Indexers must never need a spending key to discover offers. Details: [docs/protocol.md](docs/protocol.md).
+### Read offers without control of funds
+
+An indexer uses the board's **Unified Incoming Viewing Key (UIVK)** to decrypt
+incoming board outputs and read their offer memos and values. This key **cannot
+sign transactions or spend ZEC**. It is intentionally included in the signed
+public board descriptor, so independent operators can reconstruct discovery
+without access to a wallet or its spending keys. The first mainnet offer was
+verified this way by two independent indices.
+
+The browser UI only reads the indexer's HTTP API; it does not need even the
+UIVK. Publish only a dedicated board's incoming viewing authority: never a
+personal seller viewing key, full viewing key, seed or spending key. Board
+content is readable by descriptor holders; this is public discovery, not a
+confidential mailbox. Details: [board descriptor](docs/board-descriptor.md).
 
 ## Zcash architecture
 
@@ -203,7 +216,7 @@ Details: [docs/roadmap.md](docs/roadmap.md).
 
 ## Local interface
 
-Run `python3 ui/server.py` and open http://127.0.0.1:8090 with a local indexer on port 8080. The UI shows real indexed offers and saves unsigned drafts in the browser. It does not connect to the wallet, publish offers or execute purchases. See [UI instructions](ui/README.md).
+Run `python3 ui/server.py` and open http://127.0.0.1:8090 with a local indexer on port 8080. The English-only UI shows real indexed offers, saves unsigned drafts in the browser, and includes a free local text-shortening test service (no AI model or payment). It does not connect to the wallet, publish offers or execute purchases. See [UI instructions](ui/README.md).
 
 ## Development
 

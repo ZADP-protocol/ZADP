@@ -6,6 +6,18 @@ The JSON has two top-level fields: `board` and `signature`. `board` contains `za
 
 Policy fields: `admission` (`open`/`authorized`), `authorized_sellers` (`ed25519:`-prefixed base64 Ed25519 public keys), `max_offer_ttl_seconds`, `min_listing_value_zat`, `max_active_offers_per_seller`, `max_publications_per_seller_per_window`, `rate_window_seconds`, `confirmed_after_blocks`, `max_clock_skew_seconds`. All fields are explicit; see `BoardPolicy::default` for suggested values. The listing value is a board charge, **not the network fee**. Authorized mode uses an operator-signed allowlist; portable per-seller authorization certificates are future work.
 
+## Read-only discovery is independent of custody
+
+A UIVK lets an indexer decrypt incoming notes and read OFFER memos/values. It
+cannot authorize a spend, create a transaction signature, or take control of
+funds. Independent indices need the signed public descriptor and chain data,
+not wallet authentication or spending keys. The web UI can use an indexer's
+HTTP API without holding any viewing key itself.
+
+The board UIVK is intentionally public. A personal seller UIVK is not: sharing
+it would disclose that account's incoming activity. Do not export a UFVK or
+reuse a personal account for the public board.
+
 ## Provisioning
 
 Use a **dedicated** local wallet account (separate from the seller spend account) to derive an Orchard-only UA and corresponding UIVK. The scanner must never receive a spending key, seed, or wallet credential. The first dedicated mainnet board was provisioned locally for the verified discovery test; the CLI does not automatically create or fund production wallets. Do not paste wallet secrets into an agent/chat.
