@@ -306,6 +306,6 @@ There is **no** `GET /offers/{id}` on `board_router`.
 | OFFER signing + board-bound memo wire | Implemented |
 | Board descriptor + admission | Implemented |
 | CompactTxStreamer scan + SQLite index | Implemented |
-| Live mainnet acceptance | **Pending** |
+| Live mainnet discovery acceptance | **Verified 2026-10-05** — mined OFFER and two independent indices; [public evidence](./mainnet-acceptance.md) |
 | Real shielded settlement | **Not implemented** (mock only) |
 | OFFER_UPDATE / OFFER_REVOKE wire | **Not implemented** |

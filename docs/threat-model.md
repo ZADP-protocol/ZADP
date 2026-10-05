@@ -132,7 +132,6 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 - Mock commerce provides **no** real privacy or settlement.
 - No consensus-level spam resistance on `open` boards.
 - No production API authentication or TLS termination in-tree.
-- Live funded mainnet acceptance evidence not yet produced.
 
 ## Security checklist for contributors
 
