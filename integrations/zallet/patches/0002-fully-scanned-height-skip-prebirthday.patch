@@ -1,0 +1,207 @@
+diff --git a/zcash_client_sqlite/src/wallet.rs b/zcash_client_sqlite/src/wallet.rs
+index 6a2ad6c47..77ee3b449 100644
+--- a/zcash_client_sqlite/src/wallet.rs
++++ b/zcash_client_sqlite/src/wallet.rs
+@@ -3550,13 +3550,16 @@ pub(crate) fn fully_scanned_height(
+     // mean that we return a more conservative fully-scanned height, which likely just causes a
+     // performance regression.
+     //
+-    // The fully-scanned height is therefore the last height that falls within the first range in
+-    // the scan queue with priority "Scanned".
++    // Stale Scanned ranges that end at or before the wallet birthday (e.g. leftovers from a
++    // previous no-account sync) must be ignored: they do not cover any birthday-through-tip
++    // progress. The fully-scanned height is therefore the last height that falls within the
++    // earliest Scanned range that still extends past the birthday, provided that range also
++    // starts at or before the birthday (so there is no unscanned gap after the birthday).
+     let calc_fully_scanned_height = |row: &rusqlite::Row| {
+         let block_range_start = BlockHeight::from_u32(row.get(0)?);
+         let block_range_end = BlockHeight::from_u32(row.get(1)?);
+ 
+-        // If the start of the earliest scanned range is greater than
++        // If the start of the earliest relevant scanned range is greater than
+         // the birthday height, then there is an unscanned range between
+         // the wallet birthday and that range, so there is no fully
+         // scanned height.
+@@ -3572,9 +3575,13 @@ pub(crate) fn fully_scanned_height(
+             "SELECT block_range_start, block_range_end
+             FROM scan_queue
+             WHERE priority = :priority
++              AND block_range_end > :birthday
+             ORDER BY block_range_start ASC
+             LIMIT 1",
+-            named_params![":priority": priority_code(&ScanPriority::Scanned)],
++            named_params![
++                ":priority": priority_code(&ScanPriority::Scanned),
++                ":birthday": u32::from(birthday_height),
++            ],
+             calc_fully_scanned_height,
+         )
+         .optional()?
+@@ -6096,6 +6103,7 @@ mod tests {
+         WalletWrite,
+         chain::{ChainState, CommitmentTreeRoot},
+         error::RewindError,
++        scanning::ScanPriority,
+         testing::{
+             AddressType, DataStoreFactory, FakeCompactOutput, InitialChainState, TestBuilder,
+             TestState, pool::ShieldedPoolTester, sapling::SaplingPoolTester,
+@@ -6115,12 +6123,14 @@ mod tests {
+         AccountUuid,
+         error::SqliteClientError,
+         testing::{BlockCache, db::TestDbFactory},
++        wallet::scanning::priority_code,
+     };
+ 
+     use super::{
+         KeyScope, ShieldedPool, TxQueryType, TxRef, account_birthday, chain_tip_height,
+-        flag_previously_received_change, get_transaction, min_shared_checkpoint_height, parse_tx,
+-        put_zip318_classification, queue_tx_retrieval, select_truncation_height,
++        flag_previously_received_change, fully_scanned_height, get_transaction,
++        min_shared_checkpoint_height, parse_tx, put_zip318_classification, queue_tx_retrieval,
++        select_truncation_height,
+     };
+ 
+     use incrementalmerkletree::frontier::Frontier;
+@@ -6577,6 +6587,142 @@ mod tests {
+         assert_eq!(block_fully_scanned(&st), Some(end_height));
+     }
+ 
++    /// Synthetic `scan_queue` fixture only — production code never mutates via raw SQL.
++    fn replace_scan_queue_fixture(conn: &Connection, rows: &[(u32, u32, ScanPriority)]) {
++        conn.execute("DELETE FROM scan_queue", []).unwrap();
++        for &(start, end, priority) in rows {
++            conn.execute(
++                "INSERT INTO scan_queue (block_range_start, block_range_end, priority)
++                 VALUES (:start, :end, :priority)",
++                named_params![
++                    ":start": start,
++                    ":end": end,
++                    ":priority": priority_code(&priority),
++                ],
++            )
++            .unwrap();
++        }
++    }
++
++    fn birthday_wallet() -> TestState<BlockCache, TestDb, LocalNetwork> {
++        TestBuilder::new()
++            .with_data_store_factory(TestDbFactory::default())
++            .with_block_cache(BlockCache::new())
++            .with_account_from_sapling_activation(BlockHash([0; 32]))
++            .build()
++    }
++
++    #[test]
++    fn fully_scanned_height_ignores_stale_prebirthday_scanned() {
++        let st = birthday_wallet();
++        let birthday = u32::from(st.sapling_activation_height());
++        let tip_end = birthday + 500;
++
++        // Old no-account Scanned below birthday, Ignored gap, then genuine Scanned covering
++        // birthday through a recent tip — the pre-birthday leftover must not win selection.
++        replace_scan_queue_fixture(
++            st.wallet().conn(),
++            &[
++                (8_367, 21_354, ScanPriority::Scanned),
++                (21_354, birthday, ScanPriority::Ignored),
++                (birthday, tip_end, ScanPriority::Scanned),
++            ],
++        );
++
++        assert_eq!(
++            fully_scanned_height(st.wallet().conn()).unwrap(),
++            Some(BlockHeight::from_u32(tip_end - 1))
++        );
++    }
++
++    #[test]
++    fn fully_scanned_height_none_when_only_prebirthday_scanned() {
++        let st = birthday_wallet();
++        let birthday = u32::from(st.sapling_activation_height());
++
++        replace_scan_queue_fixture(
++            st.wallet().conn(),
++            &[
++                (8_367, 21_354, ScanPriority::Scanned),
++                (21_354, birthday + 200, ScanPriority::Historic),
++            ],
++        );
++
++        assert_eq!(fully_scanned_height(st.wallet().conn()).unwrap(), None);
++    }
++
++    #[test]
++    fn fully_scanned_height_none_when_first_relevant_starts_after_birthday() {
++        let st = birthday_wallet();
++        let birthday = u32::from(st.sapling_activation_height());
++
++        replace_scan_queue_fixture(
++            st.wallet().conn(),
++            &[
++                (8_367, birthday, ScanPriority::Scanned),
++                (birthday + 10, birthday + 200, ScanPriority::Scanned),
++            ],
++        );
++
++        assert_eq!(fully_scanned_height(st.wallet().conn()).unwrap(), None);
++    }
++
++    #[test]
++    fn fully_scanned_height_stops_at_containing_range_with_later_gap() {
++        let st = birthday_wallet();
++        let birthday = u32::from(st.sapling_activation_height());
++        let mid = birthday + 50;
++        let tip_end = birthday + 200;
++
++        // Contiguous Scanned covering birthday ends mid-way; later Scanned after a gap must not
++        // inflate progress past the gap.
++        replace_scan_queue_fixture(
++            st.wallet().conn(),
++            &[
++                (birthday - 10, mid, ScanPriority::Scanned),
++                (mid, mid + 20, ScanPriority::Historic),
++                (mid + 20, tip_end, ScanPriority::Scanned),
++            ],
++        );
++
++        assert_eq!(
++            fully_scanned_height(st.wallet().conn()).unwrap(),
++            Some(BlockHeight::from_u32(mid - 1))
++        );
++    }
++
++    #[test]
++    fn fully_scanned_height_excludes_scanned_ending_at_birthday() {
++        let st = birthday_wallet();
++        let birthday = u32::from(st.sapling_activation_height());
++
++        // End-exclusive range ending at birthday covers only up to birthday-1, so birthday itself
++        // is unscanned — must not report a fully-scanned height from that leftover alone.
++        replace_scan_queue_fixture(
++            st.wallet().conn(),
++            &[
++                (1_000, birthday, ScanPriority::Scanned),
++                (birthday + 1, birthday + 100, ScanPriority::Scanned),
++            ],
++        );
++
++        assert_eq!(fully_scanned_height(st.wallet().conn()).unwrap(), None);
++    }
++
++    #[test]
++    fn fully_scanned_height_none_without_accounts() {
++        let st = TestBuilder::new()
++            .with_data_store_factory(TestDbFactory::default())
++            .build();
++
++        replace_scan_queue_fixture(
++            st.wallet().conn(),
++            &[(1_000, 50_000, ScanPriority::Scanned)],
++        );
++
++        assert_eq!(fully_scanned_height(st.wallet().conn()).unwrap(), None);
++    }
++
+     #[test]
+     fn test_account_birthday() {
+         let st = TestBuilder::new()

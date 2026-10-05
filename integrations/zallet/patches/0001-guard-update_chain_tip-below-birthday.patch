@@ -1,0 +1,116 @@
+diff --git a/zcash_client_sqlite/src/wallet/scanning.rs b/zcash_client_sqlite/src/wallet/scanning.rs
+index ac6a23124..38a30f270 100644
+--- a/zcash_client_sqlite/src/wallet/scanning.rs
++++ b/zcash_client_sqlite/src/wallet/scanning.rs
+@@ -620,6 +620,18 @@ pub(crate) fn update_chain_tip<P: consensus::Parameters>(
+         _ => (),
+     };
+ 
++    // If the caller's chain tip is still below the wallet birthday, the chain view is
++    // behind account creation (stale/lagging tip). Rewriting tip-relative scan ranges
++    // would either construct inverted `ScanRange`s (birthday..tip+1 with birthday >
++    // tip+1) or shrink coverage incorrectly. Leave the existing queue intact; callers
++    // retry once tip >= birthday. This does not suppress reorg handling above: that
++    // path already returned when `new_tip < max_scanned`.
++    if let Some(b) = wallet_birthday {
++        if new_tip < b {
++            return Ok(());
++        }
++    }
++
+     // `ScanRange` uses an exclusive upper bound.
+     let chain_end = new_tip + 1;
+ 
+@@ -644,10 +656,13 @@ pub(crate) fn update_chain_tip<P: consensus::Parameters>(
+     // Create a scanning range for the fragment of the last shard leading up to new tip.
+     // We set a lower bound at the wallet birthday (if known), because account creation
+     // requires specifying a tree frontier that ensures we don't need tree information
+-    // prior to the birthday.
+-    let tip_shard_entry = min_shard_tip.filter(|h| h < &chain_end).map(|h| {
++    // prior to the birthday. Skip when the birthday clamp would invert the range
++    // (defensive; the tip-below-birthday early return above is the primary guard).
++    let tip_shard_entry = min_shard_tip.filter(|h| h < &chain_end).and_then(|h| {
+         let min_to_scan = wallet_birthday.filter(|b| b > &h).unwrap_or(h);
+-        ScanRange::from_parts(min_to_scan..chain_end, ScanPriority::ChainTip)
++        (min_to_scan < chain_end).then(|| {
++            ScanRange::from_parts(min_to_scan..chain_end, ScanPriority::ChainTip)
++        })
+     });
+ 
+     // Create scan ranges to either validate potentially invalid blocks at the wallet's
+@@ -661,9 +676,14 @@ pub(crate) fn update_chain_tip<P: consensus::Parameters>(
+                 // We can therefore ignore all blocks up to the chain tip.
+                 || ScanRange::from_parts(sapling_activation..chain_end, ScanPriority::Ignored),
+                 // We have a wallet birthday, so mark all blocks between that and the
+-                // chain tip as `Historic` (performing wallet recovery).
++                // chain tip as `Historic` (performing wallet recovery). Empty when the
++                // tip has not yet reached the birthday (should have early-returned).
+                 |wallet_birthday| {
+-                    ScanRange::from_parts(wallet_birthday..chain_end, ScanPriority::Historic)
++                    if wallet_birthday < chain_end {
++                        ScanRange::from_parts(wallet_birthday..chain_end, ScanPriority::Historic)
++                    } else {
++                        ScanRange::from_parts(chain_end..chain_end, ScanPriority::Historic)
++                    }
+                 },
+             )
+         },
+@@ -1276,6 +1296,58 @@ pub(crate) mod tests {
+         assert_eq!(actual, expected);
+     }
+ 
++    #[test]
++    fn sapling_update_chain_tip_skips_when_tip_below_birthday() {
++        update_chain_tip_skips_when_tip_below_birthday::<SaplingPoolTester>();
++    }
++
++    #[test]
++    #[cfg(feature = "orchard")]
++    fn orchard_update_chain_tip_skips_when_tip_below_birthday() {
++        update_chain_tip_skips_when_tip_below_birthday::<OrchardPoolTester>();
++    }
++
++    /// Regression: a no-scanned-block wallet with shard metadata and birthday above the
++    /// supplied tip must not construct inverted `ChainTip`/`Historic` ranges (previously
++    /// panicked in `ScanRange::from_parts`). The scan queue stays intact until tip catches up.
++    fn update_chain_tip_skips_when_tip_below_birthday<T: ShieldedPoolTester>() {
++        // Use a non-zero birthday offset because Sapling and NU5 are activated at the same height.
++        let (mut st, _, birthday, _sap_active) =
++            test_with_nu5_birthday_offset::<T>(76, 1000, BlockHash([0; 32]), true);
++        let b = birthday.height();
++
++        // Lagging tip before any tip-above-birthday update: must not panic, queue unchanged.
++        let before_any_tip_advance = suggest_scan_ranges(st.wallet().conn(), Ignored).unwrap();
++        let lagging_tip = b - 1000;
++        st.wallet_mut().update_chain_tip(lagging_tip).unwrap();
++        assert_eq!(
++            suggest_scan_ranges(st.wallet().conn(), Ignored).unwrap(),
++            before_any_tip_advance,
++            "tip below birthday must leave the scan queue intact"
++        );
++
++        // Control: normal catch-up once the tip is at/above the birthday.
++        let tip_height = b + 500;
++        st.wallet_mut().update_chain_tip(tip_height).unwrap();
++        let chain_end = u32::from(tip_height + 1);
++        let after_catch_up = suggest_scan_ranges(st.wallet().conn(), Ignored).unwrap();
++        assert!(
++            after_catch_up.iter().any(|r| {
++                r.priority() == ChainTip && u32::from(r.block_range().end) == chain_end
++            }),
++            "catch-up must schedule ChainTip through the new tip; got {after_catch_up:?}"
++        );
++
++        // A subsequent lagging tip must still refuse to rewrite the healthy queue.
++        let healthy = after_catch_up.clone();
++        st.wallet_mut().update_chain_tip(lagging_tip).unwrap();
++        assert_eq!(
++            suggest_scan_ranges(st.wallet().conn(), Ignored).unwrap(),
++            healthy,
++            "lagging tip after catch-up must not shrink or invert the scan queue"
++        );
++    }
++
+     #[test]
+     fn sapling_update_chain_tip_unstable_max_scanned() {
+         update_chain_tip_unstable_max_scanned::<SaplingPoolTester>();

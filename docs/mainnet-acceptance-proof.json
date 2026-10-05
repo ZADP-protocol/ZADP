@@ -1,0 +1,42 @@
+{
+  "observed_at_utc": "2026-10-05T19:25:49.068307+00:00",
+  "network": "mainnet",
+  "transaction_id": "d85939f3c7f1b993cfa05edeeeb4f7cad9d81fc21663acac233e8cfc52ac723c",
+  "offer_id": "01M46R4A8RQQCTG12FC9XG066S",
+  "title": "ZADP mainnet discovery test",
+  "endpoint": "https://example.com/zadp",
+  "endpoint_is_placeholder": true,
+  "block_height": 3507498,
+  "confirmations": 5,
+  "board_fingerprint": "e23cfe406a9a644ec753d023da415ef3e0d0531cb97f9d700deba6e632d969a4",
+  "listing_value_zat": 1000,
+  "network_fee_zat": 25000,
+  "total_cost_zat": 26000,
+  "http_get_offers_verified": true,
+  "two_indices_reconstructed_same_signed_offer": true,
+  "indices": [
+    {
+      "index": "indexer-a",
+      "fresh_independent_database": true,
+      "scan_start_height": 3507246,
+      "scanned_height": 3507502,
+      "matching_offer": true,
+      "matching_transaction": true,
+      "listing_value_zat": 1000,
+      "pool": "ironwood",
+      "rejected_count": 0
+    },
+    {
+      "index": "indexer-b",
+      "fresh_independent_database": true,
+      "scan_start_height": 3507246,
+      "scanned_height": 3507500,
+      "matching_offer": true,
+      "matching_transaction": true,
+      "listing_value_zat": 1000,
+      "pool": "ironwood",
+      "rejected_count": 0
+    }
+  ],
+  "scope": "Live offer publication and discovery only; paid service execution remains mocked."
+}

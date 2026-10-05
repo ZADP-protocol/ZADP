@@ -8,7 +8,7 @@ A permissionless service-discovery protocol where sellers publish signed offers 
 
 ![ZADP concept: sellers publish shielded offers, independent indexers expose discovery, and humans or agents consume it](docs/images/zadp-ecosystem-concept.jpg)
 
-*Concept illustration. Web/game interfaces, autonomous buyers and real purchase settlement are planned capabilities; live mainnet discovery acceptance is still pending.*
+*Concept illustration. Web/game interfaces, autonomous buyers and real purchase settlement are planned capabilities; live mainnet publication and independent discovery were verified on 2026-10-05. Paid service execution remains planned.*
 
 ## Why ZADP?
 
