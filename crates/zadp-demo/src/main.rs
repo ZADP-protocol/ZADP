@@ -1,4 +1,4 @@
-//! ZADP Phase 1 end-to-end demo (mock Zcash).
+//! ZADP local end-to-end demo (mock Zcash).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,7 +26,9 @@ async fn main() -> Result<()> {
         .init();
 
     println!("ZADP demo\n");
-    println!("Note: Zcash publish/scan/pay/observe are MOCKED in Phase 1.\n");
+    println!(
+        "Note: this demo mocks Zcash publish/scan/pay/observe; it does not access a wallet.\n"
+    );
 
     let adapter = Arc::new(MockZcashAdapter::new());
     let repo = Arc::new(InMemoryOfferRepository::new());
@@ -44,7 +46,9 @@ async fn main() -> Result<()> {
     };
     let app = router(state);
     tokio::spawn(async move {
-        axum::serve(listener, app).await.expect("server");
+        if let Err(error) = axum::serve(listener, app).await {
+            tracing::error!(%error, "local demo server stopped");
+        }
     });
     // Brief wait for accept loop.
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -125,7 +129,10 @@ async fn main() -> Result<()> {
         offer_id: offer.id.clone(),
         amount,
         currency: "ZEC".into(),
-        pay_to: invoice_resp["pay_to"].as_str().unwrap().to_string(),
+        pay_to: invoice_resp["pay_to"]
+            .as_str()
+            .context("invoice pay_to missing")?
+            .to_string(),
         memo_hint: invoice_resp["memo_hint"].clone(),
     };
     let outcome = payment.request_payment(&view).await?;
@@ -162,7 +169,12 @@ async fn main() -> Result<()> {
     println!("  Running service...");
     println!();
     println!("Result:");
-    println!("  \"{}\"", result["output"].as_str().unwrap_or(""));
+    println!(
+        "  \"{}\"",
+        result["output"]
+            .as_str()
+            .context("service output missing")?
+    );
     println!();
 
     info!(%addr, "demo complete");

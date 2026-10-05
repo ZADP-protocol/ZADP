@@ -171,9 +171,10 @@ pub struct ApiError {
 
 impl ApiError {
     fn internal(message: impl Into<String>) -> Self {
+        tracing::warn!(error = %message.into(), "repository request failed");
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
-            message: message.into(),
+            message: "Internal server error".into(),
         }
     }
 

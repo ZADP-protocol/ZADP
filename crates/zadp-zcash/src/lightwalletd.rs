@@ -47,9 +47,13 @@ pub async fn connect_lightwalletd(
 ) -> Result<CompactTxStreamerClient<Channel>, ZcashError> {
     initialize_tls();
     let uri = url::Url::parse(url).map_err(|_| error("invalid lightwalletd URL"))?;
-    if !uri.username().is_empty() || uri.password().is_some() || uri.query().is_some() {
+    if !uri.username().is_empty()
+        || uri.password().is_some()
+        || uri.query().is_some()
+        || uri.fragment().is_some()
+    {
         return Err(error(
-            "credentials and query parameters are forbidden in lightwalletd URL",
+            "credentials, query parameters and fragments are forbidden in lightwalletd URL",
         ));
     }
     let local = matches!(uri.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));

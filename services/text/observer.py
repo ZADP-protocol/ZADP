@@ -21,7 +21,7 @@ class WalletObserver:
             raise ValueError('Observer requires credential-free loopback RPC URL')
         path = Path(auth_path)
         mode = path.lstat().st_mode
-        if not stat.S_ISREG(mode) or mode & 0o077:
+        if not stat.S_ISREG(mode) or mode & 0o077 or path.stat().st_uid != os.getuid():
             raise ValueError('Authentication file must be a protected regular file')
         self.url, self.path, self.account = url, path, account
         self.client = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
@@ -32,7 +32,7 @@ class WalletObserver:
         fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd, 'rb') as auth:
             info = os.fstat(auth.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
+            if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid():
                 raise ValueError('Unprotected authentication file')
             credentials = auth.read(4097).strip()
         if len(credentials) > 4096: raise ValueError('Invalid authentication file')
@@ -40,7 +40,9 @@ class WalletObserver:
             data=json.dumps({'jsonrpc':'2.0','id':'payment-observer','method':method,'params':params}).encode(),
             headers={'Content-Type':'application/json','Authorization':'Basic '+base64.b64encode(credentials).decode()})
         with self.client.open(request,timeout=10) as response:
-            value = json.load(response)
+            data=response.read(16*1024*1024+1)
+            if len(data)>16*1024*1024: raise ValueError('Observation too large')
+            value = json.loads(data)
         if value.get('error'): raise ValueError('Read-only observation failed')
         return value['result']
 

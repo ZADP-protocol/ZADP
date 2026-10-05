@@ -1,6 +1,6 @@
 [package]
 name = "zadp-zcash"
-description = "ZcashAdapter trait and MockZcashAdapter for ZADP"
+description = "Read-only Zcash board scanner and mock commerce adapter for ZADP"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

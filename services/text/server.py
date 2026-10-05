@@ -15,7 +15,7 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Never log tokens, request inputs, addresses or wallet responses.
 
     def respond(self, status, value):
-        data=json.dumps(value).encode()
+        data=json.dumps(value,ensure_ascii=False).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type','application/json')
         self.send_header('Content-Length',str(len(data)))
@@ -74,7 +74,7 @@ def main():
     args=parser.parse_args()
     os.umask(0o077)
     path=Path(args.config)
-    if not stat.S_ISREG(path.lstat().st_mode) or path.stat().st_mode & 0o077:
+    if not stat.S_ISREG(path.lstat().st_mode) or path.stat().st_mode & 0o077 or path.stat().st_uid != os.getuid():
         raise SystemExit('Config must be an owner-only regular file')
     config=json.loads(path.read_text())
     if config['network'] not in ('testnet','mainnet'): raise SystemExit('Choose an explicit network')
@@ -88,7 +88,7 @@ def main():
     context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version=ssl.TLSVersion.TLSv1_2
     key=Path(args.tls_key)
-    if not stat.S_ISREG(key.lstat().st_mode) or key.stat().st_mode & 0o077:
+    if not stat.S_ISREG(key.lstat().st_mode) or key.stat().st_mode & 0o077 or key.stat().st_uid != os.getuid():
         raise SystemExit('TLS key must be an owner-only regular file')
     context.load_cert_chain(args.tls_cert,args.tls_key)
     server.socket=context.wrap_socket(server.socket,server_side=True)

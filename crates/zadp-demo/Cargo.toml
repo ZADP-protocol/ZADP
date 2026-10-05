@@ -1,6 +1,6 @@
 [package]
 name = "zadp-demo"
-description = "End-to-end ZADP Phase 1 vertical slice demo"
+description = "End-to-end ZADP local mock vertical slice demo"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

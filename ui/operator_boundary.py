@@ -21,7 +21,7 @@ class Operator:
     def __init__(self, config_path):
         path=Path(config_path)
         info=path.lstat()
-        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid():
             raise ValueError('Operator config must be a protected regular file')
         self.config=json.loads(path.read_text())
         self.lock=threading.Lock()
@@ -35,13 +35,16 @@ class Operator:
         fd=os.open(self.config['wallet_auth_file'],os.O_RDONLY|os.O_NOFOLLOW)
         with os.fdopen(fd,'rb') as file:
             info=os.fstat(file.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077: raise ValueError()
+            if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid(): raise ValueError()
             auth=file.read(4097).strip()
         if len(auth)>4096: raise ValueError()
         request=urllib.request.Request(self.config['wallet_rpc'],
             data=json.dumps({'jsonrpc':'2.0','id':'ui-status','method':method,'params':params}).encode(),
             headers={'Content-Type':'application/json','Authorization':'Basic '+base64.b64encode(auth).decode()})
-        result=json.load(self.client.open(request,timeout=10))
+        with self.client.open(request,timeout=10) as response:
+            data=response.read(1_048_577)
+        if len(data)>1_048_576: raise ValueError()
+        result=json.loads(data)
         if result.get('error'): raise ValueError()
         return result['result']
 
@@ -110,8 +113,8 @@ class Operator:
         request=urllib.request.Request(config['endpoint'].rstrip('/')+route,
             data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
         with client.open(request,timeout=30) as response:
-            data=response.read(16385)
-        if len(data)>16384: raise ValueError()
+            data=response.read(32769)
+        if len(data)>32768: raise ValueError()
         result=json.loads(data)
         if operation=='invoice':
             if (result['pay_to']!=self.config['receive_address'] or result['offer_id']!=config['offer_id']

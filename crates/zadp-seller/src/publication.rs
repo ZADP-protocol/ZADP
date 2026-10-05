@@ -19,7 +19,8 @@ impl LocalWallet {
                 && matches!(url.host_str(), Some("127.0.0.1" | "[::1]"))
                 && url.username().is_empty()
                 && url.password().is_none()
-                && url.query().is_none(),
+                && url.query().is_none()
+                && url.fragment().is_none(),
             "wallet RPC must be an explicit loopback IP over HTTP without URL credentials"
         );
         let bytes = read_protected(auth)?;

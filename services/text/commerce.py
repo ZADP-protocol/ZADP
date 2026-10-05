@@ -3,6 +3,7 @@
 Wallet observations must come from a trusted local observer, never HTTP clients.
 """
 import hashlib
+import os
 import secrets
 import sqlite3
 import stat
@@ -28,7 +29,8 @@ class Commerce:
         path = Path(database)
         if not path.exists():
             path.touch(mode=0o600, exist_ok=False)
-        if not stat.S_ISREG(path.lstat().st_mode) or path.stat().st_mode & 0o077:
+        if (not stat.S_ISREG(path.lstat().st_mode) or path.stat().st_mode & 0o077
+            or path.stat().st_uid != os.getuid()):
             raise ValueError('Database must be owner-only')
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
@@ -49,6 +51,9 @@ class Commerce:
             raise ValueError('Input must contain 1 to 4000 characters')
         invoice_id, token = secrets.token_hex(16), secrets.token_urlsafe(32)
         with self.lock, self.db:
+            total=self.db.execute('SELECT count(*) FROM invoices').fetchone()[0]
+            if total >= 10000:
+                raise ValueError('Invoice storage limit reached; operator review required')
             count = self.db.execute('SELECT count(*) FROM invoices WHERE expires > ?', (now,)).fetchone()[0]
             if count >= 100:
                 raise ValueError('Service capacity reached')
