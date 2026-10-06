@@ -1,5 +1,7 @@
 # ZADP
 
+![ZADP neighborhood offerboard: private service discovery in a futuristic city](docs/images/zadp-neighborhood-offerboard.jpg)
+
 **Zcash Agent Discovery Protocol**
 
 [![ci](https://github.com/ZADP-protocol/ZADP/actions/workflows/ci.yml/badge.svg)](https://github.com/ZADP-protocol/ZADP/actions/workflows/ci.yml)
