@@ -66,3 +66,40 @@ localhost/127.0.0.1 SANs. Production needs publicly trusted HTTPS termination,
 rate limiting, request authentication/anti-abuse, retention/privacy policy and
 robust payment/refund semantics. Input is stored privately with the invoice;
 unlike the free demo it is not transient. No invoice data belongs in Git.
+
+## Explicit local self-payment test CLI
+
+`zadp-seller pay-test` can pay a fresh protected invoice from the existing
+seller wallet back to its verified external receiving address. This exercises
+actual shielded payment observation and fulfillment, but is not an independent
+buyer integration or a public service-discovery test.
+
+```sh
+cargo run -p zadp-seller -- pay-test \
+  --operator-config /protected/operator-config.json \
+  --invoice /protected/invoice.json \
+  --journal /protected/payment-journal.json \
+  --max-fee-zat 10000
+```
+
+The default only builds and inspects a wallet-created FullPrivacy proposal.
+After separate human authorization, `--execute` proves, signs, verifies the
+extracted shielded transaction and submits it once. The fee cap is a limit,
+not a fee estimate; actual policy comes from the local wallet. A protected
+recovery journal is created before signing and blocks repeat execution, even
+if submission fails or times out. Reconcile its transaction ID with the wallet
+and chain rather than deleting the journal or automatically retrying.
+
+The CLI verifies invoice amount/offer/memo/expiry, network-correct unified
+receiver, synchronized chain identity, exact final decrypted output and fee.
+Incoming viewing authority is used only inside the local process and never
+printed or saved. Auth files, invoice tokens and journals remain outside Git.
+Zallet may classify same-account payments as change even when explicitly
+addressed. Normal fulfillment continues to reject change. For this local test
+only, start the service with `--self-payment-journal /protected/payment-journal.json`.
+The owner-only journal must identify one already-broadcast transaction, invoice
+and exact amount on the configured network. Only that pinned transaction may
+satisfy the self-payment invoice, and the result is marked `self_payment_test`.
+Wrong memos, amounts, receivers, accounts, timing or confirmations still fail. The invoice amount stays in the same wallet and
+only the network fee reduces its net balance. Invoice settlement still needs
+three confirmations and the service's exact payment checks.

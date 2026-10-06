@@ -30,6 +30,18 @@ class CommerceTests(unittest.TestCase):
             old=self.output[key];self.output[key]=value
             self.assertEqual(self.run_order()['status'],'awaiting_payment',key)
             self.output[key]=old
+    def test_self_payment_requires_exact_operator_pinned_transaction(self):
+        self.output['is_change']=True
+        self.assertEqual(self.run_order()['status'],'awaiting_payment')
+        self.service.self_test_payment={'txid':self.tx['txid'],'invoice_id':self.invoice['invoice_id'],'amount_zat':1000}
+        self.assertTrue(self.run_order()['self_payment_test'])
+        for key,value in [('txid','b'*64),('invoice_id','other'),('amount_zat',999)]:
+            old=self.service.self_test_payment[key];self.service.self_test_payment[key]=value
+            self.assertEqual(self.run_order()['status'],'awaiting_payment')
+            self.service.self_test_payment[key]=old
+        self.output['memo']='other'
+        self.assertEqual(self.run_order()['status'],'awaiting_payment')
+
     def test_auth_expiry_and_sync_fail_closed(self):
         with self.assertRaises(PermissionError): self.run_order(token='wrong')
         self.assertEqual(self.run_order(synced=False)['status'],'observer_unavailable')

@@ -10,6 +10,28 @@ from commerce import Commerce
 from observer import WalletObserver
 
 
+def self_test_journal(path, config):
+    """Operator-only opt-in: pin a single already-broadcast local test payment."""
+    if path is None: return None
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+    with os.fdopen(fd,'rb') as file:
+        info=os.fstat(file.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid!=os.getuid():
+            raise ValueError('Self-payment journal must be a protected regular file')
+        data=file.read(4097)
+    if len(data)>4096: raise ValueError('Self-payment journal too large')
+    journal=json.loads(data)
+    if (journal.get('stage')!='broadcast_accepted' or journal.get('self_payment') is not True
+        or journal.get('network')!=config['network']
+        or type(journal.get('amount_zat')) is not int or journal['amount_zat']!=config['price_zat']):
+        raise ValueError('Self-payment journal mismatch')
+    for key,size in [('invoice_id',32),('txid',64)]:
+        value=journal.get(key)
+        if not isinstance(value,str) or len(value)!=size or any(c not in '0123456789abcdef' for c in value):
+            raise ValueError('Invalid self-payment journal identifier')
+    return {key:journal[key] for key in ('invoice_id','txid','amount_zat')}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Never log tokens, request inputs, addresses or wallet responses.
@@ -71,6 +93,7 @@ def main():
     parser.add_argument('--tls-cert',required=True)
     parser.add_argument('--tls-key',required=True)
     parser.add_argument('--port',type=int,default=8092)
+    parser.add_argument('--self-payment-journal',help='Opt-in local self-payment test: pin one protected broadcast journal')
     args=parser.parse_args()
     os.umask(0o077)
     path=Path(args.config)
@@ -82,7 +105,8 @@ def main():
     if not config['receive_address'].startswith(prefix): raise SystemExit('Receiver/network mismatch')
     server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
     server.commerce=Commerce(args.database,config['offer_id'],config['account_uuid'],
-                            config['receive_address'],config['price_zat'])
+                            config['receive_address'],config['price_zat'],
+                            self_test_payment=self_test_journal(args.self_payment_journal,config))
     server.observer=WalletObserver(config['wallet_rpc'],config['wallet_auth_file'],config['account_uuid'])
     server.network=config['network']
     context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

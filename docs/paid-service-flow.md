@@ -9,8 +9,14 @@ fulfillment. Tests use synthetic transactions. The UI can prepare instructions
 and check the local gate; it has no buyer signing/broadcasting route.
 
 A new discoverable service OFFER, public deployment or an explicitly agreed
-local-only demonstration, buyer transaction preview/policy approval and actual
-shielded payment/result acceptance remain pending. Do not replay the existing
+local-only demonstration and independent buyer transaction integration remain
+pending. The explicit `zadp-seller pay-test` CLI now supports an operator-approved
+self-payment from the existing seller wallet; its default is an unsigned proposal
+and `--execute` requires human authorization. Live fulfillment must be verified
+after three confirmations. A same-account test may be classified as change by
+Zallet; the service needs an explicit protected journal pin for that one invoice
+and transaction, returns `self_payment_test: true`, and keeps rejecting change
+by default. This does not prove an independent buyer purchase. Do not replay the existing
 placeholder OFFER. This document is a design, not spend authorization.
 
 ## Buyer state machine
@@ -102,3 +108,21 @@ three confirmations, exact seller evidence and deterministic output without
 publishing private invoice input/token, seller viewing authority or wallet data.
 Shielding protects payment details from parties without viewing authority; the
 seller sees its incoming payment, and endpoints may still learn IP/request metadata.
+
+## Verified local mainnet self-payment test
+
+On 2026-10-06 a human-authorized 1,000,000-zat self-payment to the existing
+seller wallet was mined at height 3,508,209:
+`6db5708efb021871052cc8508640592d8915edc782b1c63fc44a563731292428`.
+The actual wallet policy fee was 10,000 zat, and the local deterministic service
+returned its three-sentence result after three confirmations. The extracted
+transaction's receiver, amount, text memo, shielded-only pools and fee were
+verified before the single submission.
+
+Zallet classified the output as change. The default service correctly withheld
+the result; an explicit operator-only journal pin enabled this one self-payment
+test and the response was marked `self_payment_test: true`. No default change
+acceptance was enabled. This is evidence for local settlement/observation and
+fulfillment, not independent buyer acceptance, a newly published OFFER or a
+publicly available paid endpoint. Private invoice tokens, input, wallet account
+identifiers and incoming viewing authority are not part of this evidence.

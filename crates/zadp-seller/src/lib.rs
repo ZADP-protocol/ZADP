@@ -8,3 +8,5 @@ pub use service::{CreateInvoiceRequest, Invoice, InvoiceStatus, SellerService, S
 
 pub mod local;
 pub mod publication;
+
+pub mod purchase;

@@ -18,13 +18,14 @@ def shorten(text):
 
 
 class Commerce:
-    def __init__(self, database, offer_id, account, address, price_zat, confirmations=3):
+    def __init__(self, database, offer_id, account, address, price_zat, confirmations=3, self_test_payment=None):
         if not offer_id or not account or not address or type(price_zat) is not int or not 0 < price_zat <= 2100000000000000:
             raise ValueError('Invalid seller configuration')
         if not 1 <= confirmations <= 100:
             raise ValueError('Invalid confirmation threshold')
         self.offer_id, self.account, self.address = offer_id, account, address
         self.price_zat, self.confirmations = price_zat, confirmations
+        self.self_test_payment = dict(self_test_payment) if self_test_payment else None
         self.lock = threading.RLock()
         path = Path(database)
         if not path.exists():
@@ -93,7 +94,11 @@ class Commerce:
                     if (output.get('pool') not in ('sapling','orchard','ironwood')
                         or output.get('to_account') != row['account']
                         or output.get('to_address') != row['address']
-                        or output.get('is_change') is not False
+                        or (output.get('is_change') is not False and not (
+                            output.get('is_change') is True and self.self_test_payment
+                            and self.self_test_payment.get('txid') == txid
+                            and self.self_test_payment.get('invoice_id') == invoice_id
+                            and self.self_test_payment.get('amount_zat') == row['amount']))
                         or output.get('value') != row['amount']
                         or output.get('memo') != f'ZADP-PAY/1:{invoice_id}'
                         or not isinstance(index,int) or index < 0):
@@ -112,4 +117,7 @@ class Commerce:
                     self.db.execute('UPDATE invoices SET output=?,payment=? WHERE id=?', (result,payment,invoice_id))
             except sqlite3.IntegrityError:
                 return {'status':'payment_already_used'}
-            return {'status':'fulfilled','invoice_id':invoice_id,'output':result}
+            response = {'status':'fulfilled','invoice_id':invoice_id,'output':result}
+            if self.self_test_payment and self.self_test_payment.get('txid') == txid:
+                response['self_payment_test'] = True
+            return response

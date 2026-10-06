@@ -3757,6 +3757,7 @@ dependencies = [
  "zcash_primitives",
  "zcash_protocol",
  "zeroize",
+ "zip32",
 ]
 
 [[package]]

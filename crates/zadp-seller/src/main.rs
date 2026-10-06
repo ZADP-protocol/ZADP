@@ -51,6 +51,8 @@ enum Command {
         output: PathBuf,
     },
     Publish(Box<Publish>),
+    /// Pay a local self-payment test invoice using an existing protected wallet.
+    PayTest(Box<zadp_seller::purchase::Purchase>),
 }
 #[derive(clap::Args)]
 struct Publish {
@@ -128,6 +130,7 @@ async fn main() -> Result<()> {
             println!("Signed descriptor fingerprint: {}", board.fingerprint()?);
         }
         Command::Publish(args) => publish(*args).await?,
+        Command::PayTest(args) => zadp_seller::purchase::purchase(*args).await?,
     }
     Ok(())
 }
