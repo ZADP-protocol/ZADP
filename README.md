@@ -299,13 +299,13 @@ Scan the QR to load the recipient and amount; **add your sponsorship memo manual
 Manually enter this memo in your wallet before approving payment:
 
 ```text
-ZADP-SPONSOR|v1|principal|public=YOUR_NAME|url=https://YOUR_URL
+ZADP-SPONSOR|principal|public=YOUR_NAME|url=https://YOUR_URL
 ```
 
 Example:
 
 ```text
-ZADP-SPONSOR|v1|principal|public=AliceLabs|url=https://alice.example
+ZADP-SPONSOR|principal|public=AliceLabs|url=https://alice.example
 ```
 
 ## Sponsors
@@ -332,13 +332,13 @@ Scan the QR to load the recipient and amount; **add your sponsorship memo manual
 Manually enter this memo in your wallet before approving payment:
 
 ```text
-ZADP-SPONSOR|v1|sponsor|public=YOUR_NAME|url=https://YOUR_URL
+ZADP-SPONSOR|sponsor|public=YOUR_NAME|url=https://YOUR_URL
 ```
 
 Example:
 
 ```text
-ZADP-SPONSOR|v1|sponsor|public=AliceLabs|url=https://alice.example
+ZADP-SPONSOR|sponsor|public=AliceLabs|url=https://alice.example
 ```
 
 **Sponsor ZADP** — Purchase project sponsorship visibility with ZEC.
