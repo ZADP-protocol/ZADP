@@ -210,13 +210,23 @@ ZADP is a **protocol**, not a mandatory marketplace. Operators can publish board
 
 1. **Done:** first live mainnet offer publication and independent discovery; [evidence](docs/mainnet-acceptance.md)
 2. **Done:** locally tested English UI, Rust memo parity, read-only wallet and unsigned fee previews
-3. **Next:** approve a real paid service test after reviewing endpoint, invoice and transaction costs
-4. Stable self-hosted API / ops docs
-5. Optional hosted indexing
-6. Agent/MCP buyer tools (still no spending keys in the model)
-7. Production hardening and broader shielded purchase support
+3. **Done locally:** direct seller commerce reference, anonymous orders, ZIP-321 QR and mock fulfillment
+4. **Next:** approve an independent real buyer-to-seller test after reviewing endpoint, invoice and transaction costs
+5. Stable self-hosted API / ops docs
+6. Optional hosted indexing
+7. Agent/MCP buyer tools (still no spending keys in the model)
+8. Production hardening and broader shielded purchase support
 
 Details: [docs/roadmap.md](docs/roadmap.md).
+
+## Direct seller commerce reference
+
+The independently runnable Rust seller service implements anonymous, persistent
+`text.uppercase` orders. Browsers call the seller directly; discovery stores no
+buyer input, payment identifiers or results. Payment requests use ZIP-321 with
+a unique order memo and complete QR. The local vertical slice uses simulated
+evidence and sends no funds. See [Direct seller commerce](docs/commerce.md) for
+API, isolated demo, boundaries and the separate real-payment approval gate.
 
 ## Local interface
 
@@ -239,6 +249,7 @@ Operators may use a local file inbox for handing tasks between agents (pending â
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Direct seller commerce](docs/commerce.md)
 - [Multi-board indexing and policy boundaries](docs/multi-board.md)
 - [Protocol](docs/protocol.md)
 - [Board descriptor](docs/board-descriptor.md)

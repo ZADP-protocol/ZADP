@@ -8,7 +8,7 @@ from urllib.request import urlopen
 from operator_boundary import Operator
 
 ROOT = Path(__file__).resolve().parent
-ASSETS = {'/purchase.js': ('purchase.js', 'text/javascript'), '/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css'), '/memo-budget.js': ('memo-budget.js', 'text/javascript'), '/offers.js': ('offers.js', 'text/javascript')}
+ASSETS = {'/commerce.js': ('commerce.js', 'text/javascript'), '/vendor/qrcode.js': ('vendor/qrcode.js', 'text/javascript'), '/purchase.js': ('purchase.js', 'text/javascript'), '/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css'), '/memo-budget.js': ('memo-budget.js', 'text/javascript'), '/offers.js': ('offers.js', 'text/javascript')}
 
 def summarize(text):
     """Extract up to three leading sentences. This is not an AI model."""
@@ -130,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(data)))
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https: http://127.0.0.1:8094; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         self.end_headers()
         self.wfile.write(data)
 

@@ -9,7 +9,7 @@ function element(tag, text, cls) { const e = document.createElement(tag); e.text
 function details(o) {
   $('detail-title').textContent = o.title;
   const dl = $('detail-fields'); dl.replaceChildren();
-  const values = {'Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : 'Purchasing is not yet available.'};
+  const values = {'Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : (o.capability === 'text.uppercase' ? 'Direct seller commerce supported. Review the seller endpoint before creating an order.' : 'This capability does not yet have a reference buyer form.')};
   for (const [key,value] of Object.entries(values)) dl.append(element('dt',key),element('dd',String(value)));
   $('detail').showModal();
 }
@@ -23,7 +23,9 @@ function render() {
     const price = element('p',`${o.price.amount} `,'price'); price.append(element('small',o.price.currency));
     const btn = element('button','View details','secondary'); btn.addEventListener('click',()=>details(o));
     const active = o.chain?.offer_status === 'active';
-    card.append(element('span',o.capability,'badge'),element('p',`Board: ${offerBoard(o) || 'Unavailable'}`),element('h2',o.title),element('p',active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
+    card.append(element('span',o.capability,'badge'),element('p',`Board: ${offerBoard(o) || 'Unavailable'}`),element('h2',o.title),element('p',o.simulation===true ? 'Known local fixture · no blockchain transaction' : active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
+    if(o.simulation===true) {card.append(element('p','LOCAL SIMULATION · No on-chain discovery or real payment'));}
+    try {DirectCommerce.endpoint(o); const buy=element('button','Buy directly from seller','primary');buy.addEventListener('click',()=>selectCommerceOffer(o));card.append(buy);}catch{}
     if(o.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
     $('offers').append(card);
   }
@@ -175,3 +177,38 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)purchase.c
 setInterval(()=>{if(!document.hidden && purchase.state.invoice && !['fulfilled','expired','payment_mismatch','payment_already_used'].includes(purchase.state.phase))purchase.check();},15000);
 (async()=>{await purchase.restore();await purchase.check();})();
 $('refresh').addEventListener('click',walletStatus);
+
+let commerceOffer=null;
+const commerce=new DirectCommerce.Flow({storage:orderStorage,fetch:window.fetch.bind(window),randomKey:()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join(''),onChange:renderCommerce});
+function selectCommerceOffer(offer){
+  commerceOffer=offer;document.querySelector('[data-tab="commerce"]').click();renderCommerce(commerce);$('commerce-input').focus();
+}
+function renderCommerce(flow){
+  const offer=flow.saved?.offer || commerceOffer;const order=flow.order;
+  $('commerce-offer').textContent=offer ? `${offer.title} · ${offer.price.amount} ZEC · Seller: ${offer.endpoint}` : 'Choose Buy on a supported text.uppercase offer.';
+  $('commerce-create').disabled=flow.busy || !offer || Boolean(flow.saved?.order_id);
+  $('commerce-create').textContent=flow.saved && !flow.saved.order_id ? 'Retry saved order with the same text' : 'Prepare seller order';
+  $('commerce-check').disabled=flow.busy || !flow.saved?.order_id;
+  $('commerce-forget').hidden=!flow.saved;$('commerce-forget').disabled=flow.busy;
+  const progress={waiting_payment:'Waiting for payment',paid:'Payment received',processing:'Processing',completed:'Completed',expired:'Expired · do not pay',failed:'Execution failed · contact seller',cancelled:'Cancelled · do not pay'};
+  $('commerce-status').textContent=flow.error || (flow.busy ? 'Contacting the seller directly…' : order ? `${order.simulation?'LOCAL SIMULATION · ':''}${progress[order.status]} · ${order.payment_check.replaceAll('_',' ')}` : flow.saved ? 'Order recovery saved. If creation was interrupted, retry with the same text. Do not pay again.' : 'No order prepared.');
+  $('commerce-summary').textContent=order ? `Order ${order.order_id} · ${order.amount_zec} ZEC · ${order.network} · Expires ${new Date(order.expires_at*1000).toLocaleString('en')} · ${order.confirmations}/${order.confirmations_required} confirmations` : '';
+  $('commerce-history').textContent=order ? order.transitions.join(' → ') : '';
+  const payable=order && order.status==='waiting_payment' && order.expires_at*1000>Date.now() && ['not_checked','waiting_payment'].includes(order.payment_check) && !flow.busy && !flow.error;
+  $('commerce-payment').hidden=!payable;
+  if(payable){
+    const code=qrcode(0,'M');code.addData(order.payment_request);code.make();$('commerce-qr').src=code.createDataURL(4,16);
+    $('commerce-uri').textContent=order.payment_request;$('commerce-memo').textContent=`Required memo: ${order.memo}`;
+    $('commerce-wallet').hidden=order.simulation;
+    if(order.simulation){$('commerce-wallet').removeAttribute('href');$('commerce-status').textContent+=' · Synthetic receiver: never send funds.';}
+    else{$('commerce-wallet').href=order.payment_request;}
+  }else{$('commerce-qr').removeAttribute('src');$('commerce-uri').textContent='';$('commerce-memo').textContent='';$('commerce-wallet').removeAttribute('href');}
+  const completed=order?.status==='completed' && order.payment_check==='verified' && typeof order.result==='string' && !flow.busy && !flow.error;
+  $('commerce-result-title').hidden=!completed;$('commerce-result').textContent=completed ? order.result : '';
+}
+$('commerce-form').addEventListener('submit',async event=>{event.preventDefault();const offer=commerce.saved?.offer||commerceOffer;if(offer)await commerce.create(offer,$('commerce-input').value);});
+$('commerce-check').addEventListener('click',()=>commerce.check());
+$('commerce-forget').addEventListener('click',()=>{if(window.confirm('Forget this browser’s recovery capability? This does not cancel the order or refund a payment.'))commerce.forget();});
+setInterval(()=>{if(!document.hidden && commerce.saved?.order_id && !['completed','expired','failed','cancelled'].includes(commerce.order?.status))commerce.check();},5000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)commerce.check();});
+(async()=>{await commerce.restore();})();

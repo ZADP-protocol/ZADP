@@ -141,3 +141,13 @@ filtering is a browsing convenience, not a moderation or signature boundary.
 Wallet status, publication previews and the paid local test remain bound to the
 protected operator configuration rather than the selected discovery board.
 See [Multi-board operator guide](../docs/multi-board.md).
+
+## Direct seller purchases
+
+Supported `text.uppercase` offers expose Buy directly from seller. The browser
+contacts that offer’s HTTPS commerce origin directly, without a discovery/UI
+order proxy. It validates payment fields, generates a complete ZIP-321 QR locally,
+and polls/retrieves results using its private saved order capability. No signing
+or payment sending is implemented. For the separate loopback-only mock fixture
+on 8095, see [commerce documentation](../docs/commerce.md). The existing legacy
+local summary test remains a separate compatibility/demo flow.

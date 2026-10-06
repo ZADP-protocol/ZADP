@@ -222,3 +222,19 @@ registration and independent host moderation. External owners retain seed and
 spending authority. The host receives only the signed descriptor/UIVK and does
 not become the board owner. Public UIVKs permit independent reconstruction;
 privately shared UIVKs are excluded from public board metadata endpoints.
+
+## Direct seller commerce reference
+
+`zadp-commerce` is the independently runnable Rust commerce layer. A signed
+OFFER reuses its `endpoint` to direct the buyer to the seller. The new UI calls
+that endpoint directly: orders, input, unique payment memo, payment identifiers
+and results never pass through the discovery host. Persistent anonymous claim
+capabilities authorize status/result retrieval. A trusted read-only seller
+observer gates deterministic `text.uppercase` execution on confirmed payment.
+
+The reference vertical slice is verified locally with mock observations, not a
+new live settlement. The earlier fixed-loopback Python summary bridge remains
+only a legacy local compatibility/demo path; it is not the architecture for
+hosted discovery purchases. See [commerce.md](commerce.md) for exact boundaries,
+API, recovery/confirmation rules, private schema compatibility and the next
+human-approved independent mainnet payment gate.

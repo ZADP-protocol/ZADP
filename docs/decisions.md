@@ -154,3 +154,27 @@ buyer fee preview and live payment require separate human review.
 
 Current priorities: [roadmap](./roadmap.md). Security limits:
 [threat model](./threat-model.md).
+
+## ADR-012: Direct buyer-to-seller commerce, separate from discovery
+
+**Decision:** The first general commerce reference is independently runnable
+Rust `zadp-commerce`, serving deterministic `text.uppercase` orders. Reuse the
+signed offer's endpoint; no new OFFER fields or public PAID message. Browsers,
+CLI clients and agents use the same seller API directly. ZADP discovery never
+custodies/routes payments or owns orders, negotiated prices, buyer input/results
+or purchase history. The older Python summary service/loopback UI bridge is
+retained as a separate compatibility demo, not a mandatory intermediary.
+
+**Authorization and payment:** A random private idempotency capability recovers
+one order; a domain-separated claim token grants anonymous retrieval. Only hashes
+are persisted. A unique order memo and ZIP-321 request bind exact seller receiver
+and amount. Read-only authenticated evidence, confirmation policy, mining window,
+non-change output and unique output consumption gate the durable state machine.
+Execution/result storage is atomic; retrieval rechecks evidence after restart.
+
+**Validation:** The direct browser/mock seller slice completes locally and its
+QR decodes to the exact invoice. No new mainnet offer, payment or wallet migration
+was made. A production HTTPS endpoint, independent buyer wallet, reviewed fee
+preview and explicit human approval remain prerequisites for real settlement.
+[Commerce design and operating limits](commerce.md) include bounded observation,
+abuse/retention concerns and schema/config migration requirements.
