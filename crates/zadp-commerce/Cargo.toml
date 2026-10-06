@@ -28,6 +28,10 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 url.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
+zadp-api.workspace = true
+zadp-indexer.workspace = true
+zadp-zcash.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 zip32.workspace = true

@@ -209,3 +209,10 @@ silently delete old orders. No migration of existing mainnet databases is needed
 The Zallet observer fails closed on synchronization locks, tip changes,
 malformed responses or history exceeding its 1,000-transaction pagination bound.
 It is not yet a production incremental observer for high-volume sellers.
+
+## Independent-process acceptance
+
+See [process and storage boundaries](commerce-process-boundaries.md) for the
+separate Rust seller, TLS endpoint, persistent indexer, UI and buyer-client
+regression. The [mainnet preparation plan](mainnet-commerce-plan.md) keeps any
+new offer/publication and real buyer payment behind concrete human review.

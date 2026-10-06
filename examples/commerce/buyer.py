@@ -3,9 +3,9 @@
 Create/check use the same API as the browser. No signing or payment sending.
 Use an HTTPS seller endpoint, or explicit --demo for the local mock fixture.
 """
-import argparse,json,os,secrets
+import argparse,json,os,secrets,ssl
 from pathlib import Path
-from urllib.request import Request,urlopen,build_opener,HTTPRedirectHandler
+from urllib.request import Request,build_opener,HTTPRedirectHandler,HTTPSHandler
 from urllib.parse import urlsplit
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args):raise ValueError('Seller redirects are forbidden')
@@ -17,8 +17,9 @@ def main():
     parser.add_argument('--text-file',type=Path)
     parser.add_argument('--recovery',type=Path,required=True)
     parser.add_argument('--demo',action='store_true')
+    parser.add_argument('--ca-cert',type=Path,help='Explicit CA trust for the isolated HTTPS test')
     args=parser.parse_args();url=urlsplit(args.endpoint)
-    if url.username or url.password or url.query or url.fragment or url.path not in ('','/') or not (url.scheme=='https' or args.demo and args.endpoint=='http://127.0.0.1:8094'):raise ValueError('Safe seller origin required')
+    if url.username or url.password or url.query or url.fragment or url.path not in ('','/') or not (url.scheme=='https' or args.demo and url.scheme=='http' and url.hostname=='127.0.0.1' and url.port is not None):raise ValueError('Safe seller origin required')
     endpoint=args.endpoint.rstrip('/')
     if args.recovery.exists():
         if args.recovery.is_symlink() or args.recovery.stat().st_mode & 0o077 or args.recovery.stat().st_uid!=os.getuid():raise ValueError('Protected recovery file required')
@@ -33,7 +34,7 @@ def main():
         if not args.offer or args.offer!=saved['offer_id'] or not args.text_file:raise ValueError('Offer and input file required')
         req=Request(endpoint+'/orders',data=json.dumps({'offer_id':args.offer,'request':{'text':args.text_file.read_text()}}).encode(),headers={'Content-Type':'application/json','Idempotency-Key':saved['key']})
     else:req=Request(endpoint+'/orders/'+saved['order_id'],headers={'Authorization':'Bearer '+saved['claim_token']})
-    with build_opener(NoRedirect()).open(req,timeout=25) as response:result=json.loads(response.read(200001))
+    with build_opener(NoRedirect(),HTTPSHandler(context=ssl.create_default_context(cafile=str(args.ca_cert) if args.ca_cert else None))).open(req,timeout=25) as response:result=json.loads(response.read(200001))
     if args.operation=='create':
         saved.update(order_id=result['order_id'],claim_token=result['claim_token'])
         # Existing file is already owned/private and contains no wallet material.

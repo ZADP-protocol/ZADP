@@ -29,6 +29,10 @@ jobs:
           node ui/test_commerce.js
           node ui/test_memo_budget.js
           node ui/test_memo_rust_parity.js
+      - name: Independent seller/discovery processes (offline HTTPS)
+        run: |
+          cargo build -p zadp-commerce --bins --examples
+          python3 -m unittest discover -s examples/commerce -p 'test_*.py'
       - name: Documentation links
         run: python3 scripts/check_doc_links.py
       - name: fmt

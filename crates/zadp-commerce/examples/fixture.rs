@@ -1,18 +1,33 @@
 //! Ephemeral local fixture. No board, chain transaction, saved seed or funding.
 use anyhow::{ensure, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{Duration, Utc};
+use clap::Parser;
 use rand::{rngs::OsRng, RngCore};
 use std::{fs, io::Write, os::unix::fs::OpenOptionsExt, path::PathBuf};
 use zadp_commerce::{private_directory, Config, ObserverConfig, Snapshot};
-use zadp_protocol::{OfferDraft, Price, SellerKeyPair, ZcashNetwork};
+use zadp_protocol::{
+    bind_offer, BoardBody, BoardPolicy, OfferDraft, Price, SellerKeyPair, ZcashNetwork,
+};
 use zcash_keys::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
 use zip32::{AccountId, DiversifierIndex};
+#[derive(Parser)]
+struct Args {
+    directory: PathBuf,
+    #[arg(long, default_value = "http://127.0.0.1:8094")]
+    seller_endpoint: String,
+    #[arg(long, default_value = "http://127.0.0.1:8095")]
+    browser_origin: String,
+}
 fn main() -> Result<()> {
-    let directory = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .ok_or_else(|| anyhow::anyhow!("usage: fixture NEW_PRIVATE_DIRECTORY"))?,
-    );
+    let args = Args::parse();
+    for endpoint in [&args.seller_endpoint, &args.browser_origin] {
+        ensure!(
+            url::Url::parse(endpoint)?.host_str() == Some("127.0.0.1"),
+            "fixture endpoints must be loopback"
+        );
+    }
+    let directory = args.directory;
     ensure!(!directory.exists(), "use a new fixture directory");
     private_directory(&directory)?;
     let directory = directory.canonicalize()?;
@@ -26,17 +41,47 @@ fn main() -> Result<()> {
         .encode(&parameters);
     // This synthetic receiver has no retained spending authority. Never fund it.
     seed.fill(0);
+    OsRng.fill_bytes(&mut seed);
+    let board_ivk = UnifiedSpendingKey::from_seed(&parameters, &seed, AccountId::ZERO)?
+        .to_unified_full_viewing_key()
+        .to_unified_incoming_viewing_key();
+    seed.fill(0);
+    let operator = SellerKeyPair::generate();
+    let board = BoardBody {
+        zadp: 1,
+        board_id: "commerce-fixture".into(),
+        name: "Offline commerce fixture".into(),
+        network: ZcashNetwork::Testnet,
+        address: board_ivk
+            .address(DiversifierIndex::from(0u32), UnifiedAddressRequest::ORCHARD)?
+            .encode(&parameters),
+        incoming_viewing_key: board_ivk.encode(&parameters),
+        birthday_height: 3_000_000,
+        policy: BoardPolicy::default(),
+        operator_key: operator.id.clone(),
+    }
+    .sign(&operator)?;
+    fs::write(
+        directory.join("board.json"),
+        serde_json::to_vec_pretty(&board)?,
+    )?;
     let identity = SellerKeyPair::generate();
-    let offer = OfferDraft::new_ulid(
-        identity.id.clone(),
-        "text.uppercase",
-        "Uppercase text · local simulation",
-        Price::zec(rust_decimal::Decimal::new(1, 2)),
-        "http://127.0.0.1:8094",
-        Utc::now() + Duration::hours(24),
-        "bG9jYWwtZml4dHVyZQ==",
-    )
-    .sign(&identity)?;
+    let now = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+    let offer = bind_offer(
+        OfferDraft::new_ulid(
+            identity.id.clone(),
+            "text.uppercase",
+            "Uppercase text · local simulation",
+            Price::zec(rust_decimal::Decimal::new(1, 2)),
+            &args.seller_endpoint,
+            now + Duration::hours(24),
+            STANDARD.encode([7u8; 16]),
+        )
+        .sign(&identity)?,
+        "commerce-fixture",
+        now,
+        &identity,
+    )?;
     let config = Config {
         offer: offer.clone(),
         network: ZcashNetwork::Testnet,
@@ -45,7 +90,7 @@ fn main() -> Result<()> {
         database: directory.join("orders.sqlite"),
         confirmations: 3,
         order_lifetime_seconds: 1800,
-        browser_origin: "http://127.0.0.1:8095".into(),
+        browser_origin: args.browser_origin,
         observer: ObserverConfig::Mock {
             snapshot_file: directory.join("snapshot.json"),
         },
