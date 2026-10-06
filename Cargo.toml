@@ -8,6 +8,7 @@ members = [
     "crates/zadp-payment",
     "crates/zadp-seller",
     "crates/zadp-demo",
+    "crates/zadp-commerce",
 ]
 default-members = ["crates/zadp-demo"]
 

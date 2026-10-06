@@ -2050,6 +2050,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+
+[[package]]
 name = "quinn"
 version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3648,6 +3654,35 @@ dependencies = [
  "zcash_primitives",
  "zcash_protocol",
  "zip32",
+]
+
+[[package]]
+name = "zadp-commerce"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "hex",
+ "qrcode",
+ "rand 0.8.8",
+ "rusqlite",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tower-http",
+ "url",
+ "zadp-protocol",
+ "zadp-seller",
+ "zcash_keys",
+ "zcash_protocol",
+ "zip32",
+ "zip321",
 ]
 
 [[package]]

@@ -104,3 +104,108 @@ wallet-generated fee preview for human approval. Only an explicitly approved
 payment may then be sent. The expired placeholder mainnet offer and earlier
 self-payment do not prove this independent buyer-to-seller flow and must not be
 retried automatically.
+
+## Run the isolated vertical slice
+
+From the repository root, use a **new private directory outside the repository**:
+
+```sh
+cargo build -p zadp-commerce --bins --examples
+cargo run -p zadp-commerce --example fixture -- /absolute/private/commerce-demo
+python3 ui/dev_commerce_fixture.py --directory /absolute/private/commerce-demo
+```
+
+Open `http://127.0.0.1:8095`. The isolated discovery fixture is on 8096; the
+independent Rust seller is on 8094. The existing mainnet UI on 8090 and discovery
+API on 8080 are not reconfigured. Choose the explicitly labeled local offer,
+click **Buy directly from seller**, enter `hello world` and prepare an order.
+The demo's synthetic testnet receiver has no retained spending authority: **never
+fund it**. Its QR is a demonstration of encoding, not a request to transfer funds.
+
+Supply an observation locally using the displayed order ID:
+
+```sh
+python3 examples/commerce/mock_payment.py \
+  --directory /absolute/private/commerce-demo --order ORDER_ID --confirmations 1
+# The UI must show confirming and withhold the result.
+python3 examples/commerce/mock_payment.py \
+  --directory /absolute/private/commerce-demo --order ORDER_ID --confirmations 3
+# Subsequent polls show paid, processing, then completed: HELLO WORLD.
+```
+
+Reload the browser, check again, or restart the seller using the same configuration
+and database. One order remains one execution. Neither the mock tool nor the
+seller HTTP API can send a transaction. The mock file must be owned/private;
+there is deliberately no HTTP payment injection route.
+
+For a CLI client, use `examples/commerce/buyer.py create` with `--endpoint`,
+`--offer`, `--text-file` and a new protected `--recovery` file, then `check` with
+that same endpoint/recovery file. Add `--demo` only for the explicit mock origin.
+The CLI prints payment details but suppresses the claim token; it never pays.
+A lost creation response can be retried with the same key and same input; input
+is not retained in browser storage, so re-enter it exactly when needed.
+
+## Seller configuration and API contract
+
+Run `zadp-commerce --config /private/seller.json`. Configuration must be an owned
+regular file with no group/other permissions (0600), in a private directory.
+Fields are `offer` (the signed OFFER JSON), `network`, `recipient`,
+`seller_account`, `database`, `confirmations` (1–100), `order_lifetime_seconds`
+(60–86400), `browser_origin` (one exact origin), and `observer`:
+
+```json
+{"mode":"zallet","rpc_url":"http://127.0.0.1:28232","auth_file":"/private/rpc.auth"}
+```
+
+Use an existing seller account/address, never the public board receiving
+account or its UIVK. A board incoming viewing key is sufficient for discovery;
+it grants neither spending authority nor access to unrelated buyer/seller wallet
+payments. This new service observes only its seller account via authenticated
+local RPC. The account UUID and auth path are private deployment configuration,
+never discovery fields or public examples containing real wallet data.
+
+The binary binds HTTP on loopback only. A real seller deploys an HTTPS reverse
+proxy in front of it and serves the reference API at the advertised origin.
+Non-root commerce base paths are not yet supported by this reference client.
+Real configuration requires HTTPS for both endpoint and browser origin. CORS
+allows only that origin, without browser cookies. Origin-bearing requests from
+other browsers are rejected; CLI requests may omit Origin. A reverse proxy must
+not log Authorization or Idempotency-Key headers, request bodies or response
+bodies. Anonymous order creation also needs deployment rate limiting and abuse
+controls; the reference has hard limits of 100 active and 10,000 total orders.
+
+- `POST /orders`: JSON `{"offer_id":"…","request":{"text":"hello world"}}`,
+  `Content-Type: application/json`, `Idempotency-Key: <random 64 lowercase hex>`.
+  Returns order ID/state, claim token, network/simulation flag, exact amount,
+  recipient, memo, ZIP-321 URI, QR SVG, expiry and confirmation policy.
+- `GET /orders/{id}`: Bearer token required. Returns payment-check state,
+  confirmation count and durable transition history; `result` appears only for
+  a completed order with freshly verified evidence. Claim tokens are not returned
+  by GET. The reference reconciles and advances work on authenticated polling;
+  continuous unattended reconciliation is a future worker extension.
+- `DELETE /orders/{id}`: Bearer token required; cancel only before accepted
+  payment. Cancellation is not a refund and cannot reverse a transfer.
+- `GET /healthz`: service liveness only, not wallet readiness.
+
+Input is limited to 4,000 UTF-8 bytes; result to 12,000 bytes. Unknown JSON fields,
+unsupported offers and precision beyond eight decimal ZEC places are rejected.
+Errors omit wallet/RPC details. Orders expire at the earlier of their payment
+window and signed offer expiry. A payment first observed within the window may
+wait beyond expiry for confirmations; terminal expired/cancelled orders do not
+reopen. Block timestamps are the reference's payment-window evidence and may
+require operational tolerance in a later production policy.
+
+The browser validates response binding (offer/order, network, price, expiry and
+memo), generates its own QR from the validated URI and ignores seller-provided
+SVG. No remote QR service is contacted. Capability credentials never go into
+query strings. The vendored browser QR encoder is `qrcode-generator` 1.4.4 under
+MIT; Rust uses `zip321` 0.9 and `qrcode` 0.14.
+
+The orders schema is version 1. Startup rejects a database containing another
+service's tables, unsupported schema versions or changed configuration. Renewing
+an offer, changing observer/account/policy or retaining orders across such a
+change requires an explicit migration design or a separate new database; do not
+silently delete old orders. No migration of existing mainnet databases is needed.
+The Zallet observer fails closed on synchronization locks, tip changes,
+malformed responses or history exceeding its 1,000-transaction pagination bound.
+It is not yet a production incremental observer for high-volume sellers.
