@@ -280,3 +280,189 @@ async fn nonce_replay_expiration_and_invalid_signature_are_rejected() {
     // Stored history remains for replay defense even when inclusion time advances.
     assert_eq!(repo.rejection_count().unwrap(), 3);
 }
+
+#[tokio::test]
+async fn host_visibility_is_separate_persistent_and_reversible() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("board.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let o = offer(&seller, 1);
+    {
+        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+        repo.apply_block(block(BIRTHDAY, 1, 0, vec![o.clone()]))
+            .unwrap();
+        for status in [Visibility::Hidden, Visibility::Quarantined] {
+            repo.moderate(o.seller.as_str(), &o.id, status, "Demo host decision")
+                .unwrap();
+            assert!(repo.list(None).await.unwrap().is_empty());
+            assert_eq!(repo.canonical_records(None).unwrap().len(), 1);
+            let audit = repo.publication_audit(100).unwrap();
+            assert!(audit[0].protocol_valid && audit[0].board_allowed);
+            assert_eq!(audit[0].offer.as_ref().unwrap(), &o);
+        }
+    }
+    let repo = SqliteOfferRepository::open(path, board).unwrap();
+    assert!(repo.list(None).await.unwrap().is_empty());
+    repo.moderate(
+        o.seller.as_str(),
+        &o.id,
+        Visibility::Visible,
+        "Manual override",
+    )
+    .unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    assert!(repo
+        .moderate(o.seller.as_str(), "unknown", Visibility::Hidden, "reason")
+        .is_err());
+    assert!(repo
+        .moderate(o.seller.as_str(), &o.id, Visibility::Hidden, "\n")
+        .is_err());
+    repo.rewind(None).unwrap();
+    assert!(repo.publication_audit(100).unwrap().is_empty());
+}
+
+#[test]
+fn valid_publication_can_fail_board_policy_without_becoming_invalid() {
+    let board = descriptor(BoardPolicy {
+        min_listing_value_zat: 2000,
+        ..BoardPolicy::default()
+    });
+    let repo = SqliteOfferRepository::open(":memory:", board).unwrap();
+    let seller = SellerKeyPair::generate();
+    let valid = offer(&seller, 1);
+    let mut invalid = offer(&seller, 2);
+    invalid.title = "Tampered".into();
+    assert_eq!(
+        repo.apply_block(block(BIRTHDAY, 1, 0, vec![valid.clone(), invalid]))
+            .unwrap(),
+        0
+    );
+    let audit = repo.publication_audit(100).unwrap();
+    assert!(audit[0].protocol_valid);
+    assert!(!audit[0].board_allowed);
+    assert_eq!(audit[0].offer.as_ref().unwrap(), &valid);
+    assert_eq!(
+        audit[0].reason.as_deref(),
+        Some("listing_value_below_minimum")
+    );
+    assert!(!audit[1].protocol_valid);
+}
+
+#[test]
+fn registry_isolates_authority_network_and_host_acceptance() {
+    let a = descriptor(BoardPolicy::default());
+    let mut registry = BoardRegistry::new(ZcashNetwork::Mainnet);
+    registry
+        .register(
+            BoardContext {
+                repository: Arc::new(SqliteOfferRepository::open(":memory:", a.clone()).unwrap()),
+                source_type: BoardSourceType::External,
+                status: BoardStatus::Active,
+            },
+            &HostedBoardPolicy::default(),
+            false,
+        )
+        .unwrap();
+    // Same viewing authority under a separately signed board id is not isolated.
+    let key = SellerKeyPair::generate();
+    let mut shared = a.board.clone();
+    shared.board_id = "other-board".into();
+    shared.operator_key = key.id.clone();
+    let shared = shared.sign(&key).unwrap();
+    assert!(registry
+        .register(
+            BoardContext {
+                repository: Arc::new(SqliteOfferRepository::open(":memory:", shared).unwrap()),
+                source_type: BoardSourceType::External,
+                status: BoardStatus::Active
+            },
+            &HostedBoardPolicy::default(),
+            false
+        )
+        .is_err());
+    assert!(BoardRegistry::new(ZcashNetwork::Testnet)
+        .register(
+            BoardContext {
+                repository: Arc::new(SqliteOfferRepository::open(":memory:", a.clone()).unwrap()),
+                source_type: BoardSourceType::External,
+                status: BoardStatus::Active
+            },
+            &HostedBoardPolicy::default(),
+            false
+        )
+        .is_err());
+    let fee = HostedBoardPolicy {
+        enabled: true,
+        creation_fee_zat: 1000,
+        fee_recipient: Some(a.board.address.clone()),
+    };
+    assert!(fee.allows(BoardSourceType::External, false));
+    assert!(!fee.allows(BoardSourceType::Hosted, false));
+    assert!(fee.allows(BoardSourceType::Hosted, true));
+    let mut host = BoardRegistry::new(ZcashNetwork::Mainnet);
+    host.register(
+        BoardContext {
+            repository: Arc::new(SqliteOfferRepository::open(":memory:", a.clone()).unwrap()),
+            source_type: BoardSourceType::Hosted,
+            status: BoardStatus::Active,
+        },
+        &fee,
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        host.get("ai-services").unwrap().status,
+        BoardStatus::Rejected
+    );
+    assert!(host
+        .get("ai-services")
+        .unwrap()
+        .descriptor()
+        .validate(ZcashNetwork::Mainnet)
+        .is_ok());
+    let summary =
+        serde_json::to_string(&host.get("ai-services").unwrap().summary().unwrap()).unwrap();
+    assert!(!summary.contains(&a.board.incoming_viewing_key));
+    assert!(!summary.contains(&a.board.address));
+}
+
+#[tokio::test]
+async fn legacy_database_upgrade_preserves_original_board_and_acceptance() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let o = offer(&seller, 1);
+    {
+        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+        repo.apply_block(block(BIRTHDAY, 1, 0, vec![o.clone()]))
+            .unwrap();
+    }
+    // Reproduce the pre-multi-board schema, preserving its original fingerprint/index.
+    let c = rusqlite::Connection::open(&path).unwrap();
+    c.execute_batch("DROP TABLE publications; DROP TABLE host_moderation;")
+        .unwrap();
+    drop(c);
+    let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+    assert_eq!(repo.board(), &board);
+    assert_eq!(repo.cursor().unwrap().unwrap().height, BIRTHDAY);
+    assert_eq!(repo.list(None).await.unwrap()[0].offer, o);
+    let audit = repo.publication_audit(10).unwrap();
+    assert_eq!(audit.len(), 1);
+    assert!(audit[0].protocol_valid && audit[0].board_allowed);
+}
+
+#[test]
+fn invalid_external_descriptors_never_register() {
+    let board = descriptor(BoardPolicy::default());
+    let mut invalid = board.clone();
+    invalid.board.name = "Tampered owner announcement".into();
+    assert!(SqliteOfferRepository::open(":memory:", invalid).is_err());
+    let mut json = serde_json::to_value(&board).unwrap();
+    json["board"]["spending_key"] = serde_json::json!("not accepted");
+    assert!(serde_json::from_value::<BoardDescriptor>(json).is_err());
+    let mut invalid = board;
+    invalid.board.incoming_viewing_key = "malformed".into();
+    assert!(SqliteOfferRepository::open(":memory:", invalid).is_err());
+}

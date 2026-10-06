@@ -3,9 +3,27 @@ use crate::{ChainObservation, IndexerError, OfferRecord, OfferRepository};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Mutex};
 use zadp_protocol::{decode_offer_memo, BoardDescriptor, Offer};
 use zadp_zcash::{BlockHeader, BoardBlock, TxId};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Visibility {
+    Visible,
+    Hidden,
+    Quarantined,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PublicationAudit {
+    pub transaction_id: String,
+    pub protocol_valid: bool,
+    pub board_allowed: bool,
+    pub reason: Option<String>,
+    pub offer: Option<Offer>,
+}
 
 pub struct SqliteOfferRepository {
     connection: Mutex<Connection>,
@@ -39,10 +57,21 @@ impl SqliteOfferRepository {
                 "database belongs to a different signed board descriptor; use a new database",
             ));
         }
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS publications (
+            height INTEGER NOT NULL REFERENCES blocks(height) ON DELETE CASCADE,
+            txid TEXT NOT NULL,pool TEXT NOT NULL,output_index INTEGER NOT NULL,
+            protocol_valid INTEGER NOT NULL,board_allowed INTEGER NOT NULL,reason TEXT,json TEXT,
+            PRIMARY KEY(txid,pool,output_index));
+            CREATE TABLE IF NOT EXISTS host_moderation (
+            seller TEXT NOT NULL,id TEXT NOT NULL,status TEXT NOT NULL,
+            reason TEXT NOT NULL,PRIMARY KEY(seller,id));",
+        )?;
         tx.execute(
             "INSERT OR IGNORE INTO metadata VALUES ('board_fingerprint',?1)",
             [fingerprint],
         )?;
+        tx.execute("INSERT OR IGNORE INTO publications SELECT height,txid,pool,output_index,1,1,NULL,json FROM offers", [])?;
         tx.commit()?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -166,6 +195,15 @@ impl SqliteOfferRepository {
                 Ok(Some(o)) => Ok(o),
                 Err(_) => Err("malformed_zadp_memo"),
             };
+            let publication_json = decoded
+                .as_ref()
+                .ok()
+                .map(serde_json::to_string)
+                .transpose()
+                .map_err(|_| state("offer serialization failed"))?;
+            let publication_valid = decoded
+                .as_ref()
+                .is_ok_and(|o| self.board.validate_publication(o, h.time).is_ok());
             let rejection = match decoded {
                 Err(reason) => Some(reason),
                 Ok(offer) => {
@@ -232,6 +270,21 @@ impl SqliteOfferRepository {
                     }
                 }
             };
+            let protocol_valid =
+                publication_valid && rejection != Some("duplicate_offer_nonce_or_output");
+            tx.execute(
+                "INSERT OR IGNORE INTO publications VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                params![
+                    h.height,
+                    output.txid.0,
+                    output.pool,
+                    output.output_index,
+                    protocol_valid,
+                    rejection.is_none(),
+                    rejection,
+                    publication_json
+                ],
+            )?;
             if let Some(reason) = rejection {
                 tx.execute(
                     "INSERT OR IGNORE INTO rejections VALUES (?1,?2,?3,?4,?5)",
@@ -248,27 +301,83 @@ impl SqliteOfferRepository {
         tx.commit()?;
         Ok(inserted)
     }
+    /// Local operator override. Never changes canonical admission or protocol validity.
+    pub fn moderate(
+        &self,
+        seller: &str,
+        id: &str,
+        visibility: Visibility,
+        reason: &str,
+    ) -> Result<(), IndexerError> {
+        if reason.len() > 512 || reason.chars().any(char::is_control) {
+            return Err(state("invalid moderation reason"));
+        }
+        let c = self.lock()?;
+        let exists: bool = c.query_row(
+            "SELECT EXISTS(SELECT 1 FROM offers WHERE seller=?1 AND id=?2)",
+            params![seller, id],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            return Err(state("unknown board offer"));
+        }
+        let status = match visibility {
+            Visibility::Visible => "visible",
+            Visibility::Hidden => "hidden",
+            Visibility::Quarantined => "quarantined",
+        };
+        c.execute("INSERT INTO host_moderation VALUES (?1,?2,?3,?4) ON CONFLICT(seller,id) DO UPDATE SET status=excluded.status,reason=excluded.reason", params![seller,id,status,reason])?;
+        Ok(())
+    }
+    pub fn canonical_records(
+        &self,
+        capability: Option<&str>,
+    ) -> Result<Vec<OfferRecord>, IndexerError> {
+        self.records(capability, None, false)
+    }
+    pub fn publication_audit(&self, limit: u32) -> Result<Vec<PublicationAudit>, IndexerError> {
+        let c = self.lock()?;
+        let mut s=c.prepare("SELECT txid,protocol_valid,board_allowed,reason,json FROM publications ORDER BY height,txid,pool,output_index LIMIT ?1")?;
+        let rows = s.query_map([limit.min(1000)], |r| {
+            Ok(PublicationAudit {
+                transaction_id: r.get(0)?,
+                protocol_valid: r.get(1)?,
+                board_allowed: r.get(2)?,
+                reason: r.get(3)?,
+                offer: r
+                    .get::<_, Option<String>>(4)?
+                    .map(|j| serde_json::from_str(&j))
+                    .transpose()
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
     fn records(
         &self,
         capability: Option<&str>,
         id: Option<&str>,
+        hosted: bool,
     ) -> Result<Vec<OfferRecord>, IndexerError> {
         let c = self.lock()?;
         let scanned_height: Option<u32> =
             c.query_row("SELECT MAX(height) FROM blocks", [], |r| r.get(0))?;
-        let mut stmt=c.prepare("SELECT json,txid,pool,output_index,value_zat,o.height,block_time,b.hash FROM offers o JOIN blocks b ON b.height=o.height WHERE expires>?1 AND (?2 IS NULL OR json_extract(json, '$.capability')=?2) AND (?3 IS NULL OR o.id=?3) ORDER BY o.height,o.txid,o.pool,o.output_index LIMIT 1000")?;
-        let rows = stmt.query_map(params![Utc::now().timestamp(), capability, id], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, u32>(3)?,
-                r.get::<_, u64>(4)?,
-                r.get::<_, u32>(5)?,
-                r.get::<_, i64>(6)?,
-                r.get::<_, String>(7)?,
-            ))
-        })?;
+        let mut stmt=c.prepare("SELECT json,txid,pool,output_index,value_zat,o.height,block_time,b.hash FROM offers o JOIN blocks b ON b.height=o.height WHERE expires>?1 AND (?2 IS NULL OR json_extract(json, '$.capability')=?2) AND (?3 IS NULL OR o.id=?3) AND (?4=0 OR NOT EXISTS (SELECT 1 FROM host_moderation m WHERE m.seller=o.seller AND m.id=o.id AND m.status != 'visible')) ORDER BY o.height,o.txid,o.pool,o.output_index LIMIT 1000")?;
+        let rows = stmt.query_map(
+            params![Utc::now().timestamp(), capability, id, hosted],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, u32>(3)?,
+                    r.get::<_, u64>(4)?,
+                    r.get::<_, u32>(5)?,
+                    r.get::<_, i64>(6)?,
+                    r.get::<_, String>(7)?,
+                ))
+            },
+        )?;
         let mut out = vec![];
         for row in rows {
             let (json, txid, pool, output_index, value, height, time, hash) = row?;
@@ -328,9 +437,9 @@ impl OfferRepository for SqliteOfferRepository {
         ))
     }
     async fn list(&self, capability: Option<&str>) -> Result<Vec<OfferRecord>, IndexerError> {
-        self.records(capability, None)
+        self.records(capability, None, true)
     }
     async fn get(&self, id: &str) -> Result<Option<OfferRecord>, IndexerError> {
-        Ok(self.records(None, Some(id))?.into_iter().next())
+        Ok(self.records(None, Some(id), true)?.into_iter().next())
     }
 }

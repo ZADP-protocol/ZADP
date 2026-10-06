@@ -131,3 +131,13 @@ Open port 8093. Change only the fixture state file to
 The separate simulator has no wallet credentials or payment methods. Its invoices
 are explicitly marked LOCAL SIMULATION, use a non-payable fixture receiver, and
 must never receive funds. No simulator route is included in the real UI server.
+
+## Multiple boards
+
+Discovery cards and details include their board ID. The Board selector filters
+currently indexed offers without merging offers that share an ID across boards.
+The indexer performs host visibility filtering before returning offers; browser
+filtering is a browsing convenience, not a moderation or signature boundary.
+Wallet status, publication previews and the paid local test remain bound to the
+protected operator configuration rather than the selected discovery board.
+See [Multi-board operator guide](../docs/multi-board.md).

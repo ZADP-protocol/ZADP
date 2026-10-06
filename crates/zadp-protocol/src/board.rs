@@ -1,4 +1,4 @@
-//! Portable signed discovery-board contract. Viewing material here is public.
+//! Portable signed discovery-board contract. Owners choose how to share viewing material.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -228,15 +228,30 @@ impl BoardDescriptor {
         data.extend(canonical_cbor(&self.board)?);
         SellerKeyPair::verify(&self.board.operator_key, &data, &self.signature)
     }
+    /// Internal isolation identity for the effective Orchard decryption scope.
+    /// Ignore other unified components and the diversifier key: neither narrows decryption.
+    pub fn incoming_scope_fingerprint(&self) -> Result<String, ProtocolError> {
+        let key = UnifiedIncomingViewingKey::decode(
+            &self.board.network.parameters(),
+            &self.board.incoming_viewing_key,
+        )
+        .map_err(|_| invalid("invalid board UIVK"))?;
+        let raw = key
+            .orchard()
+            .as_ref()
+            .ok_or_else(|| invalid("missing Orchard incoming viewing key"))?
+            .to_bytes();
+        let hash = Sha256::digest(&raw[32..]);
+        Ok(hash.iter().map(|b| format!("{b:02x}")).collect())
+    }
     pub fn fingerprint(&self) -> Result<String, ProtocolError> {
         let hash = Sha256::digest(canonical_cbor(self)?);
         Ok(hash.iter().map(|b| format!("{b:02x}")).collect())
     }
-    /// Stateless admission. Counts and replay protection are transactional repository rules.
-    pub fn validate_offer(
+    /// Content-neutral publication validity, independent from host or board admission.
+    pub fn validate_publication(
         &self,
         offer: &Offer,
-        value_zat: u64,
         block_time: DateTime<Utc>,
     ) -> Result<(), ProtocolError> {
         crate::verify_offer(offer, block_time)?;
@@ -246,6 +261,19 @@ impl BoardDescriptor {
         if offer.board_id.as_deref() != Some(&self.board.board_id) {
             return Err(invalid("wrong board binding"));
         }
+        offer
+            .issued_at
+            .ok_or_else(|| invalid("missing issued_at"))?;
+        Ok(())
+    }
+    /// Stateless admission. Counts and replay protection are transactional repository rules.
+    pub fn validate_offer(
+        &self,
+        offer: &Offer,
+        value_zat: u64,
+        block_time: DateTime<Utc>,
+    ) -> Result<(), ProtocolError> {
+        self.validate_publication(offer, block_time)?;
         let issued = offer
             .issued_at
             .ok_or_else(|| invalid("missing issued_at"))?;

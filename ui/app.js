@@ -9,20 +9,21 @@ function element(tag, text, cls) { const e = document.createElement(tag); e.text
 function details(o) {
   $('detail-title').textContent = o.title;
   const dl = $('detail-fields'); dl.replaceChildren();
-  const values = {'Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : 'Purchasing is not yet available.'};
+  const values = {'Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : 'Purchasing is not yet available.'};
   for (const [key,value] of Object.entries(values)) dl.append(element('dt',key),element('dd',String(value)));
   $('detail').showModal();
 }
 function render() {
   const query = $('search').value.toLocaleLowerCase('en');
-  const filtered = offers.filter(o => `${o.title} ${o.capability}`.toLocaleLowerCase('en').includes(query));
+  const scoped = offersForBoard(offers, $('board-filter').value);
+  const filtered = scoped.filter(o => `${o.title} ${o.capability}`.toLocaleLowerCase('en').includes(query));
   $('offers').replaceChildren(); $('count').textContent = `${filtered.length} ${filtered.length === 1 ? 'offer' : 'offers'}`;
   for (const o of filtered) {
     const card = element('article','','offer');
     const price = element('p',`${o.price.amount} `,'price'); price.append(element('small',o.price.currency));
     const btn = element('button','View details','secondary'); btn.addEventListener('click',()=>details(o));
     const active = o.chain?.offer_status === 'active';
-    card.append(element('span',o.capability,'badge'),element('h2',o.title),element('p',active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
+    card.append(element('span',o.capability,'badge'),element('p',`Board: ${offerBoard(o) || 'Unavailable'}`),element('h2',o.title),element('p',active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
     if(o.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
     $('offers').append(card);
   }
@@ -35,6 +36,12 @@ async function refresh() {
     if(!health.ok || !response.ok) throw Error();
     const data = await response.json();
     offers = parseOffersResponse(data);
+    const selected = $('board-filter').value;
+    const boards = [...new Set(offers.map(offerBoard).filter(Boolean))].sort();
+    $('board-filter').replaceChildren(element('option','All boards'));
+    $('board-filter').firstChild.value = '';
+    for (const id of boards) { const option = element('option',id); option.value = id; $('board-filter').append(option); }
+    $('board-filter').value = boards.includes(selected) ? selected : '';
     $('network-label').textContent=offersNetwork(offers); render();
     $('connection').textContent = '● Index connected'; $('index-status').textContent = 'Connected. Offers are read from the local Zcash index.';
     const heights = offers.map(o=>o.chain?.scanned_height).filter(Number.isFinite);
@@ -49,7 +56,7 @@ for(const button of document.querySelectorAll('[data-tab]')) button.addEventList
   for(const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected',String(b===button));
   for(const section of document.querySelectorAll('.panel')) section.hidden = section.id !== button.dataset.tab;
 });
-$('search').addEventListener('input',render); $('refresh').addEventListener('click',refresh); $('close').addEventListener('click',()=>$('detail').close());
+$('board-filter').addEventListener('change',render); $('search').addEventListener('input',render); $('refresh').addEventListener('click',refresh); $('close').addEventListener('click',()=>$('detail').close());
 function draft() { return Object.fromEntries(new FormData(form)); }
 function checkBudget() {
   try {

@@ -7,6 +7,8 @@ function parseOffersResponse(data) {
     for (const key of ['id','seller','title','capability','endpoint','expires_at']) {
       if (typeof offer[key] !== 'string' || !offer[key] || offer[key].length > 4096) throw Error('Invalid offer field');
     }
+    if (offer.board_id != null && (typeof offer.board_id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(offer.board_id))) throw Error('Invalid board');
+    if (offer.board_id != null && offer.chain?.board_id != null && offer.board_id !== offer.chain.board_id) throw Error('Board binding mismatch');
     if (!Number.isFinite(Date.parse(offer.expires_at))) throw Error('Invalid expiry');
     if (!offer.price || offer.price.currency !== 'ZEC' || typeof offer.price.amount !== 'string'
         || !/^\d+(\.\d{1,8})?$/.test(offer.price.amount)
@@ -25,4 +27,6 @@ function offersNetwork(offers) {
   const networks = [...new Set(offers.map(o=>o.chain?.network).filter(Boolean))];
   return networks.length === 1 ? networks[0] : (networks.length > 1 ? 'Mixed networks' : 'Network unavailable');
 }
-if(typeof module !== 'undefined') module.exports={parseOffersResponse,offersNetwork};
+function offerBoard(offer) { return offer.board_id ?? offer.chain?.board_id ?? ''; }
+function offersForBoard(offers, board) { return board ? offers.filter(o => offerBoard(o) === board) : offers; }
+if(typeof module !== 'undefined') module.exports={parseOffersResponse,offersNetwork,offerBoard,offersForBoard};

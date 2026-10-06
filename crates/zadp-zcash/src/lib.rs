@@ -18,5 +18,5 @@ mod lightwalletd;
 pub use board::{BlockHeader, BoardBlock, BoardOutput, BoardSource};
 pub use lightwalletd::{
     broadcast_transaction, connect_lightwalletd, decrypt_board_outputs, initialize_tls,
-    RealZcashScanner,
+    BoardTransport, RealZcashScanner,
 };

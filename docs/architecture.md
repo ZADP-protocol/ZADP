@@ -2,7 +2,7 @@
 
 **ZADP** (Zcash Agent Discovery Protocol) is an open protocol and reference implementation for discovering signed service offers published through Zcash shielded memos.
 
-This document describes the **current** architecture: real CompactTxStreamer scanning + SQLite indexing + read-only board API, plus a retained **mock** commerce vertical slice. The first live mainnet publish → mine → scan → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
+This document describes the **current** architecture: real CompactTxStreamer scanning + per-board SQLite indexing + read-only multi-board API, plus a retained **mock** commerce vertical slice. The first live mainnet publish → mine → scan → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
 
 ## Goals
 
@@ -22,7 +22,7 @@ flowchart TB
   subgraph discovery [ZADP Discovery - CURRENT]
     SellerPub[Seller publishes signed OFFER memo]
     IndexerScan[Indexer scans / validates / indexes]
-    Api[board_router GET /offers]
+    Api[Read-only multi-board API GET /offers]
     SellerPub --> IndexerScan --> Api
   end
 
@@ -213,3 +213,12 @@ verification, rejects redirects and never follows advertised offer URLs. A
 local unpublished test identifier is deliberately separate from a signed,
 discoverable OFFER. Public endpoint deployment, a new separately approved
 publication, buyer fee/proposal review and a real paid result are still pending.
+
+## Multi-board hosting and external ownership
+
+See [Multi-board indexing](multi-board.md) for the incremental registry, per-board
+SQLite isolation, shared CompactTxStreamer transport, read-only external board
+registration and independent host moderation. External owners retain seed and
+spending authority. The host receives only the signed descriptor/UIVK and does
+not become the board owner. Public UIVKs permit independent reconstruction;
+privately shared UIVKs are excluded from public board metadata endpoints.

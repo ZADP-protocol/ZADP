@@ -64,6 +64,7 @@ Mainnet offer discovery and local self-payment fulfillment have been verified. A
 | CompactTxStreamer scanner (trial decrypt + full memo fetch) | **Implemented** (code + offline tests) |
 | SQLite indexer, cursor, replay / reorg handling | **Implemented** |
 | Mainnet board HTTP: `GET /offers`, `GET /healthz` | **Implemented** |
+| Multi-board registry, external UIVK-only indexing and host moderation | **Implemented reference path** — isolated per-board indices, shared transport, filtered API; [operator guide](docs/multi-board.md) |
 | Seller CLI: `identity-*`, `board-sign`, `publish` (Zallet PCZT) | **Implemented** (developer preview) |
 | Mock demo: invoice / policy / mock pay / fulfill | **Implemented** (local only) |
 | Live mainnet publish → mine → scan → API acceptance | **Verified 2026-10-05** — mined OFFER + two independent indices; [public evidence](docs/mainnet-acceptance.md) |
@@ -238,6 +239,7 @@ Operators may use a local file inbox for handing tasks between agents (pending �
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Multi-board indexing and policy boundaries](docs/multi-board.md)
 - [Protocol](docs/protocol.md)
 - [Board descriptor](docs/board-descriptor.md)
 - [Zcash scanning](docs/zcash-scanning.md)

@@ -53,6 +53,8 @@ where
 #[derive(Debug, Deserialize)]
 pub struct OffersQuery {
     pub capability: Option<String>,
+    pub board_id: Option<String>,
+    pub q: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -170,6 +172,19 @@ pub struct ApiError {
 }
 
 impl ApiError {
+    fn not_found() -> Self {
+        Self {
+            status: StatusCode::NOT_FOUND,
+            message: "Unknown board".into(),
+        }
+    }
+    fn bad_request(message: &str) -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            message: message.into(),
+        }
+    }
+
     fn internal(message: impl Into<String>) -> Self {
         tracing::warn!(error = %message.into(), "repository request failed");
         Self {
@@ -203,3 +218,6 @@ impl IntoResponse for ApiError {
             .into_response()
     }
 }
+
+mod boards;
+pub use boards::multi_board_router;

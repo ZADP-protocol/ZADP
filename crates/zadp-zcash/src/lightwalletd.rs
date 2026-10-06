@@ -24,6 +24,21 @@ use zcash_protocol::consensus::{BlockHeight, BranchId};
 fn error(reason: impl Into<String>) -> ZcashError {
     ZcashError::Scan(reason.into())
 }
+/// One network-validated read-only connection shared across isolated board scanners.
+#[derive(Clone)]
+pub struct BoardTransport {
+    client: CompactTxStreamerClient<Channel>,
+    network: ZcashNetwork,
+}
+impl BoardTransport {
+    pub async fn connect(url: &str, network: ZcashNetwork) -> Result<Self, ZcashError> {
+        Ok(Self {
+            client: connect_lightwalletd(url, network).await?,
+            network,
+        })
+    }
+}
+
 pub struct RealZcashScanner {
     client: CompactTxStreamerClient<Channel>,
     network: ZcashNetwork,
@@ -114,8 +129,16 @@ fn header(block: &CompactBlock) -> Result<BlockHeader, ZcashError> {
 
 impl RealZcashScanner {
     pub async fn connect(board: &BoardDescriptor, url: &str) -> Result<Self, ZcashError> {
+        let transport = BoardTransport::connect(url, board.board.network).await?;
+        Self::with_transport(board, &transport)
+    }
+    /// Reuse one already network-validated transport for multiple isolated boards.
+    pub fn with_transport(
+        board: &BoardDescriptor,
+        transport: &BoardTransport,
+    ) -> Result<Self, ZcashError> {
         board
-            .validate(board.board.network)
+            .validate(transport.network)
             .map_err(|_| error("invalid signed board descriptor"))?;
         let network = board.board.network;
         let params = network.parameters();
@@ -134,7 +157,7 @@ impl RealZcashScanner {
             .ok_or_else(|| error("missing Orchard receiver"))?;
         let prepared = ivk.prepare();
         Ok(Self {
-            client: connect_lightwalletd(url, network).await?,
+            client: transport.client.clone(),
             network,
             ivk,
             prepared,

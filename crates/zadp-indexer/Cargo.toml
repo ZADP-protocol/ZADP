@@ -17,10 +17,10 @@ tracing = { workspace = true }
 async-trait = { workspace = true }
 
 rusqlite.workspace = true
+zcash_keys.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-zcash_keys.workspace = true
 zip32.workspace = true
 rand.workspace = true
 
