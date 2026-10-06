@@ -75,7 +75,11 @@ Buy on an eligible offer opens a seller-specific order form. The browser calls
 the advertised seller endpoint directly, shows amount/expiry/ZIP-321 QR, polls
 status and retrieves the result with its claim token. HTTPS and seller CORS are
 required outside the explicit loopback demo. Orders do not pass through the
-discovery server. HTTPS alone does not prove seller quality; indexer acceptance
+discovery server. A persistent payment-mode notice distinguishes LOCAL PAYMENT
+SIMULATION, TESTNET PAYMENT REQUEST and REAL MAINNET PAYMENT REQUEST before and
+after order creation. Simulation requests/QRs are labeled as demonstrations with
+a never-fund warning; their wallet-opening action is hidden. A real mainnet
+request requires a separate buyer wallet and explicit human approval. HTTPS alone does not prove seller quality; indexer acceptance
 and signature provenance are not fulfillment guarantees.
 
 The same API serves browser, CLI and agents. An agent may consume the payment URI

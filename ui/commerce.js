@@ -40,6 +40,14 @@ const DirectCommerce = (() => {
     if(memo!==data.memo) throw Error('Payment memo mismatch.');
     return data;
   }
+  function paymentMode(offer,order) {
+    const simulation=order?.simulation===true || offer?.simulation===true;
+    const network=order?.network || offer?.chain?.network;
+    if(simulation)return {label:'LOCAL PAYMENT SIMULATION',notice:'Mock payment evidence only. No funds are sent or received. The QR is a demonstration: never fund this synthetic receiver.',walletAllowed:false};
+    if(network==='mainnet')return {label:'REAL MAINNET PAYMENT REQUEST',notice:'Real ZEC would be spent by your separate buyer wallet. Review the complete request and wallet fee preview; explicit human approval is required. This interface does not send funds.',walletAllowed:true};
+    if(network==='testnet')return {label:'TESTNET PAYMENT REQUEST',notice:'Testnet only: never use mainnet funds. This is not a mainnet purchase. This interface does not send funds.',walletAllowed:true};
+    return {label:'NO PAYMENT MODE SELECTED',notice:'Select an offer to see its network and payment mode. No payment has been prepared or sent.',walletAllowed:false};
+  }
   class Flow {
     constructor({storage,fetch,randomKey,onChange=()=>{}}) {this.storage=storage;this.fetch=fetch;this.randomKey=randomKey;this.onChange=onChange;this.saved=null;this.order=null;this.busy=false;this.error='';}
     emit(){this.onChange(this);}
@@ -95,6 +103,6 @@ const DirectCommerce = (() => {
     }
     forget(){if(this.busy)return false;this.storage.removeItem(storageKey);this.saved=null;this.order=null;this.error='';this.emit();return true;}
   }
-  return {Flow,endpoint,validate,storageKey};
+  return {Flow,endpoint,validate,paymentMode,storageKey};
 })();
 if(typeof module!=='undefined')module.exports=DirectCommerce;

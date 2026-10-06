@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {Flow,endpoint,validate,storageKey}=require('./commerce.js');
+const {Flow,endpoint,validate,paymentMode,storageKey}=require('./commerce.js');
 const qrcode=require('./vendor/qrcode.js');
 const offer={id:'known',capability:'text.uppercase',title:'Uppercase',endpoint:'http://127.0.0.1:8094',expires_at:new Date(Date.now()+3600000).toISOString(),price:{amount:'0.01',currency:'ZEC'},chain:{network:'testnet'},simulation:true};
 const orderId='1'.repeat(32),claim='2'.repeat(64);
@@ -9,6 +9,14 @@ function response(status='waiting_payment'){
  return {order_id:orderId,offer_id:offer.id,status,simulation:true,network:'testnet',amount_zat:1000000,amount_zec:'0.01000000',recipient:'utest1synthetic',memo,payment_request:`zcash:utest1synthetic?amount=0.01&memo=${Buffer.from(memo).toString('base64url')}`,expires_at:Math.floor(Date.now()/1000)+300,claim_token:claim,confirmations:0,confirmations_required:3,payment_check:'not_checked',transitions:['created','waiting_payment']};
 }
 (async()=>{
+ assert.equal(paymentMode(null,null).walletAllowed,false);
+ assert.equal(paymentMode(offer,null).label,'LOCAL PAYMENT SIMULATION');
+ for(const state of ['waiting_payment','paid','processing','completed']){
+   const mode=paymentMode(offer,response(state));assert.equal(mode.walletAllowed,false);assert(mode.notice.includes('never fund'));
+ }
+ assert.equal(paymentMode({...offer,simulation:false,chain:{network:'mainnet'}},null).label,'REAL MAINNET PAYMENT REQUEST');
+ assert.equal(paymentMode({...offer,simulation:false},null).label,'TESTNET PAYMENT REQUEST');
+ assert.equal(paymentMode({...offer,simulation:true,chain:{network:'mainnet'}},null).walletAllowed,false);
  assert.equal(endpoint(offer),'http://127.0.0.1:8094');
  for(const endpointURL of ['http://external.example','https://user:pass@seller.example','https://example.com/zadp','https://seller.example?q=1','https://seller.example/not-root','javascript:alert(1)'])assert.throws(()=>endpoint({...offer,endpoint:endpointURL}));
  assert.throws(()=>endpoint({...offer,simulation:false}));

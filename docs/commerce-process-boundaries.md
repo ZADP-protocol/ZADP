@@ -81,3 +81,22 @@ seller/board wallet before real payment preview and explicit human approval.
 No seed/spending keys should be created or requested in chat. See the updated
 [mainnet gate](mainnet-commerce-plan.md); stop at non-broadcast preview/QR
 preparation while those deployment/wallet prerequisites are absent.
+
+## Preparation acceptance verification
+
+The independent-process acceptance passed twice from fresh temporary directories
+for the mainnet-preparation review. Each run created its own local TLS/seller/
+indexer/UI/client processes and cleaned up its fixture storage. Both runs verified
+confirmation gating, one execution, buyer recovery, seller restart and disposable
+index reconstruction; discovery storage remained unchanged by private orders.
+The ten Rust commerce regressions, ten Python UI tests and direct-browser client
+checks also passed. The browser was checked with a recovered completed local
+order: its persistent LOCAL PAYMENT SIMULATION notice remained visible alongside
+HELLO WORLD and stated that no funds were sent or received.
+
+Payment-mode checks cover simulation before creation and through completion,
+real testnet requests and real mainnet requests. A simulation flag always hides
+the wallet action, even if conflicting metadata names mainnet. These are local
+acceptance results, not proof of a funded testnet or independent mainnet purchase.
+Existing mainnet discovery continued returning HTTP 200; no runtime change,
+new offer, transaction or wallet change was performed for this verification.

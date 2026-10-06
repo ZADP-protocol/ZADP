@@ -185,6 +185,10 @@ function selectCommerceOffer(offer){
 }
 function renderCommerce(flow){
   const offer=flow.saved?.offer || commerceOffer;const order=flow.order;
+  const mode=DirectCommerce.paymentMode(offer,order);
+  $('commerce-mode').textContent=mode.label;$('commerce-mode-notice').textContent=mode.notice;
+  $('commerce-payment-title').textContent=order?.simulation ? 'Demonstration ZIP-321 request / QR · do not pay' : 'ZIP-321 payment request / QR';
+  $('commerce-qr').alt=order?.simulation ? 'Simulation QR only — never send funds' : 'Complete Zcash payment request QR';
   $('commerce-offer').textContent=offer ? `${offer.title} · ${offer.price.amount} ZEC · Seller: ${offer.endpoint}` : 'Choose Buy on a supported text.uppercase offer.';
   $('commerce-create').disabled=flow.busy || !offer || Boolean(flow.saved?.order_id);
   $('commerce-create').textContent=flow.saved && !flow.saved.order_id ? 'Retry saved order with the same text' : 'Prepare seller order';
@@ -199,7 +203,7 @@ function renderCommerce(flow){
   if(payable){
     const code=qrcode(0,'M');code.addData(order.payment_request);code.make();$('commerce-qr').src=code.createDataURL(4,16);
     $('commerce-uri').textContent=order.payment_request;$('commerce-memo').textContent=`Required memo: ${order.memo}`;
-    $('commerce-wallet').hidden=order.simulation;
+    $('commerce-wallet').hidden=!mode.walletAllowed;
     if(order.simulation){$('commerce-wallet').removeAttribute('href');$('commerce-status').textContent+=' · Synthetic receiver: never send funds.';}
     else{$('commerce-wallet').href=order.payment_request;}
   }else{$('commerce-qr').removeAttribute('src');$('commerce-uri').textContent='';$('commerce-memo').textContent='';$('commerce-wallet').removeAttribute('href');}
