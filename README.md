@@ -284,12 +284,17 @@ _No principal sponsors yet._
 Public name/project listing with one HTTPS link, displayed above normal Sponsors.
 README visibility only; no logos, badges or additional marketing text.
 
-**Pay with ZEC:** copy this complete ZIP-321 payment request into your Zcash
+**Pay with ZEC:** scan the QR below or copy this complete ZIP-321 payment request into your Zcash
 wallet. It specifies the project recipient and exact tier amount, with no memo:
 
 ```text
 zcash:u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau?amount=1.0
 ```
+
+<img src="docs/images/zadp-principal-sponsor-qr.svg" alt="Principal Sponsor payment request QR: 1.0 ZEC to the project Unified Address, no memo" width="320">
+
+[PNG QR fallback](docs/images/zadp-principal-sponsor-qr.png) · **1.0 ZEC**, excluding network fees.
+Scan the QR to load the recipient and amount; **add your sponsorship memo manually** before paying.
 
 Manually enter this memo in your wallet before approving payment:
 
@@ -312,12 +317,17 @@ _No sponsors yet._
 Public name/project listing with one HTTPS link in this Sponsors section.
 README visibility only; no logos, badges or additional marketing text.
 
-**Pay with ZEC:** copy this complete ZIP-321 payment request into your Zcash
+**Pay with ZEC:** scan the QR below or copy this complete ZIP-321 payment request into your Zcash
 wallet. It specifies the same project recipient and exact tier amount, with no memo:
 
 ```text
 zcash:u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau?amount=0.1
 ```
+
+<img src="docs/images/zadp-sponsor-qr.svg" alt="Sponsor payment request QR: 0.1 ZEC to the project Unified Address, no memo" width="320">
+
+[PNG QR fallback](docs/images/zadp-sponsor-qr.png) · **0.1 ZEC**, excluding network fees.
+Scan the QR to load the recipient and amount; **add your sponsorship memo manually** before paying.
 
 Manually enter this memo in your wallet before approving payment:
 
@@ -348,11 +358,12 @@ sponsor names and links are not automatically included in payment requests.
 Network fees are additional: review the recipient, amount, memo and wallet fee
 before sending. Never send a second payment merely because a listing is pending.
 
-This README provides copyable payment requests only, without a generated tier
-QR or wallet integration. If your wallet renders a QR from a request, verify it
-contains the complete URI and correct amount; manually add your memo before paying.
-The previous address-only donation QR is no longer shown because it does not
-specify either sponsorship amount.
+Both tier QRs encode exactly their complete ZIP-321 URI above: the project
+Unified Address and tier amount only, with no sponsor name, URL or memo. Wallet
+ZIP-321 support is required; verify the amount and recipient after scanning.
+QRs use square dark modules (`#0D1117`) on an opaque white background with a
+four-module quiet zone, no logo, and no transparent background. SVGs and PNG
+fallbacks remain readable on GitHub light and dark backgrounds.
 
 **Manual review and publication:** the maintainer checks the wallet and shielded
 memo, confirms the tier/amount, reviews the name and HTTPS link, and manually
