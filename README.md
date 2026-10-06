@@ -48,11 +48,11 @@ flowchart LR
 
 ### Visual overview
 
-![ZADP discovery overview: signed offer publication, memo decryption, validation, indexing and API discovery](docs/images/zadp-discovery-overview.jpg)
+![ZADP discovery and payment overview: signed offers, read-only board UIVK indexing, independent discovery and direct shielded payments](docs/images/zadp-discovery-and-settlement.png)
 
-![ZADP discovery and future direct buyer-to-seller shielded settlement](docs/images/zadp-discovery-and-settlement.jpg)
+This conceptual overview separates board discovery from direct buyer-to-seller payments. Indexers use the board’s **Unified Incoming Viewing Key (UIVK)** to read offers and validate their signatures and admission policy; this capability cannot spend funds or read unrelated seller payments. Offers use compact CBOR within the 512-byte memo budget. The implemented discovery endpoints are `GET /offers` and `GET /healthz`.
 
-These are conceptual diagrams, not implementation specifications. Their illustrative JSON uses a legacy `zap` field; the actual protocol uses `zadp` and compact binary memo encoding. The current board API provides `GET /offers` and `GET /healthz`; the pictured `/offers/{id}` and `/search` endpoints are not implemented. Board offers are readable by holders of the public board incoming viewing capability, despite the encrypted transport. Live buyer payment acceptance remains future work; the local UI and experimental service implement only the boundaries described below. See [Protocol](docs/protocol.md) and the status checklist below for current behavior.
+Mainnet offer discovery and local self-payment fulfillment have been verified. An independent buyer purchase and public service deployment remain pending. The pictured service listings are illustrative. See [Protocol](docs/protocol.md), [Mainnet acceptance](docs/mainnet-acceptance.md) and [Paid service flow](docs/paid-service-flow.md) for implementation details.
 
 ## Current status
 
