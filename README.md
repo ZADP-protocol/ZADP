@@ -261,3 +261,15 @@ Workspace `Cargo.toml` declares **`MIT OR Apache-2.0`**. Standalone `LICENSE` / 
 
 These are preparation materials, not a public deployment, hackathon submission
 or claim that real buyer settlement is complete.
+
+## Donate
+
+Support ZADP development with a Zcash (ZEC) donation to this Unified Address:
+
+```text
+u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau
+```
+
+<img src="docs/images/zadp-donation-qr.jpg" alt="Zcash donation QR code for ZADP development" width="320">
+
+The QR code contains exactly the address above, with no preset amount or memo.
