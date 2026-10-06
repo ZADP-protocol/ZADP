@@ -131,34 +131,40 @@ $('preview-costs').addEventListener('click',async()=>{
 });
 walletStatus();
 
-// Invoice access stays in memory, never localStorage or a URL.
-let currentInvoice=null;
-$('create-invoice').addEventListener('click',async()=>{
-  const text=$('test-input').value;
-  if(!text.trim() || text.length>4000){$('payment-status').textContent='Enter 1 to 4,000 characters above.';return;}
-  $('create-invoice').disabled=true;currentInvoice=null;
-  $('invoice-preview').hidden=true;$('paid-result').textContent='';
-  try {
-    const response=await fetch('/api/purchase/invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
-    if(!response.ok)throw Error();
-    const invoice=await response.json();currentInvoice=invoice;
-    $('invoice-summary').textContent=`${invoice.network} · Local unpublished test · ${(invoice.amount_zat/100000000).toFixed(8)} ZEC (${invoice.amount_zat} zat) · ${invoice.confirmations_required} confirmations required · Expires ${new Date(invoice.expires_at*1000).toLocaleString('en')}. Buyer network fee is additional and has not been quoted.`;
-    $('invoice-address').textContent=invoice.pay_to;$('invoice-memo').textContent=invoice.memo;
-    $('invoice-preview').hidden=false;$('payment-status').textContent='Payment instructions prepared. No funds have been sent. Mainnet payment requires separate human approval.';
-  }catch{$('payment-status').textContent='Paid local test unavailable. Check the operator configuration and service.';}
-  finally{$('create-invoice').disabled=false;}
-});
-$('check-payment').addEventListener('click',async()=>{
-  if(!currentInvoice)return;
-  $('check-payment').disabled=true;
-  try{
-    const response=await fetch('/api/purchase/fulfill',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_id:currentInvoice.invoice_id,access_token:currentInvoice.access_token})});
-    if(!response.ok)throw Error();
-    const result=await response.json();
-    const messages={awaiting_payment:'No matching payment with enough confirmations yet.',expired:'Invoice expired. Do not pay it.',observer_unavailable:'Wallet observer unavailable or still synchronizing.',payment_mismatch:'Payment evidence changed. Result withheld.',payment_already_used:'Payment is already assigned to another invoice.',fulfilled:'Payment verified. Result released.'};
-    $('payment-status').textContent=messages[result.status] ?? 'Payment status unavailable.';
-    $('paid-result').textContent=result.status==='fulfilled' ? result.output : '';
-  }catch{$('payment-status').textContent='Payment check unavailable.';$('paid-result').textContent='';}
-  finally{$('check-payment').disabled=false;}
-});
+// Only the random order recovery capability is persisted, never input or wallet data.
+let orderStorage;try{orderStorage=localStorage;}catch{orderStorage={getItem:()=>{throw Error('Browser storage unavailable');},setItem:()=>{throw Error('Browser storage unavailable');}};}
+const purchase=new PurchaseFlow.Flow({storage:orderStorage,fetch:window.fetch.bind(window),
+  randomKey:()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join(''),
+  lock:navigator.locks ? fn=>navigator.locks.request('zadp-local-order',fn) : null,
+  onChange:renderPurchase});
+function renderPurchase(state){
+  const i=state.invoice,r=state.result;
+  $('create-invoice').disabled=purchase.busy || Boolean(i);
+  $('create-invoice').textContent=purchase.key && !i ? 'Retry preparing saved order' : 'Prepare order';
+  $('check-payment').disabled=purchase.busy || !i;
+  $('recover-order').hidden=!purchase.key || Boolean(i);$('recover-order').disabled=purchase.busy;
+  $('new-order').hidden=!['expired','fulfilled'].includes(state.phase);
+  $('invoice-preview').hidden=!i;
+  $('paid-result-card').hidden=state.phase!=='fulfilled';
+  $('paid-result').textContent=state.phase==='fulfilled' ? r.output : '';
+  $('order-progress').value={idle:0,creating:1,recovering:1,ready:2,awaiting_payment:2,checking:2,confirming:3,fulfilled:4}[state.phase] ?? 2;
+  if(i){
+    $('order-mode').textContent=i.simulation ? 'LOCAL SIMULATION · No wallet or mainnet transaction' : 'LOCAL SERVICE · Mainnet payment requires separate human approval';
+    $('invoice-summary').textContent=`${i.network} · ${(i.amount_zat/100000000).toFixed(8)} ZEC (${i.amount_zat.toLocaleString('en')} zat) · Expires ${new Date(i.expires_at*1000).toLocaleString('en')}. Network fee is additional and is not quoted here.`;
+    $('invoice-address').textContent=i.pay_to;$('invoice-memo').textContent=i.memo;
+    $('invoice-expiry').textContent=i.simulation ? 'Simulation only. Do not send funds to this fixture receiver.' : purchase.expired() ? 'Payment window closed. Do not pay this invoice. You may still check a payment mined within its window.' : 'One invoice, one exact payment. If already paid, wait for confirmation; do not pay again.';
+    $('invoice-payment-fields').hidden=purchase.paymentSeen || purchase.expired() || ['checking','confirming','fulfilled','expired','unavailable','observer_unavailable','payment_mismatch','payment_already_used'].includes(state.phase);
+  }else{$('order-mode').textContent='LOCAL SERVICE · No payment is sent by this interface';}
+  const messages={idle:'Enter text above, then prepare one order.',creating:'Preparing your saved order…',recovering:'Recovering your saved order…',ready:'Order saved. No payment has been sent by this interface.',checking:'Checking payment evidence…',awaiting_payment:'No confirmed matching payment yet. If you have already paid, do not resend.',confirming:`Matching payment found: ${r?.confirmations ?? 0} / ${i?.confirmations_required ?? 3} confirmations. Waiting for the result.`,expired:'Invoice expired without an eligible confirmed payment. Do not pay it.',observer_unavailable:'Wallet observer unavailable or synchronizing. Your order is saved; do not pay again.',payment_mismatch:'Payment evidence changed. Result withheld; do not pay again.',payment_already_used:'Payment is assigned to another invoice. Result withheld; contact the operator.',fulfilled:i?.simulation ? 'Simulation completed · No funds were sent.' : r?.self_payment_test ? 'Completed · Verified local self-payment test.' : 'Completed · Payment verified and result released.'};
+  $('payment-status').textContent=state.error || messages[state.phase] || 'Order status unavailable.';
+  $('order-transaction').textContent=r?.txid ? `Transaction: ${r.txid}` : '';
+}
+$('create-invoice').addEventListener('click',()=>purchase.create($('test-input').value));
+$('check-payment').addEventListener('click',()=>purchase.check());
+$('recover-order').addEventListener('click',async()=>{await purchase.restore();await purchase.check();});
+$('new-order').addEventListener('click',()=>{if(purchase.forget()){$('test-input').value='';$('test-input').focus();}});
+window.addEventListener('storage',async e=>{if(e.key===PurchaseFlow.storageKey){await purchase.restore();await purchase.check();}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)purchase.check();});
+setInterval(()=>{if(!document.hidden && purchase.state.invoice && !['fulfilled','expired','payment_mismatch','payment_already_used'].includes(purchase.state.phase))purchase.check();},15000);
+(async()=>{await purchase.restore();await purchase.check();})();
 $('refresh').addEventListener('click',walletStatus);

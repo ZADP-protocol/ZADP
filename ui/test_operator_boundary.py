@@ -44,6 +44,26 @@ class PreviewTests(unittest.TestCase):
                 with self.assertRaises(ValueError):operator.service_request('invoice',{'text':'Hello.'})
             with self.assertRaises(ValueError):operator.service_request('fulfill',{'invoice_id':'x','access_token':'y','payment':'forged'})
 
+    def test_recovery_uses_fixed_tls_bridge_and_verifies_invoice(self):
+        import io
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'config.json'
+            config={'wallet_rpc':'http://127.0.0.1:8232','network':'mainnet','receive_address':'u1expected',
+                    'text_service':{'endpoint':'https://127.0.0.1:8092','tls_ca':'/fake/ca','offer_id':'local','price_zat':1000}}
+            path.write_text(json.dumps(config));path.chmod(0o600);operator=Operator(path)
+            calls=[]
+            def opened(request,**kwargs):
+                calls.append((request.full_url,json.loads(request.data)))
+                return io.BytesIO(json.dumps({'pay_to':'u1expected','offer_id':'local','amount_zat':1000}).encode())
+            client=type('Client',(),{'open':lambda self,*args,**kwargs:opened(*args,**kwargs)})()
+            with patch('operator_boundary.ssl.create_default_context'),patch('operator_boundary.urllib.request.build_opener',return_value=client):
+                result=operator.service_request('recover',{'request_key':'a'*64})
+                self.assertEqual(result['network'],'mainnet');self.assertTrue(result['local_unpublished_test'])
+                self.assertEqual(calls,[('https://127.0.0.1:8092/v1/recover',{'offer_id':'local','request_key':'a'*64})])
+                for body in ({'request_key':'short'},{'request_key':'a'*64,'payment':'forged'}):
+                    with self.assertRaises(ValueError):operator.service_request('recover',body)
+            self.assertEqual(len(calls),1)
+
     def test_unprotected_config_refused(self):
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'config.json';path.write_text('{}');path.chmod(0o644)

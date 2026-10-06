@@ -63,11 +63,13 @@ API; they are not a standardized ZADP/1 purchase wire format.
    seller observer checks payment; result contains `status`, and on fulfillment
    `invoice_id` and `output`. Client-supplied payment evidence is rejected.
 
-The local UI uses `/api/purchase/invoice` and `/api/purchase/fulfill` through a
+The local UI uses `/api/purchase/invoice`, `/api/purchase/recover` and
+`/api/purchase/fulfill` through a
 fixed loopback HTTPS bridge. It checks invoice receiver, offer identifier and
 amount against protected configuration. It does not fetch arbitrary advertised
-URLs or follow redirects. Invoice access stays only in browser memory and is
-lost on reload; secure buyer receipt/session recovery is a remaining design task.
+URLs or follow redirects. Access tokens stay in memory; a random private browser
+recovery capability restores the same invoice after reload. Input is not saved in
+browser storage. Shared browser access also grants access to the saved order.
 
 ## Correlation and idempotency
 
@@ -79,8 +81,9 @@ lost on reload; secure buyer receipt/session recovery is a remaining design task
   mined within the 30-minute invoice window and at least three confirmations.
 - One payment output cannot satisfy two invoices. Repeat fulfill calls return
   the same persisted result after evidence revalidation. Invoice creation is
-  **not idempotent**: retrying creates another invoice. Before deployment add
-  an authenticated idempotency key and recovery semantics; do not auto-pay both.
+  idempotent when the local UI supplies its private recovery key: retries return
+  the same invoice, while changed input is rejected. Legacy creation without a key
+  still creates separate invoices. Recovery never submits a payment.
 - The observer refuses unsynchronized/changing tips or a truncated 1,000-item
   history. It fails closed if required address/memo fields are absent.
 - The local service limits active invoices to 100 and total stored invoices to
@@ -126,3 +129,11 @@ acceptance was enabled. This is evidence for local settlement/observation and
 fulfillment, not independent buyer acceptance, a newly published OFFER or a
 publicly available paid endpoint. Private invoice tokens, input, wallet account
 identifiers and incoming viewing authority are not part of this evidence.
+
+
+The local UI now supports one recoverable order with confirmation progress,
+expiry/error handling and result retrieval. Its only persistent browser data is
+a random recovery capability and a non-authoritative payment-seen hint. Service
+input and invoice state remain protected locally. Independent buyer wallets,
+public HTTPS service admission and actual buyer transaction submission from the
+UI remain outside this local milestone.

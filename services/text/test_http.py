@@ -25,7 +25,10 @@ class HttpFlow(unittest.TestCase):
                     data=json.dumps(body).encode(),headers={'Content-Type':'application/json'})
                 return json.load(urlopen(request))
             try:
-                invoice=post('/v1/invoices',{'offer_id':'test-offer','text':'One. Two. Three. Four.'})
+                invoice=post('/v1/invoices',{'offer_id':'test-offer','text':'One. Two. Three. Four.','request_key':'a'*64})
+                self.assertEqual(post('/v1/recover',{'offer_id':'test-offer','request_key':'a'*64}),invoice)
+                self.assertEqual(post('/v1/invoices',{'offer_id':'test-offer','text':'One. Two. Three. Four.','request_key':'a'*64}),invoice)
+                with self.assertRaises(HTTPError):post('/v1/recover',{'offer_id':'test-offer','request_key':'b'*64})
                 access={k:invoice[k] for k in ('invoice_id','access_token')}
                 self.assertEqual(post('/v1/fulfill',access)['status'],'awaiting_payment')
                 with self.assertRaises(HTTPError):post('/v1/fulfill',{**access,'payment':'forged'})

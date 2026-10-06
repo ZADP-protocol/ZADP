@@ -103,3 +103,22 @@ satisfy the self-payment invoice, and the result is marked `self_payment_test`.
 Wrong memos, amounts, receivers, accounts, timing or confirmations still fail. The invoice amount stays in the same wallet and
 only the network fee reduces its net balance. Invoice settlement still needs
 three confirmations and the service's exact payment checks.
+
+
+## Idempotency and recovery
+
+Local UI creation optionally includes a random 64-hex-character `request_key`.
+Repeated creation with the same key and identical offer/text returns the original
+invoice and expiry, including after restart. Changed input with a reused key is
+rejected. `POST /v1/recover` with `offer_id` and `request_key` returns that invoice.
+The key is a private recovery capability: never log it, put it in URLs or Git.
+Only a domain-separated hash of the key is persisted, plus the existing token
+hash; the access token can be deterministically reconstructed from the key.
+Legacy invoices continue to work, but lack this browser recovery capability.
+The additive schema migration preserves their identities, token hashes and payments.
+
+A matching timely mined payment below the threshold returns `confirming` with
+its transaction ID, observed confirmation count and required count. Results are
+still withheld until the threshold. Missing/reorged evidence or unavailable
+observation never returns a cached result. Recovery does not itself certify a
+payment; clients must check fulfillment again.

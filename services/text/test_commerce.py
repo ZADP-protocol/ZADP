@@ -19,7 +19,7 @@ class CommerceTests(unittest.TestCase):
         return self.service.fulfill(self.invoice['invoice_id'],token or self.invoice['access_token'],
             [self.tx] if transactions is None else transactions,tip,synced,now=now)
     def test_only_confirmed_exact_shielded_payment_fulfills(self):
-        self.assertEqual(self.run_order(tip=11)['status'],'awaiting_payment')
+        self.assertEqual(self.run_order(tip=11),{'status':'confirming','confirmations':2,'confirmations_required':3,'txid':self.tx['txid']})
         result=self.run_order()
         self.assertEqual(result['output'],'One. Two. Three.')
         self.assertEqual(self.run_order(),result)
@@ -52,6 +52,41 @@ class CommerceTests(unittest.TestCase):
         result=self.run_order();self.service.db.close()
         self.service=Commerce(self.path,'offer-test','seller-account','test-receiver',1000)
         self.assertEqual(self.run_order(),result)
+    def test_idempotent_creation_and_recovery_survive_restart(self):
+        key='c'*64
+        first=self.service.create('offer-test','Saved text.',now=100,request_key=key)
+        self.assertEqual(self.service.create('offer-test','Saved text.',now=200,request_key=key),first)
+        self.assertEqual(self.service.recover('offer-test',key),first)
+        with self.assertRaises(ValueError):self.service.create('offer-test','Changed text.',request_key=key)
+        with self.assertRaises(PermissionError):self.service.recover('offer-test','d'*64)
+        self.service.db.close()
+        self.service=Commerce(self.path,'offer-test','seller-account','test-receiver',1000)
+        self.assertEqual(self.service.recover('offer-test',key),first)
+        self.assertEqual(self.service.db.execute('SELECT count(*) FROM invoices WHERE request_hash IS NOT NULL').fetchone()[0],1)
+        columns=self.service.db.execute('SELECT request_hash,token_hash FROM invoices WHERE request_hash IS NOT NULL').fetchone()
+        self.assertNotIn(key,list(columns));self.assertNotIn(first['access_token'],list(columns))
+        for bad in ('short','g'*64,None):
+            with self.assertRaises(ValueError):self.service.recover('offer-test',bad)
+
+    def test_legacy_schema_migration_preserves_paid_receipt(self):
+        import sqlite3,hashlib,os
+        path=Path(self.tmp.name)/'legacy.sqlite'
+        connection=sqlite3.connect(path)
+        connection.execute('CREATE TABLE invoices(id TEXT PRIMARY KEY,token_hash TEXT NOT NULL,offer_id TEXT NOT NULL,account TEXT NOT NULL,address TEXT NOT NULL,amount INTEGER NOT NULL,created INTEGER NOT NULL,expires INTEGER NOT NULL,input TEXT NOT NULL,output TEXT,payment TEXT UNIQUE)')
+        connection.execute('INSERT INTO invoices VALUES(?,?,?,?,?,?,?,?,?,?,?)',('legacy',hashlib.sha256(b'legacy-token').hexdigest(),'offer-test','seller-account','test-receiver',1000,100,1900,'Original.','Original.','existing:orchard:0'))
+        connection.commit();connection.close();os.chmod(path,0o600)
+        migrated=Commerce(path,'offer-test','seller-account','test-receiver',1000)
+        row=migrated.db.execute('SELECT * FROM invoices WHERE id=?',('legacy',)).fetchone()
+        self.assertEqual(row['token_hash'],hashlib.sha256(b'legacy-token').hexdigest())
+        self.assertEqual(row['payment'],'existing:orchard:0');self.assertEqual(row['output'],'Original.')
+        self.assertIsNone(row['request_hash']);migrated.db.close()
+
+    def test_concurrent_retries_create_one_invoice(self):
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results=list(executor.map(lambda _:self.service.create('offer-test','Same.',now=100,request_key='e'*64),range(16)))
+        self.assertEqual(len({result['invoice_id'] for result in results}),1)
+
     def test_input_limits_and_unknown_offer(self):
         with self.assertRaises(ValueError):self.service.create('other','hello')
         with self.assertRaises(ValueError):self.service.create('offer-test','x'*4001)

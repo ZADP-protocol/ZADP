@@ -98,15 +98,22 @@ class Operator:
             or url.password or url.query or url.fragment or url.path not in ('','/')):
             raise ValueError('Service must be fixed loopback HTTPS')
         if operation=='invoice':
-            if set(body)!={'text'}: raise ValueError()
+            if set(body) not in ({'text'},{'text','request_key'}): raise ValueError()
             text=body['text']
             if not isinstance(text,str) or not text.strip() or len(text)>4000: raise ValueError()
             payload={'offer_id':config['offer_id'],'text':text}; route='/v1/invoices'
+            if 'request_key' in body: payload['request_key']=body['request_key']
+        elif operation=='recover':
+            if set(body)!={'request_key'}: raise ValueError()
+            payload={'offer_id':config['offer_id'],'request_key':body['request_key']}; route='/v1/recover'
         elif operation=='fulfill':
             if set(body)!={'invoice_id','access_token'}: raise ValueError()
             if not all(isinstance(v,str) and len(v)<=128 for v in body.values()): raise ValueError()
             payload=body; route='/v1/fulfill'
         else: raise ValueError()
+        if 'request_key' in payload:
+            key=payload['request_key']
+            if not isinstance(key,str) or len(key)!=64 or any(c not in '0123456789abcdef' for c in key): raise ValueError()
         context=ssl.create_default_context(cafile=config['tls_ca'])
         client=urllib.request.build_opener(urllib.request.ProxyHandler({}),
             urllib.request.HTTPSHandler(context=context), NoRedirect())
@@ -116,7 +123,7 @@ class Operator:
             data=response.read(32769)
         if len(data)>32768: raise ValueError()
         result=json.loads(data)
-        if operation=='invoice':
+        if operation in ('invoice','recover'):
             if (result['pay_to']!=self.config['receive_address'] or result['offer_id']!=config['offer_id']
                 or result['amount_zat']!=config['price_zat']): raise ValueError('Invoice mismatch')
             result['network']=self.config['network']

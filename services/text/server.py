@@ -51,7 +51,7 @@ class Handler(BaseHTTPRequestHandler):
                          'signs_or_broadcasts':False})
 
     def do_POST(self):
-        if self.path not in ('/v1/invoices','/v1/fulfill'):
+        if self.path not in ('/v1/invoices','/v1/fulfill','/v1/recover'):
             return self.respond(404,{'error':'not_found'})
         if self.headers.get('Host') != f'127.0.0.1:{self.server.server_port}':
             return self.respond(403,{'error':'host_rejected'})
@@ -69,9 +69,12 @@ class Handler(BaseHTTPRequestHandler):
             request=json.loads(self.rfile.read(length))
             if not isinstance(request,dict): raise ValueError()
             if self.path == '/v1/invoices':
-                if set(request) != {'offer_id','text'}: raise ValueError()
-                result=self.server.commerce.create(request['offer_id'],request['text'])
+                if set(request) not in ({'offer_id','text'},{'offer_id','text','request_key'}): raise ValueError()
+                result=self.server.commerce.create(request['offer_id'],request['text'],request_key=request.get('request_key'))
                 return self.respond(201,result)
+            if self.path == '/v1/recover':
+                if set(request) != {'offer_id','request_key'}: raise ValueError()
+                return self.respond(200,self.server.commerce.recover(request['offer_id'],request['request_key']))
             if set(request) != {'invoice_id','access_token'}: raise ValueError()
             if not all(isinstance(v,str) and len(v)<=128 for v in request.values()): raise ValueError()
             # No client-provided payment evidence is ever accepted.

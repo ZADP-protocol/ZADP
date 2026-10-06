@@ -4,3 +4,5 @@ textarea{display:block;margin-top:8px;width:100%;background:#1a211f;border:1px s
 .status-card p{overflow-wrap:anywhere}#receive-qr{background:#fff;padding:8px;border-radius:8px;margin:12px 0}
 
 .offer h2, dialog dd { overflow-wrap: anywhere; }
+
+.purchase-card{max-width:780px}.order-steps{display:flex;flex-wrap:wrap;gap:12px 28px;padding-left:22px;color:#c5ef80;font-size:12px}.purchase-card progress{width:100%;height:10px;accent-color:#c5ef80;margin:14px 0 24px}.copy-value{font-family:ui-monospace,monospace;background:#111815;padding:12px;border-radius:8px}.order-notice{border-left:3px solid #c5ef80;padding-left:14px}#paid-result{white-space:pre-wrap;color:#eeeae2}button:disabled{opacity:.5;cursor:not-allowed}

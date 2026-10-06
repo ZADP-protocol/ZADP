@@ -2,6 +2,7 @@
 
 Wallet observations must come from a trusted local observer, never HTTP clients.
 """
+import base64
 import hashlib
 import os
 import secrets
@@ -42,29 +43,57 @@ class Commerce:
             created INTEGER NOT NULL, expires INTEGER NOT NULL, input TEXT NOT NULL,
             output TEXT, payment TEXT UNIQUE);
         ''')
+        columns={row['name'] for row in self.db.execute('PRAGMA table_info(invoices)')}
+        if 'request_hash' not in columns:
+            self.db.execute('ALTER TABLE invoices ADD COLUMN request_hash TEXT')
+        self.db.execute('CREATE UNIQUE INDEX IF NOT EXISTS invoice_request_key ON invoices(request_hash)')
         self.db.commit()
 
-    def create(self, offer_id, text, now=None):
-        now = int(time.time()) if now is None else now
-        if offer_id != self.offer_id:
-            raise ValueError('Unknown offer')
-        if not isinstance(text, str) or not text.strip() or len(text) > 4000:
+    @staticmethod
+    def request_credentials(request_key):
+        if not isinstance(request_key,str) or len(request_key)!=64 or any(c not in '0123456789abcdef' for c in request_key):
+            raise ValueError('Invalid order recovery key')
+        raw=bytes.fromhex(request_key)
+        digest=hashlib.sha256(b'ZADP-order-idempotency-v1\0'+raw).hexdigest()
+        token=base64.urlsafe_b64encode(hashlib.sha256(b'ZADP-order-access-v1\0'+raw).digest()).decode().rstrip('=')
+        return digest,token
+
+    def invoice_response(self,row,token):
+        return {'invoice_id':row['id'],'access_token':token,'offer_id':row['offer_id'],
+                'amount_zat':row['amount'],'currency':'ZEC','pay_to':row['address'],
+                'memo':f"ZADP-PAY/1:{row['id']}",'expires_at':row['expires'],
+                'confirmations_required':self.confirmations,'status':'awaiting_payment'}
+
+    def recover(self,offer_id,request_key):
+        digest,token=self.request_credentials(request_key)
+        with self.lock:
+            row=self.db.execute('SELECT * FROM invoices WHERE request_hash=?',(digest,)).fetchone()
+            if row is None or row['offer_id']!=offer_id:
+                raise PermissionError('Order recovery unavailable')
+            return self.invoice_response(row,token)
+
+    def create(self,offer_id,text,now=None,request_key=None):
+        now=int(time.time()) if now is None else now
+        if offer_id!=self.offer_id: raise ValueError('Unknown offer')
+        if not isinstance(text,str) or not text.strip() or len(text)>4000:
             raise ValueError('Input must contain 1 to 4000 characters')
-        invoice_id, token = secrets.token_hex(16), secrets.token_urlsafe(32)
-        with self.lock, self.db:
+        digest,token=self.request_credentials(request_key) if request_key is not None else (None,secrets.token_urlsafe(32))
+        with self.lock,self.db:
+            if digest:
+                row=self.db.execute('SELECT * FROM invoices WHERE request_hash=?',(digest,)).fetchone()
+                if row is not None:
+                    if row['offer_id']!=offer_id or row['input']!=text:
+                        raise ValueError('Recovery key already belongs to a different order')
+                    return self.invoice_response(row,token)
             total=self.db.execute('SELECT count(*) FROM invoices').fetchone()[0]
-            if total >= 10000:
-                raise ValueError('Invoice storage limit reached; operator review required')
-            count = self.db.execute('SELECT count(*) FROM invoices WHERE expires > ?', (now,)).fetchone()[0]
-            if count >= 100:
-                raise ValueError('Service capacity reached')
-            self.db.execute('INSERT INTO invoices(id,token_hash,offer_id,account,address,amount,created,expires,input) VALUES(?,?,?,?,?,?,?,?,?)',
-                            (invoice_id, hashlib.sha256(token.encode()).hexdigest(), offer_id,
-                             self.account, self.address, self.price_zat, now, now+1800, text))
-        return {'invoice_id':invoice_id, 'access_token':token, 'offer_id':offer_id,
-                'amount_zat':self.price_zat, 'currency':'ZEC', 'pay_to':self.address,
-                'memo':f'ZADP-PAY/1:{invoice_id}', 'expires_at':now+1800,
-                'confirmations_required':self.confirmations, 'status':'awaiting_payment'}
+            if total>=10000: raise ValueError('Invoice storage limit reached; operator review required')
+            count=self.db.execute('SELECT count(*) FROM invoices WHERE expires>?',(now,)).fetchone()[0]
+            if count>=100: raise ValueError('Service capacity reached')
+            invoice_id=secrets.token_hex(16)
+            self.db.execute('INSERT INTO invoices(id,token_hash,offer_id,account,address,amount,created,expires,input,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                            (invoice_id,hashlib.sha256(token.encode()).hexdigest(),offer_id,self.account,self.address,self.price_zat,now,now+1800,text,digest))
+            row=self.db.execute('SELECT * FROM invoices WHERE id=?',(invoice_id,)).fetchone()
+            return self.invoice_response(row,token)
 
     def fulfill(self, invoice_id, token, transactions, tip, synchronized, now=None):
         """Transactions must be authenticated z_listtransactions observations.
@@ -81,11 +110,12 @@ class Commerce:
             if not synchronized:
                 return {'status':'observer_unavailable'}
             payment = None
+            confirmations = 0
             for tx in transactions:
                 height, block_time = tx.get('mined_height'), tx.get('block_time')
                 txid = tx.get('txid', '')
                 if (tx.get('account_uuid') != row['account'] or not isinstance(height,int)
-                    or height > tip or tip-height+1 < self.confirmations
+                    or height > tip
                     or not isinstance(block_time,int) or not row['created'] <= block_time <= row['expires']
                     or len(txid) != 64 or any(c not in '0123456789abcdef' for c in txid)):
                     continue
@@ -103,11 +133,14 @@ class Commerce:
                         or output.get('memo') != f'ZADP-PAY/1:{invoice_id}'
                         or not isinstance(index,int) or index < 0):
                         continue
+                    confirmations = tip-height+1
                     payment = f"{txid}:{output['pool']}:{index}"
                     break
                 if payment: break
             if payment is None:
                 return {'status':'expired' if now > row['expires'] else 'awaiting_payment'}
+            if confirmations < self.confirmations:
+                return {'status':'confirming','confirmations':confirmations,'confirmations_required':self.confirmations,'txid':txid}
             # An output cannot be consumed by another invoice, nor swapped after fulfillment.
             if row['payment'] is not None and row['payment'] != payment:
                 return {'status':'payment_mismatch'}
@@ -117,7 +150,7 @@ class Commerce:
                     self.db.execute('UPDATE invoices SET output=?,payment=? WHERE id=?', (result,payment,invoice_id))
             except sqlite3.IntegrityError:
                 return {'status':'payment_already_used'}
-            response = {'status':'fulfilled','invoice_id':invoice_id,'output':result}
+            response = {'status':'fulfilled','invoice_id':invoice_id,'output':result,'confirmations':confirmations,'confirmations_required':self.confirmations,'txid':txid}
             if self.self_test_payment and self.self_test_payment.get('txid') == txid:
                 response['self_payment_test'] = True
             return response

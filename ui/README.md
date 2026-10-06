@@ -76,11 +76,11 @@ any later publication; a preview is not an approval or a guaranteed future fee.
 
 Optional `text_service` configuration contains a fixed loopback HTTPS `endpoint`,
 `tls_ca`, `offer_id` and integer `price_zat`. The UI never fetches arbitrary offer
-URLs. **Prepare payment instructions** creates a private persistent invoice for
+URLs. **Prepare order** creates a private persistent invoice for
 the entered text, displaying network, exact amount, receiver, required text memo,
 expiry and confirmation threshold. Buyer network fees are additional and are not
-quoted by an invoice. The access token stays in browser memory only; reloading
-loses that access. **Check payment and retrieve result** is read-only with respect
+quoted by an invoice. The access token stays in browser memory; the private
+recovery key restores access after reload. **Check payment** is read-only with respect
 to funds and releases output only after the seller observer verifies payment.
 
 This is an unpublished local test, separate from the placeholder mainnet offer.
@@ -95,3 +95,39 @@ label is unavailable. Invalid nested offer/price/chain data is rejected. Details
 show network, txid, inclusion height, confirmations, seller and expiry; signature
 status is explicitly the indexer's acceptance, not browser-side cryptographic
 verification. Run `node ui/test_offers.js` for these response boundaries.
+
+
+## Recoverable local purchase flow
+
+The English Test service panel prepares one active order, restores it after a
+reload, polls authenticated payment status every 15 seconds while visible, shows
+confirmation progress and releases the result only when the service verifies
+payment. Errors hide stale results. Expired orders cannot show payment instructions.
+Once a payment has been seen, instructions remain hidden through outages/reloads;
+the hint never authorizes fulfillment. New orders require completion or expiry.
+
+A random 256-bit recovery capability and a payment-seen hint are stored in this
+browser's localStorage. Neither input text nor wallet credentials are stored there.
+Anyone with access to this browser origin can recover the order; private input
+remains in the service's protected local SQLite database. Web Locks serialize
+order preparation across tabs. Storage/lock failures prevent invoice creation.
+Creation retries use the same key; the service persists its hash and returns the
+same invoice/token, rejecting changed input. Invoice access tokens remain in memory.
+Starting a new order forgets browser access to the previous one, not service data.
+The UI has no signing or broadcasting route and cannot prevent someone manually
+sending the same payment twice from an external wallet.
+
+Run `node ui/test_purchase.js` for recovery, duplicate-click, interrupted creation,
+expiry, malformed-response and unavailable/reorg behavior. For an isolated browser
+simulation, create a state file containing `{"status":"awaiting_payment"}` and run:
+
+```sh
+python3 ui/dev_purchase_fixture.py --state-file /tmp/zadp-fixture-state.json
+```
+
+Open port 8093. Change only the fixture state file to
+`{"status":"confirming","confirmations":2}`, `{"status":"fulfilled"}`,
+`{"status":"expired"}` or `{"status":"unavailable"}` and check the order.
+The separate simulator has no wallet credentials or payment methods. Its invoices
+are explicitly marked LOCAL SIMULATION, use a non-payable fixture receiver, and
+must never receive funds. No simulator route is included in the real UI server.
