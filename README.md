@@ -275,14 +275,99 @@ Workspace `Cargo.toml` declares **`MIT OR Apache-2.0`**. Standalone `LICENSE` / 
 These are preparation materials, not a public deployment, hackathon submission
 or claim that real buyer settlement is complete.
 
-## Donate
+## Principal Sponsors
 
-Support ZADP development with a Zcash (ZEC) donation to this Unified Address:
+_No principal sponsors yet._
+
+**Principal Sponsor — 1.0 ZEC**
+
+Public name/project listing with one HTTPS link, displayed above normal Sponsors.
+README visibility only; no logos, badges or additional marketing text.
+
+**Pay with ZEC:** copy this complete ZIP-321 payment request into your Zcash
+wallet. It specifies the project recipient and exact tier amount, with no memo:
+
+```text
+zcash:u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau?amount=1.0
+```
+
+Manually enter this memo in your wallet before approving payment:
+
+```text
+ZADP-SPONSOR|v1|principal|public=YOUR_NAME|url=https://YOUR_URL
+```
+
+Example:
+
+```text
+ZADP-SPONSOR|v1|principal|public=AliceLabs|url=https://alice.example
+```
+
+## Sponsors
+
+_No sponsors yet._
+
+**Sponsor — 0.1 ZEC**
+
+Public name/project listing with one HTTPS link in this Sponsors section.
+README visibility only; no logos, badges or additional marketing text.
+
+**Pay with ZEC:** copy this complete ZIP-321 payment request into your Zcash
+wallet. It specifies the same project recipient and exact tier amount, with no memo:
+
+```text
+zcash:u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau?amount=0.1
+```
+
+Manually enter this memo in your wallet before approving payment:
+
+```text
+ZADP-SPONSOR|v1|sponsor|public=YOUR_NAME|url=https://YOUR_URL
+```
+
+Example:
+
+```text
+ZADP-SPONSOR|v1|sponsor|public=AliceLabs|url=https://alice.example
+```
+
+**Sponsor ZADP** — Purchase project sponsorship visibility with ZEC.
+Project sponsorship placements are available in ZEC.
+
+Sponsor listings have no fixed term and remain visible while the ZADP Sponsors section is maintained.
+
+Both tiers use the configured public project Unified Address:
 
 ```text
 u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau
 ```
 
-<img src="docs/images/zadp-donation-qr.png" alt="Zcash donation QR code for ZADP development" width="320">
+`public=` is the name/project name you authorize us to publish. `url=` is the
+single HTTPS link you authorize us to publish. Replace the placeholders yourself;
+sponsor names and links are not automatically included in payment requests.
+Network fees are additional: review the recipient, amount, memo and wallet fee
+before sending. Never send a second payment merely because a listing is pending.
 
-The QR code contains exactly the address above, with no preset amount or memo.
+This README provides copyable payment requests only, without a generated tier
+QR or wallet integration. If your wallet renders a QR from a request, verify it
+contains the complete URI and correct amount; manually add your memo before paying.
+The previous address-only donation QR is no longer shown because it does not
+specify either sponsorship amount.
+
+**Manual review and publication:** the maintainer checks the wallet and shielded
+memo, confirms the tier/amount, reviews the name and HTTPS link, and manually
+adds approved listings as simple Markdown text links. Publication is not
+automatic. There is no sponsorship watcher, sponsor database, backend API or
+automatic README/GitHub update. The project may refuse names or links containing
+malicious links, impersonation, illegal content, deceptive affiliation claims,
+malware or abusive content. Payment does not bypass manual review.
+
+**Privacy:** the payment may be shielded, but the value provided in `public=`
+and the `url=` link are intentionally published in the README after manual
+approval. Do not include seeds, spending keys, wallet credentials or other
+private information in the memo.
+
+Project sponsorship is separate from the ZADP protocol. Neither tier grants
+protocol privileges or affects offer ranking, board admission, protocol validity,
+moderation, discovery, seller commerce, indexer behavior or reputation. A
+Principal Sponsor receives README visibility only.
