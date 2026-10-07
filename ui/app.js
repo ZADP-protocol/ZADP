@@ -31,12 +31,29 @@ function render() {
     if(o.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
     $('offers').append(card);
   }
-  $('message').textContent = filtered.length ? '' : (offers.length ? 'No offers match your search.' : 'No offers have been indexed yet.');
+  $('message').textContent = buyerGeo.mode==='nearby'&&!buyerGeo.location ? 'Choose a location to discover matching offers.' : filtered.length ? '' : (offers.length ? 'No offers match your search.' : 'No offers have been indexed yet.');
 }
-const buyerGeo=new GeoDiscovery.BuyerLocation(()=>{
-  $('geo-mode').value=buyerGeo.mode;$('buyer-geo-status').textContent=buyerGeo.message;
-  $('buyer-location').disabled=buyerGeo.busy;render();
+function syncBuyerControls() {
+  const nearby=buyerGeo.mode==='nearby',active=nearby&&!!buyerGeo.location;
+  $('geo-mode').value=buyerGeo.mode;
+  $('mode-anywhere').setAttribute('aria-pressed',String(!nearby));
+  $('mode-nearby').setAttribute('aria-pressed',String(nearby));
+  $('nearby-controls').hidden=!nearby;
+  $('buyer-radius-label').hidden=!active;$('buyer-clear').hidden=!active;
+  $('buyer-location').hidden=active;$('buyer-manual-fields').hidden=active;
+  $('buyer-geo-status').textContent=active?'Location active · kept on this device':buyerGeo.message;
+  $('buyer-location').disabled=buyerGeo.busy;
+}
+const buyerGeo=new GeoDiscovery.BuyerLocation(()=>{syncBuyerControls();render();});
+syncBuyerControls();
+$('mode-anywhere').addEventListener('click',()=>buyerGeo.setMode('anywhere'));
+$('mode-nearby').addEventListener('click',()=>buyerGeo.setMode('nearby'));
+$('menu-toggle').addEventListener('click',()=>{
+  const nav=$('main-navigation'),open=nav.classList.toggle('is-open');
+  $('menu-toggle').setAttribute('aria-expanded',String(open));
 });
+function closeMenu(){ $('main-navigation').classList.remove('is-open');$('menu-toggle').setAttribute('aria-expanded','false'); }
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closeMenu();});
 $('buyer-location').addEventListener('click',()=>buyerGeo.request(navigator.geolocation));
 $('geo-mode').addEventListener('change',()=>buyerGeo.setMode($('geo-mode').value));
 $('buyer-radius').addEventListener('change',()=>buyerGeo.setRadius(Number($('buyer-radius').value)));
@@ -71,6 +88,7 @@ async function refresh() {
 for(const button of document.querySelectorAll('[data-tab]')) button.addEventListener('click',()=>{
   for(const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected',String(b===button));
   for(const section of document.querySelectorAll('.panel')) section.hidden = section.id !== button.dataset.tab;
+  closeMenu();
 });
 $('board-filter').addEventListener('change',render); $('search').addEventListener('input',render); $('refresh').addEventListener('click',refresh); $('close').addEventListener('click',()=>$('detail').close());
 function draft() {

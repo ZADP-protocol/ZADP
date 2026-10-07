@@ -93,7 +93,7 @@ Do **not** treat CompactTxStreamer support or offline fixtures as proof of live-
 
 ### Local discovery
 
-A seller can publish **“Cabin cleaning — available within 50 km”** with an
+A seller can publish **“Bike repair — available within 25 km of San Francisco”** with an
 approximate public service-area center. The reference seller UI rounds
 browser-acquired coordinates to reduce accidental disclosure of precise location.
 A buyer can choose **“Show offers near

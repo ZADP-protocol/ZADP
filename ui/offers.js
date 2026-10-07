@@ -50,21 +50,22 @@ const GeoDiscovery = (() => {
       .sort((a,b)=>a.distance_m-b.distance_m || a.offer.id.localeCompare(b.offer.id));
   }
   class BuyerLocation {
-    constructor(onChange=()=>{}) {this.onChange=onChange;this.location=null;this.mode='anywhere';this.radius_m=50000;this.message='Anywhere · no buyer location requested.';this.busy=false;this.generation=0;}
+    constructor(onChange=()=>{}) {this.onChange=onChange;this.location=null;this.mode='anywhere';this.radius_m=25000;this.message='Anywhere · no buyer location requested.';this.busy=false;this.generation=0;}
     setDegrees(lat,lon) {
       const location=fromDegrees(lat,lon,this.radius_m,true);this.generation++;this.busy=false;this.location=location;this.mode='nearby';this.message='Nearby · location stays in this client memory only.';this.onChange();
     }
     setRadius(radius_m) {if(!Number.isInteger(radius_m)||radius_m<0||radius_m>MAX_RADIUS_M)throw Error('Invalid search radius.');this.radius_m=radius_m;if(this.location)this.location={...this.location,radius_m};this.onChange();}
-    setMode(mode) {if(!['anywhere','nearby'].includes(mode))throw Error('Invalid discovery mode.');if(mode==='nearby'&&!this.location){this.message='Choose a location or enter coordinates to use Nearby.';this.onChange();return;}this.mode=mode;this.message=mode==='nearby'?'Nearby · location stays in this client memory only.':this.location?'Anywhere · your search location remains only in client memory until cleared or reloaded.':'Anywhere · no buyer location requested.';this.onChange();}
+    setMode(mode) {if(!['anywhere','nearby'].includes(mode))throw Error('Invalid discovery mode.');if(this.busy){this.generation++;this.busy=false;}this.mode=mode;this.message=mode==='nearby'?(this.location?'Location active · kept on this device':'Choose a location to find matching offers.'):'Anywhere · no location required.';this.onChange();}
     clear() {this.generation++;this.busy=false;this.location=null;this.mode='anywhere';this.message='Location cleared · Anywhere discovery.';this.onChange();}
     // Only a user click calls this method; never watchPosition or automatic retries.
     request(geolocation) {
       if(this.busy)return;
+      this.mode='nearby';
       if(!geolocation){this.message='Location unavailable. Use Anywhere or enter coordinates manually.';this.onChange();return;}
       const generation=++this.generation;this.busy=true;this.message='Waiting for browser location permission…';this.onChange();
-      geolocation.getCurrentPosition(position=>{if(generation!==this.generation)return;this.busy=false;try{this.setDegrees(position.coords.latitude,position.coords.longitude);}catch{this.message='Location unavailable. Use Anywhere or enter coordinates manually.';this.onChange();}},()=>{if(generation!==this.generation)return;this.busy=false;this.mode='anywhere';this.message='Location not granted. Anywhere remains available; manual coordinates are optional.';this.onChange();},{enableHighAccuracy:false,maximumAge:0,timeout:10000});
+      geolocation.getCurrentPosition(position=>{if(generation!==this.generation)return;this.busy=false;try{this.setDegrees(position.coords.latitude,position.coords.longitude);}catch{this.message='Location unavailable. Use Anywhere or enter coordinates manually.';this.onChange();}},()=>{if(generation!==this.generation)return;this.busy=false;this.message='Location not granted. Enter coordinates manually or choose Anywhere.';this.onChange();},{enableHighAccuracy:false,maximumAge:0,timeout:10000});
     }
-    filter(offers) {return this.mode==='nearby'&&this.location?nearby(offers,this.location).map(r=>r.offer):offers;}
+    filter(offers) {return this.mode==='nearby'?(this.location?nearby(offers,this.location).map(r=>r.offer):[]):offers;}
   }
   return {MAX_RADIUS_M,validateArea,fromDegrees,roundedPublicCenter,distanceMeters,circlesIntersect,geoAreasIntersect,offerMatchesLocation,nearby,BuyerLocation};
 })();

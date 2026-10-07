@@ -156,8 +156,8 @@ local summary test remains a separate compatibility/demo flow.
 
 The discovery Location controls default to **Anywhere**. **Use my location** is
 the only buyer browser geolocation call; no prompt occurs on page load. On success
-Nearby defaults to 50 km; presets include 0 (“Includes my location”), 5, 25, 50,
-100 and 250 km. Manual coordinates are optional. Denial keeps Anywhere usable;
+Nearby defaults to 25 km; presets include 0 (“Includes my location”), 5, 25, 50,
+100 and 250 km. Manual coordinates are optional. Denial leaves manual coordinates and Anywhere available;
 Clear location discards the point. Reload does not restore buyer location.
 Nearby excludes global/non-geo offers and locally sorts intersecting public
 service areas by center distance. Cards say “Matches your search”, not distance
@@ -199,3 +199,9 @@ publication/signing/broadcast endpoint.
 
 Run `node ui/test_geo.js` and the existing UI tests. A repeatable offline browser
 fixture and agent commands are in [the geo guide](../docs/geographic-discovery.md).
+
+On phones, navigation is collapsed into a menu and the search field occupies its
+own row. Anywhere hides location controls. Nearby without a location asks for
+explicit browser permission or manual input; it shows no results until a point
+is available. With a point, the radius and Clear location appear. Help is collapsed
+behind “How location matching works”. Location remains runtime-only in every mode.

@@ -29,7 +29,7 @@ discovery is a primary MVP feature. Commerce remains separate and unchanged.
 Anywhere shows all active visible offers, including global/no-geo offers.
 Click Use my location or enter manual coordinates to use Nearby. Location access
 never occurs on page load. Denial is non-blocking. Search radius defaults to
-50 km after acquisition; presets 5/25/50/100/250 km and radius zero are supported.
+25 km after acquisition; presets 5/25/50/100/250 km and radius zero are supported.
 Zero means the public offer area includes the buyer point. Clear location resets
 Anywhere; reload starts without buyer location.
 
@@ -188,3 +188,15 @@ still requires review/deployment of upgraded readers/writer, a protected backup
 before any future runtime change, a public approximate area, real HTTPS endpoint,
 valid signed-board policy, authoritative fee preview and explicit approval.
 No mainnet geo transaction is prepared or broadcast by this development task.
+
+## Compact mobile discovery
+
+The mobile header opens a menu for Services, My offer, Test service, Buy from
+seller and Connection. Search occupies its own row above board selection.
+Anywhere shows active offers without location controls. Nearby without a point
+asks for a click-only browser location or manually entered coordinates, and shows
+no results until a point is chosen. Acquiring a point automatically selects Nearby.
+Nearby with a point shows a 25 km default radius and Clear location. Switching to
+Anywhere hides radius and clearing controls without persisting or transmitting the
+point. Clear discards the point; reloading also forgets it. Detailed matching help
+is collapsed below the short device-local privacy notice.
