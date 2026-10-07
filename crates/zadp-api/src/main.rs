@@ -85,6 +85,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
     let args = Args::parse();
+    let host_policy = zadp_api::HostPolicy::from_env().map_err(anyhow::Error::msg)?;
     let network = match args.network.as_str() {
         "mainnet" => ZcashNetwork::Mainnet,
         "testnet" => ZcashNetwork::Testnet,
@@ -217,7 +218,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
-    let app = zadp_api::multi_board_router(registry);
+    let app = zadp_api::multi_board_router_with_policy(registry, host_policy);
     // Independent workers: one board's failure or older birthday cannot block others.
     for (id, indexer) in scanners {
         tokio::spawn(async move {
