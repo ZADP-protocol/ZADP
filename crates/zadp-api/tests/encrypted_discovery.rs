@@ -381,7 +381,29 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
             )
             .unwrap();
     }
-    let app = zadp_api::multi_board_router(Arc::new(registry));
+    let registry = Arc::new(registry);
+    let app = zadp_api::multi_board_router(Arc::clone(&registry));
+    // Hosted presentation filtering must apply to every real multi-board offer route.
+    for (entries, expected) in [
+        (serde_json::json!([]), 0),
+        (serde_json::json!([seller.id]), 2),
+    ] {
+        let policy =
+            zadp_api::HostPolicy::from_config(Some("allowlist"), Some(&entries.to_string()))
+                .unwrap();
+        let hosted = zadp_api::multi_board_router_with_policy(Arc::clone(&registry), policy);
+        for (uri, count) in [
+            ("/offers", expected),
+            ("/offers?q=Text", expected),
+            ("/offers?capability=text.shorten", expected),
+            ("/boards/board-a/offers", expected / 2),
+            ("/offers?board_id=board-b", expected / 2),
+        ] {
+            let (_, response) = get(hosted.clone(), uri).await;
+            assert_eq!(response["offers"].as_array().unwrap().len(), count);
+        }
+    }
+
     async fn get(app: axum::Router, path: &str) -> (u16, serde_json::Value) {
         let response = app
             .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())

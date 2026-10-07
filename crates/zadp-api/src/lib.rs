@@ -77,7 +77,25 @@ pub struct IndexedOffer {
 }
 
 /// Read-only API for real board discovery. No invoice, fulfillment or wallet routes.
+pub struct BoardApiState<R> {
+    repository: Arc<R>,
+    policy: HostPolicy,
+}
+impl<R> Clone for BoardApiState<R> {
+    fn clone(&self) -> Self {
+        Self {
+            repository: Arc::clone(&self.repository),
+            policy: self.policy.clone(),
+        }
+    }
+}
 pub fn board_router<R: OfferRepository + 'static>(repository: Arc<R>) -> Router {
+    board_router_with_policy(repository, HostPolicy::default())
+}
+pub fn board_router_with_policy<R: OfferRepository + 'static>(
+    repository: Arc<R>,
+    policy: HostPolicy,
+) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/offers", get(board_offers::<R>))
@@ -87,20 +105,22 @@ pub fn board_router<R: OfferRepository + 'static>(repository: Arc<R>) -> Router 
                 tracing::info_span!("http_request", method = %request.method())
             },
         ))
-        .with_state(repository)
+        .with_state(BoardApiState { repository, policy })
 }
 
 async fn board_offers<R: OfferRepository + 'static>(
-    State(repository): State<Arc<R>>,
+    State(state): State<BoardApiState<R>>,
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<OffersResponse>, ApiError> {
-    let records = repository
+    let records = state
+        .repository
         .list(query.capability.as_deref())
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(Json(OffersResponse {
         offers: records
             .into_iter()
+            .filter(|r| state.policy.permits(&r.offer.seller))
             .map(|r| IndexedOffer {
                 offer: r.offer,
                 chain: r.chain,
@@ -231,4 +251,6 @@ impl IntoResponse for ApiError {
 }
 
 mod boards;
-pub use boards::multi_board_router;
+pub use boards::{multi_board_router, multi_board_router_with_policy};
+mod host_policy;
+pub use host_policy::HostPolicy;

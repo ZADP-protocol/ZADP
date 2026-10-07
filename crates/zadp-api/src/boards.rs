@@ -1,5 +1,5 @@
 //! Public hosted views. No registration, moderation, descriptor or spending HTTP routes.
-use crate::{ApiError, IndexedOffer, OffersQuery, OffersResponse};
+use crate::{ApiError, HostPolicy, IndexedOffer, OffersQuery, OffersResponse};
 use axum::{
     extract::{Path, Query, State},
     routing::get,
@@ -8,19 +8,26 @@ use axum::{
 use std::sync::Arc;
 use zadp_indexer::{BoardRegistry, BoardStatus, BoardSummary, OfferRepository};
 
+#[derive(Clone)]
+struct HostedState {
+    registry: Arc<BoardRegistry>,
+    policy: HostPolicy,
+}
 pub fn multi_board_router(registry: Arc<BoardRegistry>) -> Router {
+    multi_board_router_with_policy(registry, HostPolicy::default())
+}
+pub fn multi_board_router_with_policy(registry: Arc<BoardRegistry>, policy: HostPolicy) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/boards", get(boards))
         .route("/boards/{board_id}", get(board))
         .route("/boards/{board_id}/offers", get(board_offers))
         .route("/offers", get(offers))
-        .with_state(registry)
+        .with_state(HostedState { registry, policy })
 }
-async fn boards(
-    State(registry): State<Arc<BoardRegistry>>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let summaries = registry
+async fn boards(State(state): State<HostedState>) -> Result<Json<serde_json::Value>, ApiError> {
+    let summaries = state
+        .registry
         .contexts()
         .map(|b| b.summary())
         .collect::<Result<Vec<_>, _>>()
@@ -28,10 +35,10 @@ async fn boards(
     Ok(Json(serde_json::json!({"boards":summaries})))
 }
 async fn board(
-    State(registry): State<Arc<BoardRegistry>>,
+    State(state): State<HostedState>,
     Path(id): Path<String>,
 ) -> Result<Json<BoardSummary>, ApiError> {
-    let context = registry.get(&id).ok_or_else(ApiError::not_found)?;
+    let context = state.registry.get(&id).ok_or_else(ApiError::not_found)?;
     Ok(Json(
         context
             .summary()
@@ -39,7 +46,7 @@ async fn board(
     ))
 }
 async fn board_offers(
-    State(registry): State<Arc<BoardRegistry>>,
+    State(state): State<HostedState>,
     Path(id): Path<String>,
     Query(mut query): Query<OffersQuery>,
 ) -> Result<Json<OffersResponse>, ApiError> {
@@ -47,16 +54,17 @@ async fn board_offers(
         return Err(ApiError::bad_request("conflicting board filters"));
     }
     query.board_id = Some(id);
-    list(&registry, query).await
+    list(&state.registry, &state.policy, query).await
 }
 async fn offers(
-    State(registry): State<Arc<BoardRegistry>>,
+    State(state): State<HostedState>,
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<OffersResponse>, ApiError> {
-    list(&registry, query).await
+    list(&state.registry, &state.policy, query).await
 }
 async fn list(
     registry: &BoardRegistry,
+    policy: &HostPolicy,
     query: OffersQuery,
 ) -> Result<Json<OffersResponse>, ApiError> {
     if query.q.as_ref().is_some_and(|q| q.len() > 256) {
@@ -86,6 +94,9 @@ async fn list(
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
         for r in records {
+            if !policy.permits(&r.offer.seller) {
+                continue;
+            }
             if q.as_ref().is_some_and(|q| {
                 !format!(
                     "{} {} {}",
