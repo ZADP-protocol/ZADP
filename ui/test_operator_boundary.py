@@ -27,6 +27,17 @@ class PreviewTests(unittest.TestCase):
             self.assertEqual(result['total_cost_zat'],26000)
             self.assertNotIn('private-account',json.dumps(result))
             with self.assertRaises(ValueError):operator.preview({'board_id':'wrong'})
+            draft={'board_id':'board','title':'Test','capability':'cleaning','endpoint':'https://example.com','price':'0.01','geo':{'lat_e5':3777493,'lon_e5':-12241942,'radius_m':50000}}
+            def geo_run(command,**kwargs):
+                self.assertEqual(command[command.index('--geo-lat-e5')+1],'3777493')
+                self.assertEqual(command[command.index('--geo-lon-e5')+1],'-12241942')
+                self.assertEqual(command[command.index('--geo-radius-m')+1],'50000')
+                return run(command,**kwargs)
+            with patch('operator_boundary.subprocess.run',side_effect=geo_run):operator.preview(draft)
+            for bad in ({'lat_e5':0},{'lat_e5':0,'lon_e5':0,'radius_m':0},{'lat_e5':0,'lon_e5':0,'radius_m':500001}):
+                with patch('operator_boundary.subprocess.run') as command:
+                    with self.assertRaises(ValueError):operator.preview({**draft,'geo':bad})
+                    command.assert_not_called()
     def test_paid_bridge_rejects_arbitrary_hosts_and_mismatched_receiver(self):
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'config.json'

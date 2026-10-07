@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 -m unittest discover -s ui -p 'test_*.py'
           python3 -m unittest discover -s services/text -p 'test_*.py'
+          node ui/test_geo.js
           node ui/test_offers.js
           node ui/test_purchase.js
           node ui/test_commerce.js

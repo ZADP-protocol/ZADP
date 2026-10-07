@@ -11,8 +11,8 @@ use std::{
     path::PathBuf,
 };
 use zadp_protocol::{
-    bind_offer, encode_offer_memo, BoardBody, BoardDescriptor, OfferDraft, Price, SellerKeyPair,
-    ZcashNetwork,
+    bind_offer, encode_offer_memo, BoardBody, BoardDescriptor, GeoArea, OfferDraft, Price,
+    SellerKeyPair, ZcashNetwork,
 };
 use zadp_seller::{
     local::{load_identity, write_identity},
@@ -68,6 +68,13 @@ struct Publish {
     title: String,
     #[arg(long)]
     description: Option<String>,
+    /// Public approximate offer-area latitude, degrees multiplied by 100000.
+    #[arg(long, allow_hyphen_values = true, requires_all = ["geo_lon_e5", "geo_radius_m"])]
+    geo_lat_e5: Option<i32>,
+    #[arg(long, allow_hyphen_values = true, requires_all = ["geo_lat_e5", "geo_radius_m"])]
+    geo_lon_e5: Option<i32>,
+    #[arg(long, requires_all = ["geo_lat_e5", "geo_lon_e5"])]
+    geo_radius_m: Option<u32>,
     #[arg(long)]
     price_zec: Decimal,
     #[arg(long)]
@@ -182,6 +189,19 @@ async fn publish(args: Publish) -> Result<()> {
         B64.encode(nonce),
     );
     draft.description = args.description.filter(|s| !s.is_empty());
+    match (args.geo_lat_e5, args.geo_lon_e5, args.geo_radius_m) {
+        (Some(lat_e5), Some(lon_e5), Some(radius_m)) => {
+            let area = GeoArea {
+                lat_e5,
+                lon_e5,
+                radius_m,
+            };
+            area.validate()?;
+            draft = draft.with_geo(area);
+        }
+        (None, None, None) => {}
+        _ => anyhow::bail!("offer area requires latitude, longitude and radius"),
+    }
     let offer = bind_offer(draft.sign(&keys)?, &board.board.board_id, now, &keys)?;
     board.validate_offer(&offer, value, now)?;
     let memo = encode_offer_memo(&offer)?;
@@ -334,4 +354,60 @@ async fn publish(args: Publish) -> Result<()> {
         "Broadcast accepted: {txid}\nWait for mining, then query the independent board indexer."
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod geo_cli_tests {
+    use super::*;
+    #[test]
+    fn public_area_flags_are_complete_and_negative_coordinates_parse() {
+        let base = [
+            "zadp-seller",
+            "publish",
+            "--board",
+            "unused-board.json",
+            "--identity",
+            "unused-identity",
+            "--capability",
+            "cleaning",
+            "--title",
+            "Fixture",
+            "--price-zec",
+            "0.01",
+            "--endpoint",
+            "https://fixture.invalid",
+            "--wallet-auth-file",
+            "unused-auth",
+            "--wallet-account",
+            "unused-account",
+            "--lightwalletd",
+            "https://fixture.invalid",
+            "--dry-run",
+        ];
+        assert!(Args::try_parse_from(base).is_ok());
+        for partial in [
+            vec!["--geo-lat-e5", "-9000000"],
+            vec!["--geo-lon-e5", "18000000"],
+            vec!["--geo-radius-m", "50000"],
+            vec!["--geo-lat-e5", "1", "--geo-lon-e5", "2"],
+        ] {
+            assert!(Args::try_parse_from(base.into_iter().chain(partial)).is_err());
+        }
+        let args = Args::try_parse_from(base.into_iter().chain([
+            "--geo-lat-e5",
+            "-9000000",
+            "--geo-lon-e5",
+            "-18000000",
+            "--geo-radius-m",
+            "500000",
+        ]))
+        .unwrap();
+        let Command::Publish(p) = args.command else {
+            panic!("publish expected")
+        };
+        assert_eq!(p.geo_lat_e5, Some(-9000000));
+        assert_eq!(p.geo_lon_e5, Some(-18000000));
+        assert_eq!(p.geo_radius_m, Some(500000));
+        // Parsing only: no file or wallet process is accessed.
+    }
 }

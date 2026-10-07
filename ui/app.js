@@ -9,14 +9,14 @@ function element(tag, text, cls) { const e = document.createElement(tag); e.text
 function details(o) {
   $('detail-title').textContent = o.title;
   const dl = $('detail-fields'); dl.replaceChildren();
-  const values = {'Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : (o.capability === 'text.uppercase' ? 'Direct seller commerce supported. Review the seller endpoint before creating an order.' : 'This capability does not yet have a reference buyer form.')};
+  const values = {'Offer area':o.geo ? `${o.geo.radius_m/1000} km radius around published approximate center (${o.geo.lat_e5/100000}, ${o.geo.lon_e5/100000}); not a verified seller position` : 'Global / no geographic scope','Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : (o.capability === 'text.uppercase' ? 'Direct seller commerce supported. Review the seller endpoint before creating an order.' : 'This capability does not yet have a reference buyer form.')};
   for (const [key,value] of Object.entries(values)) dl.append(element('dt',key),element('dd',String(value)));
   $('detail').showModal();
 }
 function render() {
   const query = $('search').value.toLocaleLowerCase('en');
   const scoped = offersForBoard(offers, $('board-filter').value);
-  const filtered = scoped.filter(o => `${o.title} ${o.capability}`.toLocaleLowerCase('en').includes(query));
+  const filtered = buyerGeo.filter(scoped).filter(o => `${o.title} ${o.capability}`.toLocaleLowerCase('en').includes(query));
   $('offers').replaceChildren(); $('count').textContent = `${filtered.length} ${filtered.length === 1 ? 'offer' : 'offers'}`;
   for (const o of filtered) {
     const card = element('article','','offer');
@@ -24,6 +24,8 @@ function render() {
     const btn = element('button','View details','secondary'); btn.addEventListener('click',()=>details(o));
     const active = o.chain?.offer_status === 'active';
     card.append(element('span',o.capability,'badge'),element('p',`Board: ${offerBoard(o) || 'Unavailable'}`),element('h2',o.title),element('p',o.simulation===true ? 'Known local fixture · no blockchain transaction' : active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
+    if(buyerGeo.mode==='nearby')card.append(element('p',buyerGeo.radius_m===0?'Available in your area':`Matches your ${buyerGeo.radius_m/1000} km search`));
+    if(o.geo)card.append(element('p',`Service area: ${o.geo.radius_m/1000} km radius around a published approximate center`));
     if(o.simulation===true) {card.append(element('p','LOCAL SIMULATION · No on-chain discovery or real payment'));}
     try {DirectCommerce.endpoint(o); const buy=element('button','Buy directly from seller','primary');buy.addEventListener('click',()=>selectCommerceOffer(o));card.append(buy);}catch{}
     if(o.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
@@ -31,6 +33,18 @@ function render() {
   }
   $('message').textContent = filtered.length ? '' : (offers.length ? 'No offers match your search.' : 'No offers have been indexed yet.');
 }
+const buyerGeo=new GeoDiscovery.BuyerLocation(()=>{
+  $('geo-mode').value=buyerGeo.mode;$('buyer-geo-status').textContent=buyerGeo.message;
+  $('buyer-location').disabled=buyerGeo.busy;render();
+});
+$('buyer-location').addEventListener('click',()=>buyerGeo.request(navigator.geolocation));
+$('geo-mode').addEventListener('change',()=>buyerGeo.setMode($('geo-mode').value));
+$('buyer-radius').addEventListener('change',()=>buyerGeo.setRadius(Number($('buyer-radius').value)));
+$('buyer-manual').addEventListener('click',()=>{
+  try{buyerGeo.setDegrees($('buyer-lat').value,$('buyer-lon').value);}
+  catch(error){$('buyer-geo-status').textContent=error.message;}
+});
+$('buyer-clear').addEventListener('click',()=>{buyerGeo.clear();$('buyer-lat').value='';$('buyer-lon').value='';});
 async function refresh() {
   $('refresh').disabled = true;
   try {
@@ -59,7 +73,29 @@ for(const button of document.querySelectorAll('[data-tab]')) button.addEventList
   for(const section of document.querySelectorAll('.panel')) section.hidden = section.id !== button.dataset.tab;
 });
 $('board-filter').addEventListener('change',render); $('search').addEventListener('input',render); $('refresh').addEventListener('click',refresh); $('close').addEventListener('click',()=>$('detail').close());
-function draft() { return Object.fromEntries(new FormData(form)); }
+function draft() {
+  const result=Object.fromEntries(new FormData(form));
+  if($('seller-geo-enabled').checked)result.geo=GeoDiscovery.fromDegrees($('seller-lat').value,$('seller-lon').value,Number($('seller-radius').value==='custom'?$('seller-custom-radius').value:$('seller-radius').value));
+  return result;
+}
+function sellerAreaChanged() {
+  $('seller-geo-fields').hidden=!$('seller-geo-enabled').checked;
+  $('seller-custom-label').hidden=$('seller-radius').value!=='custom';
+  $('fee-preview').hidden=true;checkBudget();
+}
+$('seller-geo-enabled').addEventListener('change',sellerAreaChanged);
+$('seller-radius').addEventListener('change',sellerAreaChanged);
+$('seller-location').addEventListener('click',()=>{
+  if(!$('seller-geo-enabled').checked)return;
+  if(!navigator.geolocation){$('seller-geo-status').textContent='Location unavailable; enter an approximate offer-area center manually.';return;}
+  $('seller-location').disabled=true;
+  navigator.geolocation.getCurrentPosition(position=>{
+    $('seller-location').disabled=false;
+    $('seller-lat').value=(Math.round(position.coords.latitude*100000)/100000).toFixed(5);
+    $('seller-lon').value=(Math.round(position.coords.longitude*100000)/100000).toFixed(5);
+    $('seller-geo-status').textContent='Review this public offer-area center before saving or publishing.';checkBudget();
+  },()=>{$('seller-location').disabled=false;$('seller-geo-status').textContent='Location not granted; enter an approximate offer-area center manually.';},{enableHighAccuracy:false,maximumAge:0,timeout:10000});
+});
 function checkBudget() {
   try {
     const budget = memoBudget(draft());
@@ -77,7 +113,11 @@ function checkBudget() {
   }
 }
 form.addEventListener('input',()=>{ $('fee-preview').hidden=true; checkBudget(); });
-try { const saved=JSON.parse(localStorage.getItem(draftKey)); if(saved) for(const [key,value] of Object.entries(saved)) if(form.elements.namedItem(key)) form.elements.namedItem(key).value=value; } catch {}
+try { const saved=JSON.parse(localStorage.getItem(draftKey)); if(saved) {
+  for(const [key,value] of Object.entries(saved)) if(form.elements.namedItem(key)) form.elements.namedItem(key).value=value;
+  if(saved.geo){GeoDiscovery.validateArea(saved.geo);$('seller-geo-enabled').checked=true;$('seller-lat').value=saved.geo.lat_e5/100000;$('seller-lon').value=saved.geo.lon_e5/100000;$('seller-radius').value='custom';$('seller-custom-radius').value=saved.geo.radius_m;}
+} } catch {}
+sellerAreaChanged();
 checkBudget();
 form.addEventListener('submit',event=>{event.preventDefault();if(!checkBudget())return;try { localStorage.setItem(draftKey,JSON.stringify(draft())); $('draft-message').textContent='Draft saved in this browser. It has not been published.'; } catch { $('draft-message').textContent='Could not save the draft. You can download it as a file.'; }});
 $('export').addEventListener('click',()=>{if(!form.reportValidity() || !checkBudget())return; const url=URL.createObjectURL(new Blob([JSON.stringify({type:'unsigned-ui-draft',...draft()},null,2)],{type:'application/json'}));const a=element('a','');a.href=url;a.download='zadp-offer-draft.json';a.click();URL.revokeObjectURL(url);});

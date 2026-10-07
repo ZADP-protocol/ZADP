@@ -1,4 +1,5 @@
 'use strict';
+const OfferGeo=typeof module!=='undefined'?require('./geo.js'):GeoDiscovery;
 // Validate untrusted index JSON before rendering nested fields. Never execute URLs.
 function parseOffersResponse(data) {
   if (!data || !Array.isArray(data.offers) || data.offers.length > 1000) throw Error('Invalid index response');
@@ -6,6 +7,10 @@ function parseOffersResponse(data) {
     if (!offer || typeof offer !== 'object') throw Error('Invalid offer');
     for (const key of ['id','seller','title','capability','endpoint','expires_at']) {
       if (typeof offer[key] !== 'string' || !offer[key] || offer[key].length > 4096) throw Error('Invalid offer field');
+    }
+    if(offer.geo != null) {
+      if(offer.zadp!==2)throw Error('Geo requires Offer v2');
+      OfferGeo.validateArea(offer.geo);
     }
     if (offer.board_id != null && (typeof offer.board_id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(offer.board_id))) throw Error('Invalid board');
     if (offer.board_id != null && offer.chain?.board_id != null && offer.board_id !== offer.chain.board_id) throw Error('Board binding mismatch');

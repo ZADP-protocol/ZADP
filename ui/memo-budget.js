@@ -33,11 +33,17 @@ function memoBudget(draft, issuedAt = Math.floor(Date.now() / 1000)) {
   // array(13), protocol version, board, ULID(26), public key(32), capability,
   // title, optional description, zat integer, endpoint, two times, nonce(16), signature(64).
   const description = draft.description || null;
-  const used = 1 + 1 + textBytes(draft.board_id) + textBytes('0'.repeat(26)) + 34
+  let used = 1 + 1 + textBytes(draft.board_id) + textBytes('0'.repeat(26)) + 34
     + textBytes(draft.capability) + textBytes(draft.title)
     + (description === null ? 1 : textBytes(description)) + cborHeadBytes(zat)
     + textBytes(draft.endpoint) + cborHeadBytes(issuedAt) + cborHeadBytes(issuedAt + 86400)
     + 17 + 66;
+  if(draft.geo!=null) {
+    const g=draft.geo;
+    if(!g || Object.keys(g).sort().join(',')!=='lat_e5,lon_e5,radius_m' || !Number.isInteger(g.lat_e5) || Math.abs(g.lat_e5)>9000000 || !Number.isInteger(g.lon_e5) || Math.abs(g.lon_e5)>18000000 || !Number.isInteger(g.radius_m) || g.radius_m<1 || g.radius_m>500000)throw Error('Invalid offer area.');
+    const integerBytes=n=>cborHeadBytes(n<0?-1-n:n);
+    used+=1+integerBytes(g.lat_e5)+integerBytes(g.lon_e5)+integerBytes(g.radius_m);
+  }
   return {used, remaining:504-used, limit:504, fits:used<=504, board:draft.board_id};
 }
 if (typeof module !== 'undefined') module.exports = {memoBudget, textBytes, cborHeadBytes};

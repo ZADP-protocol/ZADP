@@ -70,6 +70,13 @@ class Operator:
             if draft.get('board_id') != board['board']['board_id']: raise ValueError('Board mismatch')
             for name in ('title','capability','endpoint','price'):
                 if not isinstance(draft.get(name),str) or len(draft[name])>2048: raise ValueError()
+            geo=draft.get('geo')
+            if geo is not None:
+                if (not isinstance(geo,dict) or set(geo)!={'lat_e5','lon_e5','radius_m'}
+                    or any(type(v) is not int for v in geo.values())
+                    or not -9000000<=geo['lat_e5']<=9000000
+                    or not -18000000<=geo['lon_e5']<=18000000
+                    or not 1<=geo['radius_m']<=500000): raise ValueError('Invalid offer area')
             description=draft.get('description','')
             if not isinstance(description,str) or len(description)>504: raise ValueError()
             with tempfile.TemporaryDirectory(prefix='zadp-preview-') as temp:
@@ -81,6 +88,7 @@ class Operator:
                     '--lightwalletd',self.config['lightwalletd'],'--title',draft['title'],
                     '--capability',draft['capability'],'--endpoint',draft['endpoint'],
                     '--price-zec',draft['price'],'--ttl-seconds','86400']
+                if geo is not None: command+=['--geo-lat-e5',str(geo['lat_e5']),'--geo-lon-e5',str(geo['lon_e5']),'--geo-radius-m',str(geo['radius_m'])]
                 if description: command+=['--description',description]
                 result=subprocess.run(command,stdin=subprocess.DEVNULL,capture_output=True,timeout=90)
                 if result.returncode!=0 or not output.exists(): raise ValueError('Unsigned preview unavailable')
