@@ -1,8 +1,8 @@
-//! ZADP/1 protocol types and seller identity.
+//! Backward-compatible ZADP Offer v1/v2 and BoardDescriptor v1 types.
 //!
 //! JSON is the human-readable interchange format.
-//! Canonical CBOR (`zadp1-sign-v1`) is used for signatures and is the design
-//! anchor for a future shielded-memo encoding (not production-packed here).
+//! Domain-separated canonical CBOR signs offers; compact memo wire v1/v2
+//! transports them in 512 bytes without changing legacy v1 encoding.
 
 mod canonical;
 mod error;
@@ -13,10 +13,13 @@ pub use canonical::{canonical_offer_cbor, signing_bytes};
 pub use error::ProtocolError;
 pub use identity::{SellerId, SellerKeyPair, Signature};
 pub use offer::{
-    verify_offer, Offer, OfferDraft, OfferStatus, Price, MESSAGE_TYPE_OFFER, PROTOCOL_VERSION,
+    verify_offer, GeoArea, Offer, OfferDraft, OfferStatus, Price, BOARD_DESCRIPTOR_VERSION,
+    MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER, OFFER_VERSION_V1, OFFER_VERSION_V2, PROTOCOL_VERSION,
 };
 
 mod board;
 mod memo;
 pub use board::{Admission, BoardBody, BoardDescriptor, BoardPolicy, ZcashNetwork};
-pub use memo::{bind_offer, decode_offer_memo, encode_offer_memo, zec_to_zat};
+pub use memo::{
+    bind_offer, decode_offer_memo, encode_offer_memo, zec_to_zat, WIRE_VERSION_V1, WIRE_VERSION_V2,
+};

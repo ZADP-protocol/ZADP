@@ -7,7 +7,32 @@ use crate::canonical::signing_bytes;
 use crate::identity::{SellerId, SellerKeyPair, Signature};
 use crate::ProtocolError;
 
-pub const PROTOCOL_VERSION: u16 = 1;
+/// Legacy alias retained for downstream v1 callers; never a latest-version switch.
+pub const PROTOCOL_VERSION: u16 = OFFER_VERSION_V1;
+pub const OFFER_VERSION_V1: u16 = 1;
+pub const OFFER_VERSION_V2: u16 = 2;
+pub const BOARD_DESCRIPTOR_VERSION: u16 = 1;
+pub const MAX_GEO_RADIUS_M: u32 = 500_000;
+
+/// Public offer/service area, not verified seller location. Integer degrees × 1e5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GeoArea {
+    pub lat_e5: i32,
+    pub lon_e5: i32,
+    pub radius_m: u32,
+}
+impl GeoArea {
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if !(-9_000_000..=9_000_000).contains(&self.lat_e5)
+            || !(-18_000_000..=18_000_000).contains(&self.lon_e5)
+            || !(1..=MAX_GEO_RADIUS_M).contains(&self.radius_m)
+        {
+            return Err(ProtocolError::InvalidOffer("invalid offer area".into()));
+        }
+        Ok(())
+    }
+}
 pub const MESSAGE_TYPE_OFFER: &str = "offer";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +86,8 @@ pub struct Offer {
     pub board_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub issued_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geo: Option<GeoArea>,
     pub signature: Signature,
 }
 
@@ -79,6 +106,7 @@ pub struct OfferDraft {
     pub capability: String,
     pub title: String,
     pub description: Option<String>,
+    pub geo: Option<GeoArea>,
     pub price: Price,
     pub endpoint: String,
     pub expires_at: DateTime<Utc>,
@@ -101,6 +129,7 @@ impl OfferDraft {
             capability: capability.into(),
             title: title.into(),
             description: None,
+            geo: None,
             price,
             endpoint: endpoint.into(),
             expires_at,
@@ -110,6 +139,11 @@ impl OfferDraft {
 
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    pub fn with_geo(mut self, geo: GeoArea) -> Self {
+        self.geo = Some(geo);
         self
     }
 
@@ -124,13 +158,18 @@ impl OfferDraft {
         // Placeholder signature so we can reuse Offer for canonicalization.
         let placeholder = Signature::from_bytes(&ed25519_dalek::Signature::from_bytes(&[0u8; 64]));
         let mut offer = Offer {
-            zadp: PROTOCOL_VERSION,
+            zadp: if self.geo.is_some() {
+                OFFER_VERSION_V2
+            } else {
+                OFFER_VERSION_V1
+            },
             message_type: MESSAGE_TYPE_OFFER.into(),
             id: self.id,
             seller: self.seller,
             capability: self.capability,
             title: self.title,
             description: self.description,
+            geo: self.geo,
             price: self.price,
             endpoint: self.endpoint,
             expires_at: self.expires_at,
@@ -145,10 +184,22 @@ impl OfferDraft {
     }
 }
 
-pub fn verify_offer(offer: &Offer, now: DateTime<Utc>) -> Result<(), ProtocolError> {
-    if offer.zadp != PROTOCOL_VERSION {
-        return Err(ProtocolError::UnsupportedVersion(offer.zadp));
+impl Offer {
+    pub fn validate_geo_version(&self) -> Result<(), ProtocolError> {
+        if ![OFFER_VERSION_V1, OFFER_VERSION_V2].contains(&self.zadp) {
+            return Err(ProtocolError::UnsupportedVersion(self.zadp));
+        }
+        if let Some(geo) = self.geo {
+            if self.zadp != OFFER_VERSION_V2 {
+                return Err(ProtocolError::InvalidOffer("geo requires Offer v2".into()));
+            }
+            geo.validate()?;
+        }
+        Ok(())
     }
+}
+pub fn verify_offer(offer: &Offer, now: DateTime<Utc>) -> Result<(), ProtocolError> {
+    offer.validate_geo_version()?;
     if offer.message_type != MESSAGE_TYPE_OFFER {
         return Err(ProtocolError::UnsupportedType(offer.message_type.clone()));
     }

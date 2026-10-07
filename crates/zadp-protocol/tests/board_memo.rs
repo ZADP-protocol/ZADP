@@ -107,7 +107,7 @@ fn unrelated_malformed_and_unsupported_memos() {
     memo[6] = 255;
     assert!(decode_offer_memo(&memo).is_err());
     let mut o = offer(&SellerKeyPair::generate());
-    o.zadp = 2;
+    o.zadp = 3;
     assert!(verify_offer(&o, Utc::now()).is_err());
 }
 #[test]

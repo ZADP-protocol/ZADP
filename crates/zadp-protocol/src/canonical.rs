@@ -11,6 +11,7 @@ pub const SIGN_PREFIX: &[u8] = b"ZADP1\0offer\0";
 /// Map keys are ordered by RFC 8949 preferred serialization: sorted by the
 /// bytewise representation of the encoded key.
 pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
+    offer.validate_geo_version()?;
     let mut entries: Vec<(Vec<u8>, String, Value)> = vec![
         entry_text("capability", offer.capability.clone())?,
         entry_text("endpoint", offer.endpoint.clone())?,
@@ -40,6 +41,17 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
     if let Some(issued_at) = offer.issued_at {
         entries.push(entry_text("issued_at", issued_at.to_rfc3339())?);
     }
+    if let Some(geo) = offer.geo {
+        entries.push((
+            encode_text_key("geo")?,
+            "geo".into(),
+            Value::Array(vec![
+                Value::Integer(geo.lat_e5.into()),
+                Value::Integer(geo.lon_e5.into()),
+                Value::Integer(geo.radius_m.into()),
+            ]),
+        ));
+    }
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     let map: Vec<(Value, Value)> = entries
         .into_iter()
@@ -55,8 +67,13 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
 /// Bytes that are actually signed: prefix || canonical CBOR body.
 pub fn signing_bytes(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
     let cbor = canonical_offer_cbor(offer)?;
-    let mut out = Vec::with_capacity(SIGN_PREFIX.len() + cbor.len());
-    out.extend_from_slice(SIGN_PREFIX);
+    let prefix: &[u8] = if offer.zadp == crate::OFFER_VERSION_V2 {
+        b"ZADP2\0offer\0"
+    } else {
+        SIGN_PREFIX
+    };
+    let mut out = Vec::with_capacity(prefix.len() + cbor.len());
+    out.extend_from_slice(prefix);
     out.extend_from_slice(&cbor);
     Ok(out)
 }

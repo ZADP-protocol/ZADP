@@ -17,6 +17,7 @@ struct Draft {
     price: String,
     description: Option<String>,
     issued_at: i64,
+    geo: Option<zadp_protocol::GeoArea>,
 }
 
 fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
@@ -31,6 +32,9 @@ fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
         issued + Duration::days(1),
         B64.encode([0u8; 16]),
     );
+    if let Some(geo) = draft.geo {
+        offer = offer.with_geo(geo);
+    }
     offer.description = draft.description.filter(|s| !s.is_empty());
     let offer = bind_offer(offer.sign(&keys)?, &draft.board_id, issued, &keys)?;
     let memo = encode_offer_memo(&offer)?;

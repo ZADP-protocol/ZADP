@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use zcash_keys::{address::Address, keys::UnifiedIncomingViewingKey};
 use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
 
-use crate::{Offer, ProtocolError, SellerId, SellerKeyPair, Signature, PROTOCOL_VERSION};
+use crate::{Offer, ProtocolError, SellerId, SellerKeyPair, Signature, BOARD_DESCRIPTOR_VERSION};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -134,7 +134,7 @@ pub fn canonical_cbor<T: Serialize>(value: &T) -> Result<Vec<u8>, ProtocolError>
 
 impl BoardBody {
     pub fn validate(&self) -> Result<(), ProtocolError> {
-        if self.zadp != PROTOCOL_VERSION {
+        if self.zadp != BOARD_DESCRIPTOR_VERSION {
             return Err(ProtocolError::UnsupportedVersion(self.zadp));
         }
         if self.board_id.is_empty()

@@ -7,7 +7,8 @@ use serde_bytes::ByteBuf;
 use std::io::Cursor;
 
 const MAGIC: &[u8] = b"\xf5ZADP";
-const WIRE_VERSION: u8 = 1;
+pub const WIRE_VERSION_V1: u8 = 1;
+pub const WIRE_VERSION_V2: u8 = 2;
 type WireOffer = (
     u16,
     String,
@@ -57,6 +58,7 @@ pub fn bind_offer(
     Ok(offer)
 }
 pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
+    offer.validate_geo_version()?;
     let issued = offer
         .issued_at
         .ok_or_else(|| invalid("missing issue time"))?;
@@ -93,6 +95,26 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
     let mut payload = vec![];
     ciborium::ser::into_writer(&wire, &mut payload)
         .map_err(|e| ProtocolError::Canonical(e.to_string()))?;
+    if offer.zadp == crate::OFFER_VERSION_V2 {
+        let ciborium::value::Value::Array(mut fields) =
+            ciborium::de::from_reader(payload.as_slice())
+                .map_err(|_| invalid("invalid encoder tuple"))?
+        else {
+            return Err(invalid("invalid encoder tuple"));
+        };
+        let geo = match offer.geo {
+            Some(g) => ciborium::value::Value::Array(vec![
+                ciborium::value::Value::Integer(g.lat_e5.into()),
+                ciborium::value::Value::Integer(g.lon_e5.into()),
+                ciborium::value::Value::Integer(g.radius_m.into()),
+            ]),
+            None => ciborium::value::Value::Null,
+        };
+        fields.push(geo);
+        payload.clear();
+        ciborium::ser::into_writer(&ciborium::value::Value::Array(fields), &mut payload)
+            .map_err(|e| ProtocolError::Canonical(e.to_string()))?;
+    }
     if payload.len() > 504 {
         return Err(invalid(
             "offer exceeds 512-byte memo budget; shorten title, endpoint or description",
@@ -100,7 +122,11 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
     }
     let mut memo = [0u8; 512];
     memo[..5].copy_from_slice(MAGIC);
-    memo[5] = WIRE_VERSION;
+    memo[5] = if offer.zadp == crate::OFFER_VERSION_V2 {
+        WIRE_VERSION_V2
+    } else {
+        WIRE_VERSION_V1
+    };
     memo[6..8].copy_from_slice(&(payload.len() as u16).to_be_bytes());
     memo[8..8 + payload.len()].copy_from_slice(&payload);
     // Decode and verify preserves all signed fields, including decimal and time normalization.
@@ -114,7 +140,7 @@ pub fn decode_offer_memo(memo: &[u8]) -> Result<Option<Offer>, ProtocolError> {
     if !memo.starts_with(MAGIC) {
         return Ok(None);
     }
-    if memo.len() != 512 || memo[5] != WIRE_VERSION {
+    if memo.len() != 512 || ![WIRE_VERSION_V1, WIRE_VERSION_V2].contains(&memo[5]) {
         return Err(invalid("unsupported or malformed ZADP memo framing"));
     }
     decode_offer_memo_inner(memo).map(Some)
@@ -124,7 +150,46 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
     if len == 0 || len > 504 || memo[8 + len..].iter().any(|b| *b != 0) {
         return Err(invalid("invalid memo length or padding"));
     }
-    let mut reader = Cursor::new(&memo[8..8 + len]);
+    // Keep the original typed v1 decoding path over the original payload bytes.
+    let (legacy, geo) = if memo[5] == WIRE_VERSION_V1 {
+        (memo[8..8 + len].to_vec(), None)
+    } else {
+        let mut outer = Cursor::new(&memo[8..8 + len]);
+        let value: ciborium::value::Value =
+            ciborium::de::from_reader(&mut outer).map_err(|_| invalid("malformed ZADP CBOR"))?;
+        if outer.position() != len as u64 {
+            return Err(invalid("trailing ZADP CBOR"));
+        }
+        let ciborium::value::Value::Array(mut fields) = value else {
+            return Err(invalid("expected OFFER tuple"));
+        };
+        if fields.len() != 14 {
+            return Err(invalid("wire v2 requires 14 fields"));
+        }
+        let geo = match fields.pop().unwrap() {
+            ciborium::value::Value::Null => None,
+            value => {
+                let mut encoded = Vec::new();
+                ciborium::ser::into_writer(&value, &mut encoded)
+                    .map_err(|_| invalid("invalid geo"))?;
+                let (lat_e5, lon_e5, radius_m): (i32, i32, u32) =
+                    ciborium::de::from_reader(encoded.as_slice())
+                        .map_err(|_| invalid("invalid geo triple"))?;
+                let area = crate::GeoArea {
+                    lat_e5,
+                    lon_e5,
+                    radius_m,
+                };
+                area.validate()?;
+                Some(area)
+            }
+        };
+        let mut legacy = Vec::new();
+        ciborium::ser::into_writer(&ciborium::value::Value::Array(fields), &mut legacy)
+            .map_err(|_| invalid("malformed tuple"))?;
+        (legacy, geo)
+    };
+    let mut reader = Cursor::new(legacy.as_slice());
     let (
         zadp,
         board_id,
@@ -141,13 +206,18 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
         sig,
     ): WireOffer =
         ciborium::de::from_reader(&mut reader).map_err(|_| invalid("malformed ZADP CBOR"))?;
-    if reader.position() != len as u64
+    if reader.position() != legacy.len() as u64
         || seller.len() != 32
         || sig.len() != 64
         || nonce.len() < 16
         || nonce.len() > 32
     {
         return Err(invalid("invalid memo field lengths"));
+    }
+    if (memo[5] == WIRE_VERSION_V1 && zadp != crate::OFFER_VERSION_V1)
+        || (memo[5] == WIRE_VERSION_V2 && zadp != crate::OFFER_VERSION_V2)
+    {
+        return Err(invalid("offer/wire version mismatch"));
     }
     if id.is_empty()
         || id.len() > 64
@@ -180,6 +250,7 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
         ),
         board_id: Some(board_id),
         nonce: B64.encode(nonce),
+        geo,
         signature,
     })
 }
