@@ -169,3 +169,32 @@ The text service caps stored invoices at 10,000 in addition to 100 active slots.
 SQLite board history/rejections and public API concurrency remain unbounded over
 long operation; production quotas/monitoring are still needed. Local TLS and
 Origin/Host checks do not defend against a compromised local OS/user process.
+
+## Geographic discovery privacy boundary
+
+A precise **public offer-area center** can reveal a sensitive place. Geo is
+optional, the seller is warned before enabling it, approximate centers are
+encouraged and no street address is required. Zcash shielding does not make
+indexed metadata private: descriptor/UIVK holders can read incoming offer
+memos and the API exposes accepted geo. Signatures authenticate declarations,
+not actual presence or service quality.
+
+A discovery operator could learn buyer coordinates from server-side geo queries.
+The reference client instead downloads public offers and performs Haversine
+circle matching locally. Buyer coordinates are transient client memory only:
+no location-bearing fetch/XHR, analytics, logs, browser persistence, URL/history,
+Zcash publication, seller call or order field. Geolocation is requested only
+by buyer/seller buttons, never on load. Seller coordinates are a separate,
+explicit public draft field and may be saved/exported by the seller.
+
+This property is scoped to the reviewed application. The browser/OS location
+provider, malicious extensions, compromised client, remote script replacement
+or voluntary disclosure during later direct shipping/service orders are outside
+it. The discovery host can still observe ordinary network metadata such as IP
+addresses and offer-feed access; this is not a claim of full anonymity. No map
+provider, reverse geocoder, tracking or external analytics is added.
+
+Tests execute the actual browser app with synthetic location and intercepted
+network/storage/logging, including denial and seller/buyer separation. See
+[geo guide](geographic-discovery.md). A real device permission review and a
+separately approved first live geo offer remain release checks.

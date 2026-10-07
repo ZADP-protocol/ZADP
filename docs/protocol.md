@@ -1,12 +1,12 @@
-# ZADP Protocol Specification (ZADP/1)
+# ZADP Protocol Specification (Offer v1/v2)
 
 Status: **Draft** — matches the current reference implementation
-Protocol major version: `1` (`zadp` field / `PROTOCOL_VERSION`)
+Offer/wire major versions: `1` and `2`. BoardDescriptor remains `1`; the legacy `PROTOCOL_VERSION` alias remains Offer v1.
 
 This document defines discovery message semantics, signing, memo wire format, board binding, and the **mock** commerce objects used by the local demo. It separates:
 
 1. **JSON representation** — human-readable REST / files / examples.
-2. **Canonical signing representation** — deterministic CBOR **map** + domain prefix (`zadp1-sign-v1`).
+2. **Canonical signing representation** — deterministic CBOR **map** + version-specific domain prefix.
 3. **Memo wire representation** — fixed 512-byte ZIP 302 framing + CBOR **tuple** (implemented for `offer`).
 
 Live mainnet publish → scan → index → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
@@ -30,7 +30,7 @@ Every ZADP discovery message includes:
 | body fields | — | Type-specific payload |
 | `signature` | string | Base64 Ed25519 signature over canonical signing bytes |
 
-### Message types (ZADP/1)
+### Message types (legacy v1 and Offer v2)
 
 | Type | Status | Purpose |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ Unknown `type` values MUST be rejected. The memo encoder accepts only `type == "
 | `title` | Short title. Memo: 1..=128 UTF-8 bytes. |
 | `description` | Optional. Omitted from canonical CBOR when empty. |
 | `price.amount` | Positive decimal string in ZEC (not binary float). Memo encodes integer **zatoshis** (exact 8 decimals; 1..=2.1e15 zat). |
-| `price.currency` | Must be `"ZEC"` in ZADP/1. |
+| `price.currency` | Must be `"ZEC"` in both offer versions. |
 | `endpoint` | Absolute seller commerce URL. Board admission requires **HTTPS**. Mock demo may use `http://127.0.0.1`. |
 | `expires_at` | RFC 3339; memo requires whole seconds. Indexers reject expired offers at API list time. |
 | `issued_at` | RFC 3339 whole seconds for memo; required when board-bound. |
@@ -88,7 +88,7 @@ Unknown `type` values MUST be rejected. The memo encoder accepts only `type == "
 
 ### Validation (`verify_offer`)
 
-1. `zadp == 1` and `type == "offer"`.
+1. `zadp` is 1 or 2 and `type == "offer"`; geo is permitted only in v2 and must be complete and within bounds.
 2. Required fields present and well-typed (non-empty id/capability/title/endpoint/nonce).
 3. `price.currency == "ZEC"` and amount positive.
 4. `expires_at` is in the future at validation time.
@@ -103,13 +103,13 @@ After decode + `verify_offer`, the board-bound indexer additionally enforces des
 
 Conflicting redefinition of the same offer id by the same seller is rejected (first valid wins). `offer_update` will supersede this later.
 
-## Canonical signing bytes (`zadp1-sign-v1`)
+## Canonical signing bytes (Offer v1/v2)
 
 Signatures MUST cover a deterministic byte string independent of JSON key order and insignificant whitespace.
 
 1. Take the offer **without** the `signature` field.
 2. Serialize to **canonical CBOR map** (RFC 8949 definite lengths; map keys sorted by bytewise encoded key).
-3. Prepend ASCII prefix `ZADP1\0offer\0`.
+3. Prepend ASCII prefix `ZADP1\0offer\0` for Offer v1, or `ZADP2\0offer\0` for Offer v2.
 4. Sign with Ed25519.
 
 JSON is **not** the signing serialization.
@@ -124,13 +124,13 @@ Price in the signed map uses the **decimal string** amount (not zatoshis).
 Transport encoding for shielded memos:
 
 ```
-0xf5 || "ZADP" || wire_version(1) || payload_length(u16 big-endian) || CBOR payload || zero padding
+0xf5 || "ZADP" || wire_version(1 or 2) || payload_length(u16 big-endian) || CBOR payload || zero padding
 ```
 
 | Constant | Value |
 | --- | --- |
 | Magic | `0xf5` + ASCII `ZADP` (5 bytes) |
-| Wire version | `1` |
+| Wire version | `1` (13-field legacy tuple) or `2` (14-field tuple) |
 | Memo size | exactly **512** bytes |
 | Max CBOR payload | **504** bytes |
 | Padding | trailing bytes MUST be zero |
@@ -160,6 +160,53 @@ Non-matching magic → ignore (not a ZADP memo). Wrong length/version/padding/pa
 Wire `type` and ZEC currency are **implicit**. This tuple is **not** what is signed. Signatures cover the canonical typed OFFER map (including `board_id` / `issued_at` when bound). The publication caller binds/normalizes before signing; the encoder round-trips and compares signed fields before accepting the memo.
 
 **Enforced transport normalization:** fractional zatoshis and subsecond timestamps are rejected. Amounts must represent an exact integer zatoshi value (at most eight meaningful decimals) and whole-second times. `bind_offer` normalizes the decimal before signing; the memo encoder does not silently normalize signed fields. Bare legacy JSON validation is less restrictive than memo transport.
+
+## Offer v2 geographic extension
+
+Offer v1 JSON, signing preimage and memo bytes remain unchanged; see the captured
+[golden fixture](../crates/zadp-protocol/tests/fixtures/offer-v1-golden.json).
+Separate constants are `OFFER_VERSION_V1=1`, `OFFER_VERSION_V2=2`,
+`WIRE_VERSION_V1=1`, `WIRE_VERSION_V2=2`, `BOARD_DESCRIPTOR_VERSION=1`.
+`PROTOCOL_VERSION` remains a legacy alias for Offer v1; it is not a board bump.
+
+Offer v2 adds optional `geo` to the typed JSON model:
+
+```json
+"geo": { "lat_e5": 3777493, "lon_e5": -12241942, "radius_m": 50000 }
+```
+
+Latitude/longitude are signed integer degrees × 100000, with ranges
+−9000000..9000000 and −18000000..18000000. Public offer radius is 1..500000 meters.
+Absent geo is valid; present geo requires exactly all three integer fields.
+Partial, floating, unknown geo fields and invalid ranges are rejected. This is
+an optional, self-declared **offer/service area**, not an address or proof of a
+physical position. Holders of the public board UIVK can read it.
+
+V2 canonical signing uses the existing map design with domain `ZADP2\0offer\0`.
+When present, the `geo` map entry is a compact CBOR array
+`[lat_e5, lon_e5, radius_m]`, sorted with other canonical keys. When absent it is
+omitted. Changing any geo value invalidates the signature. The map and the
+transport tuple remain distinct signing/transport representations.
+
+Wire v2 appends one element to the unchanged 13-field v1 tuple: the geo triple
+or CBOR null. Envelope byte 5 is 2 and payload `zadp` must be 2; wire/offer major
+mismatches are rejected. Wire v1 must carry `zadp=1` and no geo. Framing, exact
+512-byte length, 504-byte payload and zero padding are unchanged.
+
+Compared to the same v1 fields, a v2 null adds one byte; present geo adds up to
+16 bytes. Individual field limits are unchanged, but the shared payload budget
+still applies: all independently maximal fields cannot necessarily fit together.
+UTF-8 byte length, integer encoding and description consume that same budget.
+Oversize is an error, never truncation. The actual Rust encoder is authoritative;
+86 browser/Rust parity cases include geo and exact fit/overflow.
+
+A BoardDescriptor v1 admits both versions without changing its domain, address,
+UIVK, fingerprint or policy. Legacy readers continue reading v1 but reject v2;
+upgrade readers before publishing geographic offers. Persistence stores full
+OFFER JSON, so no SQLite schema migration is introduced. An older indexer that
+already rejected v2 must deliberately reconstruct in a separate database from
+the signed birthday after upgrading; advancing its cursor alone cannot recover
+previously rejected offers. Do not overwrite a running index.
 
 ## Board descriptor and binding
 
@@ -291,7 +338,10 @@ Agent-facing surface is `request_payment(invoice)` semantics — never wallet se
 | `GET` | `/healthz` | Liveness |
 | `GET` | `/offers?capability=` | Indexed offers + chain metadata |
 
-There is **no** `GET /offers/{id}` on `board_router`.
+There is **no** `GET /offers/{id}` on `board_router`. Both versions appear in
+`GET /offers`; geo uses the same integer e5 fields as typed JSON. Coordinates
+are not accepted as query fields. There is no `POST /offers/search`. API tracing
+records method only, not request URI/query/body. Buyer matching is client-only.
 
 ## Versioning
 
@@ -303,7 +353,7 @@ There is **no** `GET /offers/{id}` on `board_router`.
 
 | Item | Status |
 | --- | --- |
-| OFFER signing + board-bound memo wire | Implemented |
+| OFFER v1/v2 signing + board-bound memo wire | Implemented; signed optional geo in v2 |
 | Board descriptor + admission | Implemented |
 | CompactTxStreamer scan + SQLite index | Implemented |
 | Live mainnet discovery acceptance | **Verified 2026-10-05** — mined OFFER and two independent indices; [public evidence](./mainnet-acceptance.md) |
@@ -330,4 +380,4 @@ compatibility review/version decision rather than a silent overnight change.
 
 A signature authenticates the reconstructed canonical typed OFFER, not transport
 bytes or service quality. The bytewise encoded-key ordering and timestamp/decimal
-string conventions used by this implementation are normative for ZADP/1.
+string conventions used by this implementation are normative for both offer versions.

@@ -167,3 +167,15 @@ Operator code can inspect `canonical_records` and `publication_audit` locally.
 ZADP defines what was validly published. Board operators define what belongs on
 their board. Hosts define what they choose to display. Registry rejection and
 hosting fees are not protocol consensus.
+
+## Signed geographic offers
+
+The reader accepts Offer/wire v1 and v2 under the existing BoardDescriptor v1.
+V2 optional geo is signed public offer-area metadata, exposed as integer e5
+fields in GET /offers. Full OFFER JSON persistence requires no schema migration;
+existing board fingerprints, addresses, UIVKs and policy remain unchanged.
+No buyer coordinates are accepted or stored. Matching occurs in the client.
+Older readers reject v2: upgrade before geo publication; if an old reader already
+passed/rejected geo blocks, reconstruct separately from the signed birthday.
+Never overwrite an active index or silently replay a publication.
+[Geo compatibility and demo](geographic-discovery.md).

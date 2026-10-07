@@ -1,14 +1,14 @@
 # Geographic discovery compatibility and privacy plan
 
-Status: implementation authorized by the revised geographic MVP request.
+Status: implemented reference path with exact legacy-byte regression and local privacy tests.
 This supersedes the earlier server-search proposal and compatibility pause.
 
 - BoardDescriptor remains v1. Its fields, signing domain, address/UIVK, policy,
   serialization and fingerprint remain unchanged. A dedicated board-version
   constant prevents an OFFER version update from affecting descriptors.
-- Offer/wire v1 and `ZADP1\0offer\0` remain byte-compatible. Capture a deterministic
-  legacy memo and signature preimage before modifying the encoder and compare
-  against it in the regression suite.
+- Offer/wire v1 and `ZADP1\0offer\0` remain byte-compatible. A deterministic
+  legacy memo and signature preimage was captured before modifying the encoder;
+  the regression suite compares exact bytes against that fixture.
 - Offer v2 uses `ZADP2\0offer\0`. Optional geo is signed as an integer triple
   `[lat_e5, lon_e5, radius_m]` under canonical map key `geo`. Wire v2 is the
   existing 13-field tuple followed by that triple or null: 14 elements. Offer

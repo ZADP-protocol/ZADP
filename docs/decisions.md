@@ -125,7 +125,7 @@ Publication previews call the actual CLI with `--dry-run --preview-output`; boar
 verification and library fee policy remain authoritative. There is no browser
 route for transaction signing, broadcasting or automatic approval.
 
-The JavaScript memo counter is tested against the Rust encoder in 44 cases.
+The JavaScript memo counter is tested against the Rust encoder in 86 cases.
 Shared payload and per-field UTF-8 limits both apply; character limits alone
 cannot ensure a valid memo.
 
@@ -178,3 +178,23 @@ was made. A production HTTPS endpoint, independent buyer wallet, reviewed fee
 preview and explicit human approval remain prerequisites for real settlement.
 [Commerce design and operating limits](commerce.md) include bounded observation,
 abuse/retention concerns and schema/config migration requirements.
+
+## ADR-013: Geographic discovery is a primary MVP capability
+
+**Decision:** Separate optional public signed offer areas from private local
+buyer location. Offer/wire v2 adds a compact integer triple with its own existing
+canonical-CBOR signing domain. Offer/wire v1 bytes and BoardDescriptor v1 remain
+unchanged. The indexer exposes accepted geo through existing GET /offers and
+stores full OFFER JSON without a migration. Unknown query fields are rejected;
+there is no coordinate search endpoint.
+
+**Client:** One reusable pure Haversine matcher intersects buyer and offer circles.
+Nearby excludes global offers; Anywhere includes both. Buyer radius zero checks
+whether the offer area includes the point. Location acquisition is click-only,
+denial is non-blocking, and buyer state is never persisted or transmitted.
+Seller public-area drafts are intentionally separate. No maps or order geo fields.
+
+**Priority:** Signed publication, independently reproducible multi-board indexing,
+local human/agent discovery form the MVP. Retain commerce, but real payments,
+hosted SLA and richer purchase flows move behind this discovery milestone.
+[Compatibility](geographic-discovery-compatibility.md) and [guide](geographic-discovery.md).

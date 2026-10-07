@@ -24,3 +24,15 @@ This is a light-client source, not independent full consensus/proof validation. 
 ## Read-only network check
 
 `cargo run -p zadp-zcash --example network_probe -- https://YOUR-SERVICE:PORT` checks the mainnet chain/consensus branch and downloads the current compact block, without any wallet access or broadcast. On 2026-10-03 this check against `https://zec.rocks:443` returned height 3505016 and protocol-order hash `872eab86b2aeaea17bbcac236c86b2e9596f5f494279a0b745786e0000000000`. This proves transport access, not discovery of a real ZADP publication. TLS provider selection is explicit because transitive Zcash/wallet dependencies may enable both rustls providers.
+
+## Signed geographic offers
+
+The reader accepts Offer/wire v1 and v2 under the existing BoardDescriptor v1.
+V2 optional geo is signed public offer-area metadata, exposed as integer e5
+fields in GET /offers. Full OFFER JSON persistence requires no schema migration;
+existing board fingerprints, addresses, UIVKs and policy remain unchanged.
+No buyer coordinates are accepted or stored. Matching occurs in the client.
+Older readers reject v2: upgrade before geo publication; if an old reader already
+passed/rejected geo blocks, reconstruct separately from the signed birthday.
+Never overwrite an active index or silently replay a publication.
+[Geo compatibility and demo](geographic-discovery.md).

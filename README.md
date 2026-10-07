@@ -6,7 +6,9 @@
 
 [![ci](https://github.com/ZADP-protocol/ZADP/actions/workflows/ci.yml/badge.svg)](https://github.com/ZADP-protocol/ZADP/actions/workflows/ci.yml)
 
-A permissionless service-discovery protocol where sellers publish signed offers through Zcash shielded memos and humans or autonomous agents can discover them through independently operated indexers.
+A permissionless service-discovery protocol where sellers publish signed offers through Zcash shielded memos and humans or autonomous agents discover them through independent, multi-board indexers.
+
+**Publish services to a geographic area through Zcash and discover matching offers locally without publishing the buyer’s location.**
 
 ![ZADP concept: sellers publish shielded offers, independent indexers expose discovery, and humans or agents consume it](docs/images/zadp-ecosystem-concept.jpg)
 
@@ -22,6 +24,7 @@ ZADP experiments with Zcash as a **permissionless publication** layer (and, late
 - cryptographically signed offers (seller Ed25519 identity, independent of Zcash keys)
 - independently reproducible indexing from chain data + a portable board descriptor
 - Zcash-native shielded memos for offer transport
+- optional signed public service areas, with private buyer-side geographic matching
 - pseudonymous sellers
 - private buyer→seller settlement as a **related / future** capability (not required for discovery)
 
@@ -38,8 +41,12 @@ flowchart LR
   Idx[Indexer - read-only board viewing]
   API[REST API]
   Client[Buyer or AI agent]
+  GPS[Private location - client memory only]
+  Match[Local geographic match]
 
   Seller --> Offer --> Tx --> Net --> Idx --> API --> Client
+  Client --> Match
+  GPS --> Match
 ```
 
 **Privacy boundary:** offer publication is intentionally discoverable by holders of the board’s public incoming viewing information. Purchases are **not** meant to go through that board viewing capability; settlement (when implemented for real) is direct buyer→seller.
@@ -59,7 +66,7 @@ Mainnet offer discovery and local self-payment fulfillment have been verified. A
 | Area | Status |
 | --- | --- |
 | Signed `offer` messages, Ed25519 seller identity | **Implemented** |
-| Canonical signing + 512-byte memo framing (`0xf5` + `ZADP` + wire v1 + CBOR) | **Implemented** |
+| Canonical signing + 512-byte memo framing (`0xf5` + `ZADP` + wire v1/v2 + CBOR) | **Implemented** |
 | Board descriptor, board binding, admission policy | **Implemented** |
 | CompactTxStreamer scanner (trial decrypt + full memo fetch) | **Implemented** (code + offline tests) |
 | SQLite indexer, cursor, replay / reorg handling | **Implemented** |
@@ -70,6 +77,7 @@ Mainnet offer discovery and local self-payment fulfillment have been verified. A
 | Live mainnet publish → mine → scan → API acceptance | **Verified 2026-10-05** — mined OFFER + two independent indices; [public evidence](docs/mainnet-acceptance.md) |
 | Payment-gated text service | **Implemented experimental local path** — authenticated seller observer + persistent invoices; synthetic tests, live buyer payment still pending |
 | Local web UI | **Implemented** — discovery, drafts, exact memo budget, optional read-only wallet/QR, unsigned publication costs and local invoice instructions |
+| Geographic discovery | **Implemented reference path** — signed Offer v2 area, v1-compatible indexing/API, local Nearby/Anywhere matching; [guide](docs/geographic-discovery.md) |
 | MCP / reputation / hosted marketplace | **Not implemented** |
 | `offer_update` / `offer_revoke` | **Specified only** |
 
@@ -79,8 +87,24 @@ Do **not** treat CompactTxStreamer support or offline fixtures as proof of live-
 
 1. **Discovery** — seller publishes a board-bound signed `offer` in a shielded memo.
 2. **Indexing** — indexer scans with the board UIVK, validates, and stores current offer state.
-3. **Commerce** — buyer contacts the seller `endpoint` directly (HTTP).
-4. **Settlement** — future/related flow: shielded ZEC buyer→seller; not the board-discovery path.
+3. **Local discovery** — human or agent downloads public offers and intersects public offer areas with a private local search circle.
+4. **Commerce** — buyer contacts the seller `endpoint` directly (HTTP).
+5. **Settlement** — future/related flow: shielded ZEC buyer→seller; not the board-discovery path.
+
+### Local discovery
+
+A seller can publish **“Cabin cleaning — available within 50 km”** with an
+approximate public service-area center. A buyer can choose **“Show offers near
+me within 25 km”**. The buyer’s location stays in client memory; it is not sent
+to Zcash, the indexer, discovery API, seller or commerce service. Nearby matches
+intersecting geographic areas; Anywhere also includes global offers. A zero
+search radius means “the offer area includes my point”. Neither center nor
+signature proves the seller’s physical position or service quality.
+
+The browser and [small agent example](examples/geo/discover.js) use the same
+local matcher and public `GET /offers` data. GPS is requested only on a click;
+there is no server geo-search endpoint, map provider or automatic persistence.
+[Geo protocol, privacy boundaries and offline demo](docs/geographic-discovery.md).
 
 ### Read offers without control of funds
 

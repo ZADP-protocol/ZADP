@@ -8,6 +8,7 @@ This document describes the **current** architecture: real CompactTxStreamer sca
 
 - Sellers publish cryptographically signed service offers via Zcash shielded memos on an operator-defined board.
 - An indexer discovers, validates, and exposes offers over a read-only REST API.
+- Humans and agents match public service areas locally; buyer location stays in client memory.
 - AI/LLM processes may **request** payment but must **never** hold or use a Zcash spending key.
 - Settlement (buyer→seller shielded payment) is a **related / planned** capability; the mock demo exercises it locally only.
 
@@ -45,6 +46,35 @@ flowchart TB
 Discovery is the production path under active implementation. The Rust commerce demo remains mocked. A separate experimental Python text
 service implements an authenticated seller-observed payment gate, with synthetic
 acceptance tests; live buyer payment and delivery remain unverified.
+
+## Geographic discovery: public offer area, private buyer point
+
+```mermaid
+flowchart LR
+  Seller[Seller - approximate public service area] --> Offer[Signed Offer v2 geo]
+  Offer --> Chain[Shielded Zcash memo]
+  Chain --> Index[Read-only board UIVK indexer]
+  Index --> API[GET /offers - public area data]
+  subgraph client [Buyer browser or agent - private client boundary]
+    GPS[Local location - memory only]
+    Feed[Downloaded public offers]
+    Match[Pure local Haversine intersection]
+    GPS --> Match
+    Feed --> Match
+  end
+  API --> Feed
+```
+
+**Buyer GPS stops at the client boundary.** No location-bearing discovery request,
+backend search, database field, order extension, telemetry or location persistence
+is introduced. Existing capability/text/board filters remain available. Anywhere
+includes global and geographic offers; Nearby includes only intersecting geo
+areas. An agent reuses the same public API and local matcher.
+
+Offer v2 signs a compact integer area. Existing board v1 and Offer v1 bytes are
+preserved. Full JSON persistence needs no schema change. Mainnet services are
+not upgraded by source development; deployment and first geo publication require
+separate review. [Precise formats and demo](geographic-discovery.md).
 
 ## Current publication path
 

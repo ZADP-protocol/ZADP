@@ -41,7 +41,7 @@ must have at most eight decimal places; endpoints must use HTTPS without
 embedded credentials. Oversized or invalid drafts cannot be saved/exported.
 Optional descriptions use the same shared byte budget.
 
-This is a protocol-v1 size preview, not a signed-board policy check, fee quote
+This is a protocol-v1/v2 size preview, not a signed-board policy check, fee quote
 or publication approval. The Rust publication encoder remains authoritative.
 Run `node ui/test_memo_budget.js` for boundary and Unicode tests.
 
@@ -151,3 +151,33 @@ and polls/retrieves results using its private saved order capability. No signing
 or payment sending is implemented. For the separate loopback-only mock fixture
 on 8095, see [commerce documentation](../docs/commerce.md). The existing legacy
 local summary test remains a separate compatibility/demo flow.
+
+## Geographic discovery
+
+The discovery Location controls default to **Anywhere**. **Use my location** is
+the only buyer browser geolocation call; no prompt occurs on page load. On success
+Nearby defaults to 50 km; presets include 0 (“Includes my location”), 5, 25, 50,
+100 and 250 km. Manual coordinates are optional. Denial keeps Anywhere usable;
+Clear location discards the point. Reload does not restore buyer location.
+Nearby excludes global/non-geo offers and locally sorts intersecting public
+service areas by center distance. Cards say “Matches your search”, not distance
+to a seller. Details label the public approximate service-area center.
+
+`geo.js` provides the shared pure Haversine matcher. Buyer point/radius live only
+in runtime state and are not sent by fetch/XHR, saved to local/session storage,
+cookies or IndexedDB, logged, put in URLs or copied into drafts/orders. Location
+acquisition and radius/mode changes make **zero** network requests. Refresh still
+fetches the usual public feed/health and optional wallet readiness without buyer
+coordinates. Independently active commerce polling remains unchanged and never
+adds coordinates. No analytics or map services are included.
+
+My offer has a separate optional **Offer area** with a public-data warning,
+manual approximate center, click-only seller geolocation, radius presets and
+custom 1..500000 meters. Saving/exporting a seller draft intentionally stores
+that public area; it never borrows buyer coordinates. Drafts with geo select
+Offer v2 in CLI previews; absent geo retains v1. Exact memo budget and Python
+operator preview validate complete integer e5 fields. There is still no browser
+publication/signing/broadcast endpoint.
+
+Run `node ui/test_geo.js` and the existing UI tests. A repeatable offline browser
+fixture and agent commands are in [the geo guide](../docs/geographic-discovery.md).

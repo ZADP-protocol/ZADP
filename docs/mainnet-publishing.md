@@ -63,3 +63,19 @@ A proposal cannot broadcast from any automated test. Tests never access a funded
 6. Archive public evidence only; never wallet credentials/seeds. A local encrypted fixture is not a substitute for these steps.
 
 All steps succeeded for the first test OFFER; see the linked public evidence. Do not retry that publication. Purchase settlement, AI purchasing, reputation and hosted marketplace are outside this milestone.
+
+## Optional signed public offer area
+
+The seller CLI accepts the complete triple `--geo-lat-e5`, `--geo-lon-e5` and
+`--geo-radius-m`. For example `--geo-lat-e5 3777493 --geo-lon-e5 -12241942
+--geo-radius-m 50000` declares a public approximate San Francisco-area center and 50 km
+service radius. All flags are required together; signed Offer/wire v2 is selected.
+Omit all three to preserve Offer/wire v1. Latitude/longitude ranges are ±9000000
+and ±18000000; radius is 1..500000 m. Geo consumes up to 16 extra memo bytes.
+
+This area becomes readable by board UIVK holders and the public discovery API.
+It is not buyer GPS or proof of a seller’s physical location. Review the area,
+actual signed memo budget, existing board policy and current fee preview before
+any separately authorized publication. Upgrade independent readers first.
+No geo offer was broadcast during implementation; source tests are not a live
+geo acceptance claim. Existing mainnet runtime and wallet were not modified.
