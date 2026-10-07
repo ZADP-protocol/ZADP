@@ -51,7 +51,10 @@ acceptance tests; live buyer payment and delivery remain unverified.
 
 ```mermaid
 flowchart LR
-  Seller[Seller - approximate public service area] --> Offer[Signed Offer v2 geo]
+  BrowserGPS[Seller browser GPS - explicit click] --> Round[Local 3-decimal privacy rounding]
+  Round --> Center[Public Offer Area - seller reviews or edits]
+  Manual[Seller-selected approximate center] --> Center
+  Center --> Offer[Signed Offer v2 geo]
   Offer --> Chain[Shielded Zcash memo]
   Chain --> Index[Read-only board UIVK indexer]
   Index --> API[GET /offers - public area data]
@@ -64,6 +67,13 @@ flowchart LR
   end
   API --> Feed
 ```
+
+Browser-acquired seller latitude/longitude are rounded locally to three decimal
+degrees before becoming visible Offer Area fields. Manual coordinates keep
+seller-selected e5 precision. The seller reviews/edits them before the normal
+publication confirmation; acquiring GPS never publishes or broadcasts. Rounding
+reduces accidental precision without making a center anonymous. Protocol e5,
+signatures, wire and board versions are unchanged.
 
 **Buyer GPS stops at the client boundary.** No location-bearing discovery request,
 backend search, database field, order extension, telemetry or location persistence

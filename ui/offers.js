@@ -15,6 +15,19 @@ const GeoDiscovery = (() => {
     if(!Number.isFinite(latitude)||Math.abs(latitude)>90||!Number.isFinite(longitude)||Math.abs(longitude)>180)throw Error('Latitude must be between −90 and 90; longitude between −180 and 180.');
     return validateArea({lat_e5:Math.round(latitude*100000),lon_e5:Math.round(longitude*100000),radius_m},buyer);
   }
+  // Reference seller-client policy only. Protocol and buyer precision stay unchanged.
+  function roundedPublicCenter(latitude,longitude) {
+    if(typeof latitude!=='number'||typeof longitude!=='number')throw Error('Invalid browser coordinates.');
+    fromDegrees(latitude,longitude,1); // Validate raw bounds before privacy rounding.
+    // Intl decimal rounding defaults to halfExpand: halfway values round away
+    // from zero on both signs, unlike Math.round's negative-half behavior.
+    const formatter=new Intl.NumberFormat('en-US',{useGrouping:false,minimumFractionDigits:3,maximumFractionDigits:3});
+    const rounded=value=>{
+      const decimal=Number(formatter.format(value));
+      return (Object.is(decimal,-0)?0:decimal).toFixed(3);
+    };
+    return {latitude:rounded(latitude),longitude:rounded(longitude)};
+  }
   function distanceMeters(a,b) {
     validateArea(a,true);validateArea(b,true);
     const rad=Math.PI/18000000;
@@ -53,7 +66,7 @@ const GeoDiscovery = (() => {
     }
     filter(offers) {return this.mode==='nearby'&&this.location?nearby(offers,this.location).map(r=>r.offer):offers;}
   }
-  return {MAX_RADIUS_M,validateArea,fromDegrees,distanceMeters,circlesIntersect,geoAreasIntersect,offerMatchesLocation,nearby,BuyerLocation};
+  return {MAX_RADIUS_M,validateArea,fromDegrees,roundedPublicCenter,distanceMeters,circlesIntersect,geoAreasIntersect,offerMatchesLocation,nearby,BuyerLocation};
 })();
 
 'use strict';

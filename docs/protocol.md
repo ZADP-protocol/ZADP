@@ -182,6 +182,18 @@ Partial, floating, unknown geo fields and invalid ranges are rejected. This is
 an optional, self-declared **offer/service area**, not an address or proof of a
 physical position. Holders of the public board UIVK can read it.
 
+**Protocol precision versus reference UI policy:** e5 is the deterministic signed
+integer representation, with all existing integer values and ranges allowed.
+The reference seller UI rounds only browser-acquired coordinates to three decimal
+degrees locally, then converts the reviewable form values to e5. For example:
+`37.774929 → 37.775 → 3777500 lat_e5`. Manual coordinates retain seller-selected
+precision up to e5; they are not silently rounded to three decimals. This does
+not constrain wire values to multiples of 100, change signing/version/framing,
+or require other clients to adopt the same precision. A conforming ZADP client
+**MUST NOT assume that all geo offers use 3-decimal coordinates**. Three decimal
+degrees represent approximately 100-meter-scale precision, with ground distance
+varying by latitude, especially for longitude; rounding is not anonymization.
+
 V2 canonical signing uses the existing map design with domain `ZADP2\0offer\0`.
 When present, the `geo` map entry is a compact CBOR array
 `[lat_e5, lon_e5, radius_m]`, sorted with other canonical keys. When absent it is

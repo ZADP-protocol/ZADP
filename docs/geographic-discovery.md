@@ -51,8 +51,27 @@ are self-declared discovery/service areas, not verified premises or addresses.
 
 Enable geographic discovery in My offer, review the public-data warning, and
 enter an approximate center and a service radius. Seller Use my current location
-is a separate click-only action; it never borrows the buyer point. A custom
-radius uses integer meters 1..500000. Unsigned drafts may intentionally save or
+is a separate click-only action; it never borrows the buyer point. It requests
+browser location, rounds latitude and longitude locally to **3 decimal degrees**,
+and fills visible form fields for review/editing. It does not publish the exact
+device position, save the draft automatically or broadcast an offer. Publication
+still requires the normal separate confirmation.
+
+For example, browser 37.774929 / -122.419416 becomes 37.775 / -122.419 in the form,
+then integer e5 3777500 / -12241900 in the draft. Decimal halfway values round away
+from zero on both signs; tiny values rounded to zero display as 0.000. The
+reference uses Intl decimal halfExpand rounding, not Math.round on negative ties.
+Raw browser coordinates are checked against normal bounds before rounding.
+
+This is approximately 100-meter-scale coordinate precision, varying with latitude,
+especially for longitude; it is not fixed accuracy or anonymity. Rounded centers
+can still reveal a small sensitive area. Manually entered or edited coordinates
+retain seller-selected precision within the existing e5/form limit (five decimal
+places), without automatic reduction to three decimals. Geo remains optional.
+Other clients may intentionally publish different precision. A conforming client
+must not assume all offer centers have three decimals or e5 multiples of 100.
+
+A custom radius uses integer meters 1..500000. Unsigned drafts may intentionally save or
 export this public area. Memo budget checks select v2 only when geo is present.
 The protected operator preview passes the complete e5 triple to the real CLI;
 there is no browser signing/publication/broadcast route.
@@ -157,7 +176,9 @@ include delivery details; discovery never adds them automatically.
   rejection, each signature tamper, wire round trip, memo fit/overflow, persistent
   admission/restart/replay/host visibility, API boundaries and prior scanner tests.
 - `node ui/test_geo.js`: known distances, circle boundaries, 0/5/25/50 km,
-  poles/antimeridian, denial, actual app network/storage/log interception.
+  poles/antimeridian, denial, actual app network/storage/log interception, automatic
+  seller rounding (positive/negative/ties/bounds), visible review values and
+  preservation of manually entered e5 precision.
 - `node ui/test_memo_rust_parity.js`: 86 real Rust/browser byte-budget cases.
 - Existing offer, purchase, commerce, Python boundary and independent-process
   tests plus fmt, clippy, documentation links and mock demo smoke remain required.

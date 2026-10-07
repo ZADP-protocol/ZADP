@@ -3,6 +3,26 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const geo=require('./geo.js');
+// Automatic seller GPS rounds decimal ties away from zero; manual e5 is unchanged.
+for(const [lat,lon,expectedLat,expectedLon] of [
+ [37.774929,-122.419416,'37.775','-122.419'],
+ [-37.774929,122.419416,'-37.775','122.419'],
+ [37.7745,-122.4195,'37.775','-122.420'],
+ [1.0055,-1.0055,'1.006','-1.006'],
+ [89.999999,179.999999,'90.000','180.000'],
+ [-89.999999,-179.999999,'-90.000','-180.000'],
+ [90,-180,'90.000','-180.000'],
+ [.0005,-.0005,'0.001','-0.001'],
+ [.0001,-.0001,'0.000','0.000'],
+]) {
+ const rounded=geo.roundedPublicCenter(lat,lon);
+ assert.deepEqual(rounded,{latitude:expectedLat,longitude:expectedLon});
+ geo.fromDegrees(rounded.latitude,rounded.longitude,50000);
+}
+for(const values of [[90.000001,0],[0,-180.000001],[NaN,0],[0,Infinity],['37.774929',25]])assert.throws(()=>geo.roundedPublicCenter(...values));
+assert.deepEqual(geo.fromDegrees('37.77493','-122.41941',50000),{lat_e5:3777493,lon_e5:-12241941,radius_m:50000});
+assert.equal(geo.fromDegrees(geo.roundedPublicCenter(37.774929,-122.419416).latitude,'-122.419',50000).lat_e5,3777500);
+
 const point=(lat,lon,r=0)=>geo.fromDegrees(lat,lon,r,true);
 assert.equal(geo.distanceMeters(point(0,0),point(0,0)),0);
 for(const [degrees,expected] of [[.009,1000],[.22483,25000],[.89932,100000]])assert(Math.abs(geo.distanceMeters(point(0,0),point(degrees,0))-expected)<2);
@@ -79,8 +99,26 @@ pending.request({getCurrentPosition(success){lateSuccess=success;}});pending.cle
  // Saving a no-geo seller draft cannot include the buyer coordinates.
  for(const handler of get('draft-form').handlers.submit)handler({preventDefault(){}});
  assert.equal(writes.length,1);assert(!writes[0][1].includes('37.77493'));assert(!writes[0][1].includes('-12241942'));assert(!JSON.parse(writes[0][1]).geo);
- const html=fs.readFileSync(`${__dirname}/index.html`,'utf8');assert(html.includes('This geographic area becomes public ZADP discovery metadata.'));
+ // Automatic seller acquisition fills reviewable 3-decimal fields, with no I/O.
+ const requestsBeforeSeller=requests.length,writesBeforeSeller=writes.length;
+ get('seller-geo-enabled').checked=true;
+ for(const handler of get('seller-geo-enabled').handlers.change)handler();
+ sandbox.navigator.geolocation.getCurrentPosition=success=>{gpsCalls++;success({coords:{latitude:37.774929,longitude:-122.419416}});};
+ for(const handler of get('seller-location').handlers.click)handler();
+ assert.equal(get('seller-lat').value,'37.775');assert.equal(get('seller-lon').value,'-122.419');
+ assert(get('seller-geo-status').textContent.includes('Rounded public location'));
+ assert.equal(requests.length,requestsBeforeSeller);assert.equal(writes.length,writesBeforeSeller);assert.equal(logs.length,0);
+ for(const handler of get('draft-form').handlers.submit)handler({preventDefault(){}});
+ assert.deepEqual(JSON.parse(writes.at(-1)[1]).geo,{lat_e5:3777500,lon_e5:-12241900,radius_m:50000});
+ // Seller edits retain e5 precision; automatic 3-decimal policy does not reapply.
+ get('seller-lat').value='37.77493';get('seller-lon').value='-122.41941';
+ for(const handler of get('draft-form').handlers.input)handler();
+ for(const handler of get('draft-form').handlers.submit)handler({preventDefault(){}});
+ assert.equal(get('seller-lat').value,'37.77493');assert.equal(get('seller-lon').value,'-122.41941');
+ assert.deepEqual(JSON.parse(writes.at(-1)[1]).geo,{lat_e5:3777493,lon_e5:-12241941,radius_m:50000});
+ assert.equal(requests.length,requestsBeforeSeller);
+ const html=fs.readFileSync(`${__dirname}/index.html`,'utf8');assert(html.includes('This geographic area becomes public ZADP discovery metadata.') && html.includes('Your browser location is rounded to 3 decimal degrees'));
  assert(!html.includes('src="/geo.js"'),'No new asset route needed by running UI servers');
  for(const id of ['buyer-lat','buyer-lon'])assert(!html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))[0].includes('name='));
- console.log('Local geo and app privacy: distances, intersections, ordering, denial, no automatic GPS, no location network/storage/logging, seller/buyer separation passed.');
+ console.log('Local geo and app privacy: distances, intersections, ordering, denial, no automatic GPS, no location network/storage/logging, seller/buyer separation and automatic seller rounding/manual precision passed.');
 })();

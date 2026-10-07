@@ -94,7 +94,9 @@ Do **not** treat CompactTxStreamer support or offline fixtures as proof of live-
 ### Local discovery
 
 A seller can publish **“Cabin cleaning — available within 50 km”** with an
-approximate public service-area center. A buyer can choose **“Show offers near
+approximate public service-area center. The reference seller UI rounds
+browser-acquired coordinates to reduce accidental disclosure of precise location.
+A buyer can choose **“Show offers near
 me within 25 km”**. The buyer’s location stays in client memory; it is not sent
 to Zcash, the indexer, discovery API, seller or commerce service. Nearby matches
 intersecting geographic areas; Anywhere also includes global offers. A zero

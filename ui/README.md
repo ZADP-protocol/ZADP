@@ -175,8 +175,24 @@ adds coordinates. No analytics or map services are included.
 
 My offer has a separate optional **Offer area** with a public-data warning,
 manual approximate center, click-only seller geolocation, radius presets and
-custom 1..500000 meters. Saving/exporting a seller draft intentionally stores
-that public area; it never borrows buyer coordinates. Drafts with geo select
+custom 1..500000 meters.
+
+Use my current location means: request browser location after the click, round
+locally to **three decimal degrees**, populate visible Offer Area fields and let
+the seller review or edit them before the normal separate publication confirmation.
+For example 37.774929 / -122.419416 becomes 37.775 / -122.419, then integer e5
+3777500 / -12241900. Decimal halfway values round away from zero on both signs
+using Intl halfExpand rounding. Negative zero displays as 0.000. Bounds are
+checked before rounding. The status label says Rounded public location.
+
+Manual coordinates and edits retain chosen precision within the existing
+five-decimal/e5 form limit; the three-decimal policy applies only to automatic
+browser acquisition. Approximately 100-meter-scale coordinate precision varies
+with latitude, especially longitude. Rounding reduces accidental precision but
+never guarantees anonymity; the final center is public. GPS does not save,
+submit, preview a transaction or broadcast automatically.
+
+Saving/exporting a seller draft intentionally stores that public area; it never borrows buyer coordinates. Drafts with geo select
 Offer v2 in CLI previews; absent geo retains v1. Exact memo budget and Python
 operator preview validate complete integer e5 fields. There is still no browser
 publication/signing/broadcast endpoint.

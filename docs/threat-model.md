@@ -179,6 +179,20 @@ indexed metadata private: descriptor/UIVK holders can read incoming offer
 memos and the API exposes accepted geo. Signatures authenticate declarations,
 not actual presence or service quality.
 
+Browser geolocation can reveal a home, office or other sensitive physical place.
+The reference seller UI requests it only after explicit seller action, rounds
+browser-acquired coordinates to **three decimal degrees before populating public
+Offer Area fields**, and lets the seller review/edit the center. Sellers may
+choose an approximate center manually; geo remains optional. Manual precision
+is seller-controlled within e5 rather than silently reduced to three decimals.
+
+Rounding reduces accidental precision but **does not anonymize a seller**.
+A rounded center may still reveal a small area. Three-decimal coordinate precision
+is approximately 100-meter scale, not an exact fixed meter accuracy; longitude
+distance varies strongly with latitude. No privacy guarantee follows from it.
+The protocol can intentionally encode finer e5 values; this is a reference-client
+publication policy, not a restriction on conforming offers or other clients.
+
 A discovery operator could learn buyer coordinates from server-side geo queries.
 The reference client instead downloads public offers and performs Haversine
 circle matching locally. Buyer coordinates are transient client memory only:

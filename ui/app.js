@@ -91,9 +91,15 @@ $('seller-location').addEventListener('click',()=>{
   $('seller-location').disabled=true;
   navigator.geolocation.getCurrentPosition(position=>{
     $('seller-location').disabled=false;
-    $('seller-lat').value=(Math.round(position.coords.latitude*100000)/100000).toFixed(5);
-    $('seller-lon').value=(Math.round(position.coords.longitude*100000)/100000).toFixed(5);
-    $('seller-geo-status').textContent='Review this public offer-area center before saving or publishing.';checkBudget();
+    try {
+      const center=GeoDiscovery.roundedPublicCenter(position.coords.latitude,position.coords.longitude);
+      $('seller-lat').value=center.latitude;
+      $('seller-lon').value=center.longitude;
+      $('seller-geo-status').textContent='Rounded public location · 3 decimal degrees. Review or edit this offer-area center before saving or publishing.';
+      checkBudget();
+    } catch {
+      $('seller-geo-status').textContent='Location unavailable; enter an approximate offer-area center manually.';
+    }
   },()=>{$('seller-location').disabled=false;$('seller-geo-status').textContent='Location not granted; enter an approximate offer-area center manually.';},{enableHighAccuracy:false,maximumAge:0,timeout:10000});
 });
 function checkBudget() {
