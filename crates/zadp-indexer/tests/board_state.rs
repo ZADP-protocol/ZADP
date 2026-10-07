@@ -466,3 +466,71 @@ fn invalid_external_descriptors_never_register() {
     invalid.board.incoming_viewing_key = "malformed".into();
     assert!(SqliteOfferRepository::open(":memory:", invalid).is_err());
 }
+
+#[tokio::test]
+async fn signed_geo_on_v1_board_survives_restart_without_schema_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("geo.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let fingerprint = board.fingerprint().unwrap();
+    let encoded_board = serde_json::to_string(&board).unwrap();
+    let seller = SellerKeyPair::generate();
+    let global = offer(&seller, 1);
+    let mut local = offer(&seller, 2);
+    local.zadp = OFFER_VERSION_V2;
+    local.geo = Some(GeoArea {
+        lat_e5: 3777493,
+        lon_e5: -12241942,
+        radius_m: 50000,
+    });
+    local.signature = seller.sign(&signing_bytes(&local).unwrap());
+    let mut changed = local.clone();
+    changed.geo.as_mut().unwrap().radius_m = 60000;
+    changed.signature = seller.sign(&signing_bytes(&changed).unwrap());
+    {
+        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+        assert_eq!(
+            repo.apply_block(block(BIRTHDAY, 1, 0, vec![global.clone(), local.clone()]))
+                .unwrap(),
+            2
+        );
+        // Existing first-wins semantics: redefinition is not an UPDATE.
+        assert_eq!(
+            repo.apply_block(block(BIRTHDAY + 1, 2, 1, vec![changed]))
+                .unwrap(),
+            0
+        );
+        assert_eq!(repo.get(&local.id).await.unwrap().unwrap().offer, local);
+    }
+    let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 2);
+    assert_eq!(repo.get(&global.id).await.unwrap().unwrap().offer.geo, None);
+    assert_eq!(repo.get(&local.id).await.unwrap().unwrap().offer, local);
+    assert_eq!(repo.board().fingerprint().unwrap(), fingerprint);
+    assert_eq!(serde_json::to_string(repo.board()).unwrap(), encoded_board);
+    assert_eq!(board.board.zadp, BOARD_DESCRIPTOR_VERSION);
+    repo.moderate(
+        local.seller.as_str(),
+        &local.id,
+        Visibility::Hidden,
+        "Fixture",
+    )
+    .unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let names = connection
+        .prepare("PRAGMA table_info(offers)")
+        .unwrap()
+        .query_map([], |r| r.get::<_, String>(1))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert!(!names
+        .iter()
+        .any(|n| n.contains("geo") || n.contains("buyer")));
+    assert!(repo
+        .canonical_records(None)
+        .unwrap()
+        .iter()
+        .any(|r| r.offer == local));
+}

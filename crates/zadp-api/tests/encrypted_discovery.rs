@@ -93,6 +93,13 @@ fn encrypted_action(
 }
 #[tokio::test]
 async fn encrypted_memo_to_independent_persistent_indexes_and_get_offers() {
+    encrypted_discovery_fixture(false).await;
+}
+#[tokio::test]
+async fn encrypted_geo_memo_to_independent_indexes_and_public_feed() {
+    encrypted_discovery_fixture(true).await;
+}
+async fn encrypted_discovery_fixture(with_geo: bool) {
     let params = ZcashNetwork::Mainnet.parameters();
     let mut seed = [0u8; 64];
     rand::rngs::OsRng.fill_bytes(&mut seed);
@@ -123,23 +130,22 @@ async fn encrypted_memo_to_independent_persistent_indexes_and_get_offers() {
     .sign(&operator)
     .unwrap();
     let now = DateTime::from_timestamp(Utc::now().timestamp() - 1, 0).unwrap();
-    let offer = bind_offer(
-        OfferDraft::new_ulid(
-            seller.id.clone(),
-            "llm.inference",
-            "ZADP Demo Inference",
-            Price::zec(Decimal::new(1, 2)),
-            "https://example.com/zadp",
-            now + Duration::hours(24),
-            B64.encode([1u8; 16]),
-        )
-        .sign(&seller)
-        .unwrap(),
-        "ai-services",
-        now,
-        &seller,
-    )
-    .unwrap();
+    let draft = OfferDraft::new_ulid(
+        seller.id.clone(),
+        "llm.inference",
+        "ZADP Demo Inference",
+        Price::zec(Decimal::new(1, 2)),
+        "https://example.com/zadp",
+        now + Duration::hours(24),
+        B64.encode([1u8; 16]),
+    );
+    let geo = GeoArea {
+        lat_e5: 3777493,
+        lon_e5: -12241942,
+        radius_m: 50000,
+    };
+    let draft = if with_geo { draft.with_geo(geo) } else { draft };
+    let offer = bind_offer(draft.sign(&seller).unwrap(), "ai-services", now, &seller).unwrap();
     let memo = encode_offer_memo(&offer).unwrap();
     let action = encrypted_action(*board_address.orchard().unwrap(), memo);
     let compact = CompactAction::from(&action);
@@ -229,6 +235,8 @@ async fn encrypted_memo_to_independent_persistent_indexes_and_get_offers() {
     assert_eq!(json["offers"][0]["chain"]["confirmations"], 1);
     let returned: Offer = serde_json::from_value(json["offers"][0].clone()).unwrap();
     verify_offer(&returned, Utc::now()).unwrap();
+    assert_eq!(returned.geo, with_geo.then_some(geo));
+    assert_eq!(returned.zadp, if with_geo { 2 } else { 1 });
 }
 
 fn isolated_descriptor(id: &str, birthday: u32) -> BoardDescriptor {

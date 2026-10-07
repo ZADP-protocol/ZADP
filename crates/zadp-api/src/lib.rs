@@ -46,11 +46,17 @@ where
         .route("/offers", get(list_offers::<A, R>))
         .route("/v1/invoices", post(create_invoice::<A, R>))
         .route("/v1/fulfill", post(fulfill::<A, R>))
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().make_span_with(
+            |request: &axum::http::Request<axum::body::Body>| {
+                // Deliberately omit query strings and bodies from request spans.
+                tracing::info_span!("http_request", method = %request.method())
+            },
+        ))
         .with_state(state)
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OffersQuery {
     pub capability: Option<String>,
     pub board_id: Option<String>,
@@ -75,7 +81,12 @@ pub fn board_router<R: OfferRepository + 'static>(repository: Arc<R>) -> Router 
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/offers", get(board_offers::<R>))
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().make_span_with(
+            |request: &axum::http::Request<axum::body::Body>| {
+                // Deliberately omit query strings and bodies from request spans.
+                tracing::info_span!("http_request", method = %request.method())
+            },
+        ))
         .with_state(repository)
 }
 

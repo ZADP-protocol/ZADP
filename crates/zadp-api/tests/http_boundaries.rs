@@ -119,3 +119,60 @@ async fn internal_repository_details_never_reach_http_clients() {
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(body, serde_json::json!({"error":"Internal server error"}));
 }
+
+#[tokio::test]
+async fn public_geo_feed_never_needs_or_accepts_buyer_coordinates() {
+    let repo = Arc::new(InMemoryOfferRepository::new());
+    let keys = SellerKeyPair::generate();
+    let offer = OfferDraft::new_ulid(
+        keys.id.clone(),
+        "cleaning",
+        "Cabin cleaning",
+        Price::zec("0.01".parse().unwrap()),
+        "https://fixture.example",
+        Utc::now() + Duration::days(1),
+        "fixture-nonce",
+    )
+    .with_geo(zadp_protocol::GeoArea {
+        lat_e5: 3777493,
+        lon_e5: -12241942,
+        radius_m: 50000,
+    })
+    .sign(&keys)
+    .unwrap();
+    repo.upsert_first_wins(OfferRecord {
+        offer,
+        source_txid: TxId("fixture".into()),
+        indexed_at: Utc::now(),
+        chain: None,
+    })
+    .await
+    .unwrap();
+    let (status, body) = response(repo.clone(), "/offers").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["offers"][0]["geo"],
+        serde_json::json!({"lat_e5":3777493,"lon_e5":-12241942,"radius_m":50000})
+    );
+    for uri in [
+        "/offers?lat=65&lon=25",
+        "/offers?lat_e5=6500000&lon_e5=2500000",
+        "/offers?location=private",
+    ] {
+        assert_eq!(response(repo.clone(), uri).await.0, StatusCode::BAD_REQUEST);
+    }
+    let response = zadp_api::board_router(repo)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/offers/search")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    r#"{"location":{"lat":37.775,"lon":-122.419,"radius_m":25000}}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
