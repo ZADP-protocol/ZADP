@@ -163,7 +163,9 @@ Nearby excludes global/non-geo offers and locally sorts intersecting public
 service areas by center distance. Cards say “Matches your search”, not distance
 to a seller. Details label the public approximate service-area center.
 
-`geo.js` provides the shared pure Haversine matcher. Buyer point/radius live only
+`geo.js` exports the shared pure Haversine matcher for Node. Its single
+implementation is shipped inside the existing browser `offers.js` asset, so
+already-running fixed-asset UI servers need no new route or runtime restart. Buyer point/radius live only
 in runtime state and are not sent by fetch/XHR, saved to local/session storage,
 cookies or IndexedDB, logged, put in URLs or copied into drafts/orders. Location
 acquisition and radius/mode changes make **zero** network requests. Refresh still

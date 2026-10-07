@@ -80,6 +80,7 @@ pending.request({getCurrentPosition(success){lateSuccess=success;}});pending.cle
  for(const handler of get('draft-form').handlers.submit)handler({preventDefault(){}});
  assert.equal(writes.length,1);assert(!writes[0][1].includes('37.77493'));assert(!writes[0][1].includes('-12241942'));assert(!JSON.parse(writes[0][1]).geo);
  const html=fs.readFileSync(`${__dirname}/index.html`,'utf8');assert(html.includes('This geographic area becomes public ZADP discovery metadata.'));
+ assert(!html.includes('src="/geo.js"'),'No new asset route needed by running UI servers');
  for(const id of ['buyer-lat','buyer-lon'])assert(!html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))[0].includes('name='));
  console.log('Local geo and app privacy: distances, intersections, ordering, denial, no automatic GPS, no location network/storage/logging, seller/buyer separation passed.');
 })();

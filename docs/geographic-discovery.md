@@ -129,7 +129,10 @@ board descriptor, wallet/accounts and indices are preserved.
 
 ## Privacy verification and limitations
 
-Geolocation API calls exist only at the buyer button via BuyerLocation.request
+The single matcher is bundled in the existing `ui/offers.js` browser asset;
+`ui/geo.js` is its CommonJS export entry for agents/tests. No extra browser asset
+route or running UI server restart is needed. Geolocation API calls exist only
+at the buyer button via BuyerLocation.request
 and the seller area button. There is no watchPosition or automatic acquisition.
 Acquisition, mode/radius changes and local filtering trigger zero requests.
 Explicit Refresh retains public feed/health and optional read-only wallet-status
