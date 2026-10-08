@@ -274,7 +274,12 @@ fn isolated_descriptor(id: &str, birthday: u32) -> BoardDescriptor {
         address: address.encode(&params),
         incoming_viewing_key: uivk.encode(&params),
         birthday_height: birthday,
-        policy: BoardPolicy::default(),
+        // Disposable offline board explicitly allows the pagination scale fixture.
+        policy: BoardPolicy {
+            max_active_offers_per_seller: 2000,
+            max_publications_per_seller_per_window: 2000,
+            ..BoardPolicy::default()
+        },
         operator_key: owner.id.clone(),
     }
     .sign(&owner)
@@ -428,6 +433,20 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
         let body = to_bytes(response.into_body(), 1_048_576).await.unwrap();
         (status, serde_json::from_slice(&body).unwrap())
     }
+    assert_eq!(get(app.clone(), "/offers/same-offer-id").await.0, 400);
+    let (status, selected) = get(app.clone(), "/offers/same-offer-id?board_id=board-b").await;
+    assert_eq!(status, 200);
+    assert_eq!(selected["board_id"], "board-b");
+    let hidden = zadp_api::multi_board_router_with_policy(
+        Arc::clone(&registry),
+        zadp_api::HostPolicy::from_config(Some("allowlist"), Some("[]")).unwrap(),
+    );
+    assert_eq!(
+        get(hidden, "/offers/same-offer-id?board_id=board-b")
+            .await
+            .0,
+        404
+    );
     let (_, all) = get(app.clone(), "/offers").await;
     assert_eq!(all["offers"].as_array().unwrap().len(), 2);
     assert_eq!(all["offers"][0]["id"], all["offers"][1]["id"]);
@@ -488,6 +507,43 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
     );
     assert!(ra.publication_audit(10).unwrap()[0].protocol_valid);
     assert_eq!(ra.canonical_records(None).unwrap().len(), 1);
+    // A second board's visible ID must not disappear behind the first 1,000 list rows.
+    // These are offline decoded-output fixtures, not transactions or mainnet evidence.
+    let mut outputs = Vec::new();
+    for index in 0..1000 {
+        let mut draft = oa.clone();
+        draft.id = format!("pagination-fixture-{index}");
+        draft.nonce = B64.encode((index as u128 + 1).to_be_bytes());
+        let signed = bind_offer(draft, &a.board.board_id, now, &seller).unwrap();
+        outputs.push(zadp_zcash::BoardOutput {
+            txid: zadp_zcash::TxId(format!("{index:064x}")),
+            transaction_index: index,
+            output_index: 0,
+            pool: "orchard".into(),
+            value_zat: a.board.policy.min_listing_value_zat,
+            memo: encode_offer_memo(&signed).unwrap().to_vec(),
+        });
+    }
+    assert_eq!(
+        ra.apply_block(BoardBlock {
+            header: BlockHeader {
+                height: 3_000_001,
+                hash: "2".repeat(64),
+                prev_hash: "1".repeat(64),
+                time: now
+            },
+            outputs,
+        })
+        .unwrap(),
+        1000
+    );
+    assert_eq!(
+        get(app.clone(), "/offers/same-offer-id?board_id=board-b")
+            .await
+            .0,
+        200
+    );
+    assert_eq!(get(app.clone(), "/offers/same-offer-id").await.0, 200);
     for path in [
         "/boards",
         "/boards/board-a/moderate",

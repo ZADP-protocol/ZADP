@@ -75,13 +75,13 @@ async fn board_offers(
         return Err(ApiError::bad_request("conflicting board filters"));
     }
     query.board_id = Some(id);
-    list(&state.registry, &state.policy, query).await
+    list(&state.registry, &state.policy, query, None).await
 }
 async fn offers(
     State(state): State<HostedState>,
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<OffersResponse>, ApiError> {
-    list(&state.registry, &state.policy, query).await
+    list(&state.registry, &state.policy, query, None).await
 }
 async fn offer(
     State(state): State<HostedState>,
@@ -89,7 +89,7 @@ async fn offer(
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<IndexedOffer>, ApiError> {
     // Reuse the exact active hosted view; knowing a canonical ID cannot bypass it.
-    let Json(view) = list(&state.registry, &state.policy, query).await?;
+    let Json(view) = list(&state.registry, &state.policy, query, Some(&id)).await?;
     let mut matches = view.offers.into_iter().filter(|o| o.offer.id == id);
     let first = matches.next().ok_or_else(ApiError::not_found)?;
     if matches.next().is_some() {
@@ -101,6 +101,7 @@ async fn list(
     registry: &BoardRegistry,
     policy: &HostPolicy,
     query: OffersQuery,
+    only_id: Option<&str>,
 ) -> Result<Json<OffersResponse>, ApiError> {
     if query.q.as_ref().is_some_and(|q| q.len() > 256) {
         return Err(ApiError::bad_request("search query too long"));
@@ -130,6 +131,10 @@ async fn list(
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
         for r in records {
+            // Exact lookup must precede list pagination; hidden IDs still use the same policy.
+            if only_id.is_some_and(|id| r.offer.id != id) {
+                continue;
+            }
             if !policy.permits_record(&r) {
                 continue;
             }
@@ -149,7 +154,7 @@ async fn list(
                 offer: r.offer,
                 chain: r.chain,
             });
-            if offers.len() >= 1000 {
+            if offers.len() >= if only_id.is_some() { 2 } else { 1000 } {
                 return Ok(Json(OffersResponse { offers }));
             }
         }
