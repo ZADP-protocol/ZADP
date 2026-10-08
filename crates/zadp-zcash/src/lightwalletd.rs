@@ -31,6 +31,24 @@ pub struct BoardTransport {
     network: ZcashNetwork,
 }
 impl BoardTransport {
+    /// Public software metadata reported by the transport, never wallet data.
+    pub async fn backend_versions(&self) -> Result<(String, String), ZcashError> {
+        let info = self
+            .client
+            .clone()
+            .get_lightd_info(Empty {})
+            .await
+            .map_err(|e| error(format!("GetLightdInfo: {}", e.code())))?
+            .into_inner();
+        let clean = |s: String| {
+            if s.len() <= 128 && !s.chars().any(char::is_control) {
+                s
+            } else {
+                String::new()
+            }
+        };
+        Ok((clean(info.zcashd_subversion), clean(info.version)))
+    }
     pub async fn connect(url: &str, network: ZcashNetwork) -> Result<Self, ZcashError> {
         Ok(Self {
             client: connect_lightwalletd(url, network).await?,

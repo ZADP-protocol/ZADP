@@ -117,10 +117,11 @@ async fn board_offers<R: OfferRepository + 'static>(
         .list(query.capability.as_deref())
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
+    let policy = state.policy.snapshot();
     Ok(Json(OffersResponse {
         offers: records
             .into_iter()
-            .filter(|r| state.policy.permits(&r.offer.seller))
+            .filter(|r| policy.permits_record(r))
             .map(|r| IndexedOffer {
                 offer: r.offer,
                 chain: r.chain,
@@ -251,6 +252,10 @@ impl IntoResponse for ApiError {
 }
 
 mod boards;
-pub use boards::{multi_board_router, multi_board_router_with_policy};
+pub use boards::{
+    multi_board_router, multi_board_router_with_policy, multi_board_router_with_versions,
+};
 mod host_policy;
-pub use host_policy::HostPolicy;
+pub use host_policy::{
+    HostPolicy, ManualPolicy, OfferDecision, OfferRule, SellerRule, SellerStatus,
+};

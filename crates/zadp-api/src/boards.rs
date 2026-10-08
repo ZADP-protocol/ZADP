@@ -12,18 +12,39 @@ use zadp_indexer::{BoardRegistry, BoardStatus, BoardSummary, OfferRepository};
 struct HostedState {
     registry: Arc<BoardRegistry>,
     policy: HostPolicy,
+    versions: Option<(String, String)>,
 }
 pub fn multi_board_router(registry: Arc<BoardRegistry>) -> Router {
     multi_board_router_with_policy(registry, HostPolicy::default())
 }
 pub fn multi_board_router_with_policy(registry: Arc<BoardRegistry>, policy: HostPolicy) -> Router {
+    multi_board_router_with_versions(registry, policy, None)
+}
+pub fn multi_board_router_with_versions(
+    registry: Arc<BoardRegistry>,
+    policy: HostPolicy,
+    versions: Option<(String, String)>,
+) -> Router {
     Router::new()
-        .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz", get(health))
         .route("/boards", get(boards))
         .route("/boards/{board_id}", get(board))
         .route("/boards/{board_id}/offers", get(board_offers))
         .route("/offers", get(offers))
-        .with_state(HostedState { registry, policy })
+        .route("/offers/{id}", get(offer))
+        .with_state(HostedState {
+            registry,
+            policy,
+            versions,
+        })
+}
+async fn health(State(state): State<HostedState>) -> Json<serde_json::Value> {
+    let mut status = serde_json::json!({"status":"ok"});
+    if let Some((node, transport)) = state.versions {
+        status["node_version"] = node.into();
+        status["lightwalletd_version"] = transport.into();
+    }
+    Json(status)
 }
 async fn boards(State(state): State<HostedState>) -> Result<Json<serde_json::Value>, ApiError> {
     let summaries = state
@@ -62,6 +83,20 @@ async fn offers(
 ) -> Result<Json<OffersResponse>, ApiError> {
     list(&state.registry, &state.policy, query).await
 }
+async fn offer(
+    State(state): State<HostedState>,
+    Path(id): Path<String>,
+    Query(query): Query<OffersQuery>,
+) -> Result<Json<IndexedOffer>, ApiError> {
+    // Reuse the exact active hosted view; knowing a canonical ID cannot bypass it.
+    let Json(view) = list(&state.registry, &state.policy, query).await?;
+    let mut matches = view.offers.into_iter().filter(|o| o.offer.id == id);
+    let first = matches.next().ok_or_else(ApiError::not_found)?;
+    if matches.next().is_some() {
+        return Err(ApiError::bad_request("select a board for this offer ID"));
+    }
+    Ok(Json(first))
+}
 async fn list(
     registry: &BoardRegistry,
     policy: &HostPolicy,
@@ -77,6 +112,7 @@ async fn list(
     {
         return Err(ApiError::not_found());
     }
+    let policy = policy.snapshot();
     let q = query.q.map(|q| q.to_lowercase());
     let mut offers = Vec::new();
     for board in registry.contexts() {
@@ -94,7 +130,7 @@ async fn list(
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
         for r in records {
-            if !policy.permits(&r.offer.seller) {
+            if !policy.permits_record(&r) {
                 continue;
             }
             if q.as_ref().is_some_and(|q| {

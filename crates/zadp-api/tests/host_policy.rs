@@ -94,3 +94,30 @@ async fn hosted_visibility_does_not_change_canonical_storage_or_geo() {
     }
     assert_eq!(repo.list(None).await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn health_exposes_only_public_backend_versions() {
+    let registry = Arc::new(zadp_indexer::BoardRegistry::new(
+        zadp_protocol::ZcashNetwork::Mainnet,
+    ));
+    let app = zadp_api::multi_board_router_with_versions(
+        registry,
+        HostPolicy::default(),
+        Some(("/Zebra:fixture/".into(), "fixture-lightwalletd".into())),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/healthz")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let body = to_bytes(response.into_body(), 4096).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["node_version"], "/Zebra:fixture/");
+    assert_eq!(value["lightwalletd_version"], "fixture-lightwalletd");
+    assert_eq!(value.as_object().unwrap().len(), 3);
+}
