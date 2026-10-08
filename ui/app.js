@@ -33,7 +33,7 @@ function render() {
     if(commerce?.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
     $('offers').append(card);
   }
-  $('message').textContent = buyerGeo.mode==='nearby'&&!buyerGeo.location ? 'Choose a location to discover matching offers.' : filtered.length ? '' : (offers.length ? 'No offers match your search.' : 'No offers have been indexed yet.');
+  $('message').textContent = buyerGeo.mode==='nearby'&&!buyerGeo.location ? 'Choose a location to discover matching offers.' : filtered.length ? '' : (offers.length ? 'No offers match your search.' : 'No active offers are currently available.');
 }
 function syncBuyerControls() {
   const nearby=buyerGeo.mode==='nearby',active=nearby&&!!buyerGeo.location;
@@ -71,15 +71,28 @@ async function refresh() {
     if(!health.ok || !response.ok) throw Error();
     const data = await response.json();
     offers = parseOffersResponse(data);
+    // An empty active feed still has a configured board. Read only public
+    // board metadata; location matching never triggers this request.
+    let summaries=[];
+    if(!offers.length) {
+      try {
+        const metadata=await fetch('/api/boards');
+        if(metadata.ok) {
+          const body=await metadata.json();
+          if(Array.isArray(body.boards))summaries=body.boards.filter(b=>b&&typeof b.board_id==='string'&&['mainnet','testnet'].includes(b.network));
+        }
+      } catch {} // Older local servers can omit the board metadata endpoint.
+    }
     const selected = $('board-filter').value;
-    const boards = [...new Set(offers.map(offerBoard).filter(Boolean))].sort();
+    const boards = [...new Set([...offers.map(offerBoard),...summaries.map(b=>b.board_id)].filter(Boolean))].sort();
     $('board-filter').replaceChildren(element('option','All boards'));
     $('board-filter').firstChild.value = '';
     for (const id of boards) { const option = element('option',id); option.value = id; $('board-filter').append(option); }
     $('board-filter').value = boards.includes(selected) ? selected : '';
-    $('network-label').textContent=offersNetwork(offers); render();
+    const networks=[...new Set(summaries.map(b=>b.network))];
+    $('network-label').textContent=offers.length?offersNetwork(offers):networks.length===1?`${networks[0]} board`:networks.length>1?'Mixed board networks':'Network unavailable'; render();
     $('connection').textContent = '● Index connected'; $('index-status').textContent = 'Connected. Offers are read from the connected Zcash index.';
-    const heights = offers.map(o=>o.chain?.scanned_height).filter(Number.isFinite);
+    const heights = [...offers.map(o=>o.chain?.scanned_height),...summaries.map(b=>b.scanned_height)].filter(Number.isFinite);
     $('height').textContent = heights.length ? `Scanned block height: ${Math.max(...heights).toLocaleString('en')}` : 'Block height unavailable.';
   } catch {
     offers = []; $('network-label').textContent='Network unavailable'; $('offers').replaceChildren(); $('count').textContent = '';

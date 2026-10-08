@@ -125,5 +125,16 @@ pending.request({getCurrentPosition(success){lateSuccess=success;}});pending.cle
  const html=fs.readFileSync(`${__dirname}/index.html`,'utf8');assert(html.includes('This geographic area becomes public ZADP discovery metadata.') && html.includes('Your browser location is rounded to 3 decimal degrees'));
  assert(!html.includes('src="/geo.js"'),'No new asset route needed by running UI servers');
  for(const id of ['buyer-lat','buyer-lon'])assert(!html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))[0].includes('name='));
- console.log('Local geo and app privacy: distances, intersections, ordering, denial, no automatic GPS, no location network/storage/logging, seller/buyer separation and automatic seller rounding/manual precision passed.');
+ // An empty active feed retains public board network/height without location I/O.
+ let metadataAvailable=true;
+ sandbox.fetch=async(url,options)=>{requests.push({url,options});return {ok:url!='/api/boards'||metadataAvailable,json:async()=>url==='/api/offers'?{offers:[]}:url==='/api/boards'?{boards:[{board_id:'ai-services',network:'mainnet',scanned_height:123}]}:{}};};
+ for(const handler of get('refresh').handlers.click)await handler();
+ assert.equal(get('network-label').textContent,'mainnet board');assert.equal(get('height').textContent,'Scanned block height: 123');assert.equal(get('offers').children.length,0);
+ assert.equal(get('message').textContent,'Choose a location to discover matching offers.');
+ for(const handler of get('mode-anywhere').handlers.click)handler();
+ assert.equal(get('message').textContent,'No active offers are currently available.');
+ const afterMetadata=requests.length;for(const handler of get('mode-nearby').handlers.click)handler();assert.equal(requests.length,afterMetadata);
+ metadataAvailable=false;for(const handler of get('refresh').handlers.click)await handler();
+ assert.equal(get('network-label').textContent,'Network unavailable');assert.equal(get('connection').textContent,'● Index connected');
+ console.log('Local geo and app privacy: matching, no location network/storage/logging, seller rounding/manual precision, and empty-feed board status passed.');
 })();
