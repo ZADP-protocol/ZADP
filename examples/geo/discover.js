@@ -3,7 +3,7 @@
 // Read a PUBLIC GET /offers feed file; accept the private buyer circle on stdin.
 // No coordinate arguments, network, persistence, analytics or buyer-point output.
 const fs=require('node:fs');
-const geo=require('../../ui/geo.js');
+const geo=require('../../client/browser/geo.js');
 try {
   if(process.argv.length!==3)throw Error('Expected a public feed file.');
   const feed=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));

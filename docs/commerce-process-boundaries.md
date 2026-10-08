@@ -18,7 +18,7 @@ regressions separately test note decryption into independent indices.
    the read-only `board_router`. Its directory contains only a synthetic signed
    public descriptor, public offer, board SQLite database and normal SQLite
    sidecars. It never opens seller configuration or buyer/seller order storage.
-4. `ui/server.py`: separate process serving the existing UI, with no operator
+4. `examples/browser/server.py`: separate process serving the existing UI, with no operator
    configuration. Its fixed discovery upstream points to the isolated indexer.
 5. `buyer.py`: separate client processes/session, with a private recovery file
    and input file in a buyer-only directory. Uses the same seller API as the
@@ -69,7 +69,7 @@ commerce state remaining independent of board cursors, rebuilds and availability
 This test is in CI. Existing anonymous order, replay/reuse, expiry, payment-field,
 reorg, browser recovery and QR tests remain required. Passing this bounded suite
 is a local architecture checkpoint, not a claim of complete production stability.
-See [the gated mainnet plan](mainnet-commerce-plan.md) before any real transition.
+See [mainnet publication safety](mainnet-publishing.md) before any real transition.
 
 ## Transition is deferred until a real endpoint and independent wallet exist
 
@@ -79,7 +79,7 @@ The independent buyer CLI in this test is an order client, not a funded wallet.
 A separate real buyer wallet/account must be configured outside the existing
 seller/board wallet before real payment preview and explicit human approval.
 No seed/spending keys should be created or requested in chat. See the updated
-[mainnet gate](mainnet-commerce-plan.md); stop at non-broadcast preview/QR
+[mainnet safety](mainnet-publishing.md); stop at non-broadcast preview/QR
 preparation while those deployment/wallet prerequisites are absent.
 
 ## Preparation acceptance verification

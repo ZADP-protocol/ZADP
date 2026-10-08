@@ -40,11 +40,13 @@ function memoBudget(draft, issuedAt = Math.floor(Date.now() / 1000)) {
   }
   // array(13), protocol version, board, ULID(26), public key(32), capability,
   // title, optional description, zat integer, endpoint, two times, nonce(16), signature(64).
+  const ttl=draft.ttl_seconds??86400;
+  if(!Number.isSafeInteger(ttl)||ttl<=0||ttl>4294967295)throw Error('Invalid publication lifetime.');
   const description = draft.description || null;
   let used = 1 + 1 + textBytes(draft.board_id) + textBytes('0'.repeat(26)) + 34
     + textBytes(draft.capability) + textBytes(draft.title)
     + (description === null ? 1 : textBytes(description))
-    + (v2 ? (commerce===null?1:1+textBytes(commerce.endpoint)+cborHeadBytes(zat)) : textBytes(commerce.endpoint)+cborHeadBytes(zat)) + cborHeadBytes(issuedAt) + cborHeadBytes(issuedAt + 86400)
+    + (v2 ? (commerce===null?1:1+textBytes(commerce.endpoint)+cborHeadBytes(zat)) : textBytes(commerce.endpoint)+cborHeadBytes(zat)) + cborHeadBytes(issuedAt) + cborHeadBytes(issuedAt + ttl)
     + 17 + 66;
   if(v2 && draft.geo==null)used+=1;
   if(draft.geo!=null) {

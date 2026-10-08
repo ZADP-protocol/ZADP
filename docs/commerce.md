@@ -111,45 +111,14 @@ payment may then be sent. The expired placeholder mainnet offer and earlier
 self-payment do not prove this independent buyer-to-seller flow and must not be
 retried automatically.
 
-## Run the isolated vertical slice
-
-From the repository root, use a **new private directory outside the repository**:
+## Run independent reference commerce acceptance
 
 ```sh
 cargo build -p zadp-commerce --bins --examples
-cargo run -p zadp-commerce --example fixture -- /absolute/private/commerce-demo
-python3 ui/dev_commerce_fixture.py --directory /absolute/private/commerce-demo
+python3 -m unittest discover -s examples/commerce -p 'test_*.py'
 ```
 
-Open `http://127.0.0.1:8095`. The isolated discovery fixture is on 8096; the
-independent Rust seller is on 8094. The existing mainnet UI on 8090 and discovery
-API on 8080 are not reconfigured. Choose the explicitly labeled local offer,
-click **Buy directly from seller**, enter `hello world` and prepare an order.
-The demo's synthetic testnet receiver has no retained spending authority: **never
-fund it**. Its QR is a demonstration of encoding, not a request to transfer funds.
-
-Supply an observation locally using the displayed order ID:
-
-```sh
-python3 examples/commerce/mock_payment.py \
-  --directory /absolute/private/commerce-demo --order ORDER_ID --confirmations 1
-# The UI must show confirming and withhold the result.
-python3 examples/commerce/mock_payment.py \
-  --directory /absolute/private/commerce-demo --order ORDER_ID --confirmations 3
-# Subsequent polls show paid, processing, then completed: HELLO WORLD.
-```
-
-Reload the browser, check again, or restart the seller using the same configuration
-and database. One order remains one execution. Neither the mock tool nor the
-seller HTTP API can send a transaction. The mock file must be owned/private;
-there is deliberately no HTTP payment injection route.
-
-For a CLI client, use `examples/commerce/buyer.py create` with `--endpoint`,
-`--offer`, `--text-file` and a new protected `--recovery` file, then `check` with
-that same endpoint/recovery file. Add `--demo` only for the explicit mock origin.
-The CLI prints payment details but suppresses the claim token; it never pays.
-A lost creation response can be retried with the same key and same input; input
-is not retained in browser storage, so re-enter it exactly when needed.
+The reference test creates disposable private buyer, seller and discovery directories, ephemeral TLS and synthetic payment observations. It proves direct seller ordering, confirmation gating, one execution, recovery and independence from discovery. No fixture address may be funded. The branded product walkthrough is maintained outside this core repository.
 
 ## Seller configuration and API contract
 
@@ -220,5 +189,5 @@ It is not yet a production incremental observer for high-volume sellers.
 
 See [process and storage boundaries](commerce-process-boundaries.md) for the
 separate Rust seller, TLS endpoint, persistent indexer, UI and buyer-client
-regression. The [mainnet preparation plan](mainnet-commerce-plan.md) keeps any
+regression. The [mainnet preparation plan](commerce.md) keeps any
 new offer/publication and real buyer payment behind concrete human review.

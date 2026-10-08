@@ -13,7 +13,7 @@ acceptance tests. A live buyer payment and delivered result remain unverified.
 and demo orchestration in separate crates under `crates/`.
 
 **Why:** Domain logic stays independent of wallet credentials, HTTP and chain
-transport. The local web UI in `ui/` consumes discovery separately.
+transport. The minimal reference browser consumes discovery separately.
 `cargo run -p zadp-demo` remains the mock commerce demonstration.
 
 ## ADR-002: Separate real discovery from mock commerce — evolved
@@ -117,7 +117,7 @@ without an AI provider, payment or blockchain publication.
 
 **Why:** Validate service interaction before adding wallet or purchase operations.
 The demo is separate from the mainnet test offer's placeholder endpoint.
-See [UI instructions](../ui/README.md).
+See [reference client](../examples/browser/README.md).
 
 ## ADR-010: Read-only operator boundary and exact unsigned previews
 

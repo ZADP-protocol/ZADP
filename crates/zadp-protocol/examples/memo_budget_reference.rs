@@ -18,6 +18,7 @@ struct Draft {
     commerce: Option<zadp_protocol::Commerce>,
     description: Option<String>,
     issued_at: i64,
+    ttl_seconds: Option<u32>,
     geo: Option<zadp_protocol::GeoArea>,
 }
 
@@ -44,14 +45,14 @@ fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
             draft.title,
             c.price,
             c.endpoint,
-            issued + Duration::days(1),
+            issued + Duration::seconds(i64::from(draft.ttl_seconds.unwrap_or(86_400))),
             B64.encode([0u8; 16]),
         ),
         None => OfferDraft::new_discovery(
             keys.id.clone(),
             draft.capability,
             draft.title,
-            issued + Duration::days(1),
+            issued + Duration::seconds(i64::from(draft.ttl_seconds.unwrap_or(86_400))),
             B64.encode([0u8; 16]),
         ),
     };

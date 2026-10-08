@@ -372,7 +372,7 @@ records method only, not request URI/query/body. Buyer matching is client-only.
 
 The Python [paid text service](../services/text/README.md) uses exact integer
 zatoshis and a text invoice memo, not the Rust mock invoice schema above.
-See [paid-service design](paid-service-flow.md). Neither schema is a standardized
+See [paid-service design](commerce.md). Neither schema is a standardized
 ZADP/1 purchase message; no purchase wire semantics changed in this stabilization.
 
 Compatibility details: OFFER JSON ignores unknown properties during typed

@@ -34,8 +34,6 @@ prefer cohesive pinned upgrades over forcing a single transitive version.
 ## Direct commerce additions
 
 The reference commerce crate adds `qrcode` 0.14.1 and uses the existing locked
-`zip321` 0.9.0 cohort to construct payment requests. The browser vendors
-`qrcode-generator` 1.4.4 under MIT (source and license in `ui/vendor`); it encodes
-validated ZIP-321 data locally without sending payment details to a QR service.
+`zip321` 0.9.0 cohort to construct payment requests. Browser QR presentation is kept in the separate private Web product. Core reference payment requests are produced by the Rust implementation and do not require that product.
 These additions postdate the dependency counts above. A current advisory audit
 is still required before production release.

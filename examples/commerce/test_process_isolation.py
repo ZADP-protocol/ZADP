@@ -48,7 +48,7 @@ class ProcessIsolation(unittest.TestCase):
             proxy=start([sys.executable,'examples/commerce/https_fixture.py','--port',str(tls_port),'--upstream-port',str(seller_port),'--certificate',str(certificate),'--key',str(key)])
             indexer_command=[str(ROOT/'target/debug/examples/fixture_indexer'),'--directory',str(discovery_dir),'--bind',f'127.0.0.1:{index_port}']
             indexer=start(indexer_command)
-            ui=start([sys.executable,'ui/server.py','--port',str(ui_port),'--indexer-port',str(index_port)])
+            ui=start([sys.executable,'examples/browser/server.py','--port',str(ui_port),'--indexer-port',str(index_port)])
             wait_ready(endpoint,context)
             with self.assertRaises(URLError):urlopen(endpoint+'/healthz',timeout=2)
             preflight=Request(endpoint+'/orders',method='OPTIONS',headers={'Origin':origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type,idempotency-key'})
@@ -66,7 +66,7 @@ class ProcessIsolation(unittest.TestCase):
                     time.sleep(.05)
             self.assertEqual(len(offers),1);offer=offers[0];self.assertEqual(offer['endpoint'],endpoint);self.assertTrue(offer['simulation'])
             self.assertEqual(offer['chain']['confirmations'],3)
-            with urlopen(origin) as response:self.assertIn(b'/commerce.js',response.read())
+            with urlopen(origin) as response:self.assertIn(b'Discovery reference client',response.read())
             before=database_state(discovery_dir/'index.sqlite')
             original_public={p.name:p.read_bytes() for p in discovery_dir.glob('*.json')}
             input_text='cross-process private input: hello world'

@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Discovery reference client</title><script src="/offers.js"></script><h1>Discovery reference client</h1><p>Read signed offer data from your chosen indexer. The browser trusts its validation; verify signatures independently with the protocol library.</p><button id="anywhere">Anywhere</button><button id="nearby">Use my location locally</button><p id="status">Your location stays in volatile memory. No map provider or storage.</p><ul id="offers"></ul><script>
+'use strict';let offers=[];const status=document.getElementById('status');const buyer=new GeoDiscovery.BuyerLocation(render);
+function render(){const list=document.getElementById('offers');list.replaceChildren();for(const offer of buyer.filter(offers)){const row=document.createElement('li');row.textContent=offer.title+' · '+offer.id;list.append(row);}status.textContent=buyer.message;}
+document.getElementById('anywhere').onclick=()=>buyer.setMode('anywhere');document.getElementById('nearby').onclick=()=>buyer.request(navigator.geolocation);
+fetch('/api/offers').then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{offers=parseOffersResponse(data);render();}).catch(()=>{status.textContent='Reference index unavailable.';});
+</script></html>

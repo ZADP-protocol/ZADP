@@ -16,7 +16,7 @@ This document describes the **current** architecture: real CompactTxStreamer sca
 
 ## Non-goals (current milestone)
 
-A local UI is available in `ui/`; its discovery proxy reads only public offers/health and stores unsigned drafts in the browser. A separate free local text-shortening endpoint demonstrates request/response without AI inference, wallet access, payment or publication. Full marketplace purchasing, reputation, escrow, DID, production hosted wallets, tokens, DAO governance, recommendation engines, and blockchain abstraction frameworks remain out of scope.
+A minimal unbranded reference browser is available in `examples/browser/`; its fixed discovery proxy reads only public offers/health. Buyer location remains in runtime memory. Hosted product drafts, maps and pricing UX live outside this repository. Full marketplace purchasing, reputation, escrow, DID, production hosted wallets, tokens, DAO governance, recommendation engines, and blockchain abstraction frameworks remain out of scope.
 
 ## Conceptual layers
 

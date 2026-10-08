@@ -125,21 +125,12 @@ cargo run -p zadp-api --example geo_fixture -- \
 In a separate terminal:
 
 ```sh
-python3 ui/server.py --port 8097 --indexer-port 8098
+python3 examples/browser/server.py --port 8097 --indexer-port 8098
 ```
 
-1. Open http://127.0.0.1:8097. Anywhere shows San Francisco/Boston service areas plus
-   one global offer. All are explicitly local simulation, not payable services.
-2. Enter manual buyer coordinates 37.77493 / -122.41942 and choose 25 km.
-   Nearby shows San Francisco only; radius zero also includes San Francisco. Switch Anywhere to
-   restore all three; clear location or reload to discard the buyer point.
-3. Inspect details for the published approximate area; no “seller distance”.
-4. Create a seller draft with optional area and inspect the v2 byte budget;
-   saving a no-geo draft never copies buyer location.
-5. Restart the fixture with the same database: persisted v1/v2 offers remain.
-   The fixture initializes only an empty database and never overwrites a running
-   reconstruction. It does not renew expiry; a fresh demo DB is needed after
-   the seven-day synthetic lifetime.
+1. Open http://127.0.0.1:8097. Anywhere lists the San Francisco/Boston areas and global fixture. None is a payable service.
+2. Explicitly choose Nearby to acquire a browser location, or run the local CLI with a synthetic buyer point supplied on stdin. All matching remains client-side.
+3. Reload to discard buyer location. Restart the fixture database to verify persisted v1/v2 reconstruction; create a fresh disposable DB after fixture expiry.
 
 The actual protocol signer, memo decoder, board admission, SQLite repository and
 HTTP router are used. Live CompactTxStreamer encryption remains covered by the
@@ -148,22 +139,9 @@ board descriptor, wallet/accounts and indices are preserved.
 
 ## Privacy verification and limitations
 
-The single matcher is bundled in the existing `ui/offers.js` browser asset;
-`ui/geo.js` is its CommonJS export entry for agents/tests. No extra browser asset
-route or running UI server restart is needed. Geolocation API calls exist only
-at the buyer button via BuyerLocation.request
-and the seller area button. There is no watchPosition or automatic acquisition.
-Acquisition, mode/radius changes and local filtering trigger zero requests.
-Explicit Refresh retains public feed/health and optional read-only wallet-status
-requests without buyer coordinates; independently active commerce polling is
-unchanged and carries no discovery point.
+The shared matcher lives in `client/browser/offers.js`; `client/browser/geo.js` exports that same implementation to Node. The minimal reference page makes one fixed public feed request. BuyerLocation requests browser geolocation only after an explicit user action, retains it in volatile memory and ignores late permission callbacks after clearing. Local matching makes no network/storage/log call.
 
-The actual app test intercepts fetch, logging and storage with synthetic GPS:
-no automatic permission request, location transmission, persistent buyer state
-or seller-draft contamination. No XHR, analytics, maps, history/coordinate URL,
-localStorage/sessionStorage/cookie/IndexedDB buyer path is implemented. Seller
-public drafts and private commerce recovery capabilities retain their separate
-existing storage behavior. The application does not infer GPS from those values.
+Reference tests cover known distances, intersections, invalid coordinates, denial, clear/reload semantics and seller rounding. Product-specific browser tests and map rendering are kept in the separate private Web repository, which consumes the pinned reference module rather than maintaining another matcher.
 
 This is an application boundary, not a guarantee against malicious extensions,
 a compromised client or the browser/OS location provider. Feed requests can
@@ -175,11 +153,11 @@ include delivery details; discovery never adds them automatically.
 - `cargo test --workspace`: v1 golden bytes, v2 absent/present geo, range/partial
   rejection, each signature tamper, wire round trip, memo fit/overflow, persistent
   admission/restart/replay/host visibility, API boundaries and prior scanner tests.
-- `node ui/test_geo.js`: known distances, circle boundaries, 0/5/25/50 km,
-  poles/antimeridian, denial, actual app network/storage/log interception, automatic
+- `node client/browser/test_geo.js`: known distances, circle boundaries, 0/5/25/50 km,
+  poles/antimeridian, denial, reference volatile-memory behavior, automatic
   seller rounding (positive/negative/ties/bounds), visible review values and
   preservation of manually entered e5 precision.
-- `node ui/test_memo_rust_parity.js`: 86 real Rust/browser byte-budget cases.
+- `node client/browser/test_memo_rust_parity.js`: real Rust/browser byte-budget parity cases.
 - Existing offer, purchase, commerce, Python boundary and independent-process
   tests plus fmt, clippy, documentation links and mock demo smoke remain required.
 
