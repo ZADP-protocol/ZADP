@@ -78,12 +78,12 @@ async function refresh() {
     for (const id of boards) { const option = element('option',id); option.value = id; $('board-filter').append(option); }
     $('board-filter').value = boards.includes(selected) ? selected : '';
     $('network-label').textContent=offersNetwork(offers); render();
-    $('connection').textContent = '● Index connected'; $('index-status').textContent = 'Connected. Offers are read from the local Zcash index.';
+    $('connection').textContent = '● Index connected'; $('index-status').textContent = 'Connected. Offers are read from the connected Zcash index.';
     const heights = offers.map(o=>o.chain?.scanned_height).filter(Number.isFinite);
     $('height').textContent = heights.length ? `Scanned block height: ${Math.max(...heights).toLocaleString('en')}` : 'Block height unavailable.';
   } catch {
     offers = []; $('network-label').textContent='Network unavailable'; $('offers').replaceChildren(); $('count').textContent = '';
-    $('message').textContent = 'Index unavailable or response invalid. Check the local indexer and try again.';
+    $('message').textContent = 'Index unavailable or response invalid. Check the indexer connection and try again.';
     $('connection').textContent = '○ Index disconnected'; $('index-status').textContent = 'Index unavailable.'; $('height').textContent = '';
   } finally { $('refresh').disabled = false; }
 }
