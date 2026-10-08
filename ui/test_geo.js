@@ -69,7 +69,7 @@ pending.request({getCurrentPosition(success){lateSuccess=success;}});pending.cle
  }
  function get(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);}
  get('board_id').value='ai-services';get('title').value='Fixture';get('capability').value='cleaning';get('endpoint').value='https://fixture.example';get('price').value='0.01';get('description').value='';get('seller-radius').value='50000';get('buyer-radius').value='50000';get('geo-mode').value='anywhere';
- const offer={id:'fixture',seller:'ed25519:fixture',title:'Cabin cleaning',capability:'cleaning',endpoint:'https://fixture.example',expires_at:new Date(Date.now()+86400000).toISOString(),price:{amount:'0.01',currency:'ZEC'},zadp:2,geo:area};
+ const offer={id:'fixture',seller:'ed25519:fixture',title:'Bike repair — San Francisco area',capability:'text.uppercase',commerce:null,expires_at:new Date(Date.now()+86400000).toISOString(),zadp:2,geo:area};
  let gpsCalls=0;
  const sandbox={console:{log:(...v)=>logs.push(v),warn:(...v)=>logs.push(v),error:(...v)=>logs.push(v)},TextEncoder,TextDecoder,URL,Blob,AbortController,setTimeout,clearTimeout,setInterval:()=>0,
   localStorage:{getItem:()=>null,setItem:(...v)=>writes.push(v),removeItem:(...v)=>writes.push(v)},
@@ -91,7 +91,7 @@ pending.request({getCurrentPosition(success){lateSuccess=success;}});pending.cle
  assert.equal(gpsCalls,1);assert.equal(get('geo-mode').value,'nearby');assert(get('buyer-geo-status').textContent.includes('kept on this device'));
  get('buyer-radius').value='25000';for(const handler of get('buyer-radius').handlers.change)handler();
  get('geo-mode').value='anywhere';for(const handler of get('geo-mode').handlers.change)handler();
- assert.equal(get('nearby-controls').hidden,true);assert.equal(get('buyer-radius-label').hidden,true);assert.equal(get('buyer-clear').hidden,true);assert.equal(get('offers').children.length,1);
+ assert.equal(get('nearby-controls').hidden,true);assert.equal(get('buyer-radius-label').hidden,true);assert.equal(get('buyer-clear').hidden,true);assert.equal(get('offers').children.length,1);assert(!get('offers').children[0].children.some(c=>c.textContent==='Buy directly from seller'));
  get('buyer-lat').value='37.77493';get('buyer-lon').value='-122.41942';for(const handler of get('buyer-manual').handlers.click)handler();
  for(const handler of get('buyer-clear').handlers.click)handler();
  assert.equal(get('buyer-lat').value,'');assert.equal(requests.length,networkBefore,'Location actions trigger no request');assert.equal(writes.length,0);assert.equal(logs.length,0);
@@ -103,7 +103,7 @@ pending.request({getCurrentPosition(success){lateSuccess=success;}});pending.cle
 
  // Saving a no-geo seller draft cannot include the buyer coordinates.
  for(const handler of get('draft-form').handlers.submit)handler({preventDefault(){}});
- assert.equal(writes.length,1);assert(!writes[0][1].includes('37.77493'));assert(!writes[0][1].includes('-12241942'));assert(!JSON.parse(writes[0][1]).geo);
+ assert.equal(writes.length,1);assert.equal(JSON.parse(writes[0][1]).commerce,null);assert(!('endpoint' in JSON.parse(writes[0][1])));assert(!('price' in JSON.parse(writes[0][1])));assert(!writes[0][1].includes('37.77493'));assert(!writes[0][1].includes('-12241942'));assert(!JSON.parse(writes[0][1]).geo);
  // Automatic seller acquisition fills reviewable 3-decimal fields, with no I/O.
  const requestsBeforeSeller=requests.length,writesBeforeSeller=writes.length;
  get('seller-geo-enabled').checked=true;

@@ -1,5 +1,7 @@
 # ZADP Architecture
 
+The discovery Offer v2 contains core discovery fields, optional signed geo and optional signed commerce. Discovery-only offers need no endpoint or service price. Automated buying remains a separate seller-owned capability. See [optional-commerce model](optional-commerce.md).
+
 **ZADP** (Zcash Agent Discovery Protocol) is an open protocol and reference implementation for discovering signed service offers published through Zcash shielded memos.
 
 This document describes the **current** architecture: real CompactTxStreamer scanning + per-board SQLite indexing + read-only multi-board API, plus a retained **mock** commerce vertical slice. The first live mainnet publish → mine → scan → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).

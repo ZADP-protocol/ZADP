@@ -8,8 +8,9 @@ const draftKey = 'zadp-offer-draft-v1';
 function element(tag, text, cls) { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; }
 function details(o) {
   $('detail-title').textContent = o.title;
+  const commerce=offerCommerce(o);
   const dl = $('detail-fields'); dl.replaceChildren();
-  const values = {'Offer area':o.geo ? `${o.geo.radius_m/1000} km radius around published approximate center (${o.geo.lat_e5/100000}, ${o.geo.lon_e5/100000}); not a verified seller position` : 'Global / no geographic scope','Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Price':`${o.price.amount} ${o.price.currency}`,'Service endpoint':o.endpoint,'Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':o.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : (o.capability === 'text.uppercase' ? 'Direct seller commerce supported. Review the seller endpoint before creating an order.' : 'This capability does not yet have a reference buyer form.')};
+  const values = {'Offer area':o.geo ? `${o.geo.radius_m/1000} km radius around published approximate center (${o.geo.lat_e5/100000}, ${o.geo.lon_e5/100000}); not a verified seller position` : 'Global / no geographic scope','Board':offerBoard(o) || 'Unavailable','Capability':o.capability,'Commerce':commerce?`${commerce.price.amount} ${commerce.price.currency}`:'Discovery only','Service endpoint':commerce?.endpoint ?? 'No automated purchase endpoint','Offer':o.id,'Network':o.chain?.network ?? 'Unavailable','Block height':o.chain?.block_height ?? 'Unavailable','Expiry':o.expires_at,'Seller public identity':o.seller,'Confirmations':o.chain?.confirmations ?? 'Unavailable','Transaction':o.chain?.transaction_id ?? 'Unavailable','Signature status':'Accepted by the indexer; the browser does not independently verify signatures','Service availability':!commerce ? 'Discovery only; no automated purchase endpoint.' : commerce.endpoint === 'https://example.com/zadp' ? 'Test placeholder. This service is not operational.' : (o.capability === 'text.uppercase' ? 'Direct seller commerce supported. Review the seller endpoint before creating an order.' : 'This capability does not yet have a reference buyer form.')};
   for (const [key,value] of Object.entries(values)) dl.append(element('dt',key),element('dd',String(value)));
   $('detail').showModal();
 }
@@ -20,7 +21,8 @@ function render() {
   $('offers').replaceChildren(); $('count').textContent = `${filtered.length} ${filtered.length === 1 ? 'offer' : 'offers'}`;
   for (const o of filtered) {
     const card = element('article','','offer');
-    const price = element('p',`${o.price.amount} `,'price'); price.append(element('small',o.price.currency));
+    const commerce=offerCommerce(o);
+    const price=element('p',commerce?`${commerce.price.amount} ${commerce.price.currency}`:'Discovery only','price');
     const btn = element('button','View details','secondary'); btn.addEventListener('click',()=>details(o));
     const active = o.chain?.offer_status === 'active';
     card.append(element('span',o.capability,'badge'),element('p',`Board: ${offerBoard(o) || 'Unavailable'}`),element('h2',o.title),element('p',o.simulation===true ? 'Known local fixture · no blockchain transaction' : active ? `${o.chain.network} · ${o.chain.confirmations} ${o.chain.confirmations === 1 ? 'confirmation' : 'confirmations'} · Discovered from Zcash` : 'Offer is inactive'),price,btn);
@@ -28,7 +30,7 @@ function render() {
     if(o.geo)card.append(element('p',`Service area: ${o.geo.radius_m/1000} km radius around a published approximate center`));
     if(o.simulation===true) {card.append(element('p','LOCAL SIMULATION · No on-chain discovery or real payment'));}
     try {DirectCommerce.endpoint(o); const buy=element('button','Buy directly from seller','primary');buy.addEventListener('click',()=>selectCommerceOffer(o));card.append(buy);}catch{}
-    if(o.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
+    if(commerce?.endpoint === 'https://example.com/zadp') card.append(element('p','Test offer · placeholder endpoint'));
     $('offers').append(card);
   }
   $('message').textContent = buyerGeo.mode==='nearby'&&!buyerGeo.location ? 'Choose a location to discover matching offers.' : filtered.length ? '' : (offers.length ? 'No offers match your search.' : 'No offers have been indexed yet.');
@@ -93,14 +95,20 @@ for(const button of document.querySelectorAll('[data-tab]')) button.addEventList
 $('board-filter').addEventListener('change',render); $('search').addEventListener('input',render); $('refresh').addEventListener('click',refresh); $('close').addEventListener('click',()=>$('detail').close());
 function draft() {
   const result=Object.fromEntries(new FormData(form));
+  if($('seller-commerce-enabled').checked) {result.commerce={endpoint:result.endpoint,price:{amount:result.price,currency:'ZEC'}};} else {result.commerce=null;}
+  delete result.endpoint;delete result.price;
   if($('seller-geo-enabled').checked)result.geo=GeoDiscovery.fromDegrees($('seller-lat').value,$('seller-lon').value,Number($('seller-radius').value==='custom'?$('seller-custom-radius').value:$('seller-radius').value));
   return result;
 }
 function sellerAreaChanged() {
+  const commerce=$('seller-commerce-enabled').checked;
+  $('seller-commerce-fields').hidden=!commerce;
+  for(const name of ['endpoint','price']){const field=form.elements.namedItem(name);field.disabled=!commerce;field.required=commerce;}
   $('seller-geo-fields').hidden=!$('seller-geo-enabled').checked;
   $('seller-custom-label').hidden=$('seller-radius').value!=='custom';
   $('fee-preview').hidden=true;checkBudget();
 }
+$('seller-commerce-enabled').addEventListener('change',sellerAreaChanged);
 $('seller-geo-enabled').addEventListener('change',sellerAreaChanged);
 $('seller-radius').addEventListener('change',sellerAreaChanged);
 $('seller-location').addEventListener('click',()=>{
@@ -139,6 +147,7 @@ function checkBudget() {
 form.addEventListener('input',()=>{ $('fee-preview').hidden=true; checkBudget(); });
 try { const saved=JSON.parse(localStorage.getItem(draftKey)); if(saved) {
   for(const [key,value] of Object.entries(saved)) if(form.elements.namedItem(key)) form.elements.namedItem(key).value=value;
+  if(saved.commerce || saved.endpoint){const c=saved.commerce??{endpoint:saved.endpoint,price:{amount:saved.price}};$('seller-commerce-enabled').checked=true;form.elements.endpoint.value=c.endpoint;form.elements.price.value=c.price.amount;}
   if(saved.geo){GeoDiscovery.validateArea(saved.geo);$('seller-geo-enabled').checked=true;$('seller-lat').value=saved.geo.lat_e5/100000;$('seller-lon').value=saved.geo.lon_e5/100000;$('seller-radius').value='custom';$('seller-custom-radius').value=saved.geo.radius_m;}
 } } catch {}
 sellerAreaChanged();
@@ -172,6 +181,7 @@ async function walletStatus() {
     const status=await response.json();
     if(!status.available)throw Error();
     operatorReady=true;
+    if(!offers.length && ['mainnet','testnet'].includes(status.network))$('network-label').textContent=status.network;
     $('wallet-state').textContent=status.sync_locked ? 'Wallet is synchronizing.' : 'Wallet available.';
     const balance=status.seller_total_zat;
     $('wallet-balance').textContent=`Spendable: ${balance.spendable === null ? 'Unavailable' : (balance.spendable/100000000).toFixed(8)+' ZEC'} · Pending: ${balance.pending === null ? 'Unavailable' : (balance.pending/100000000).toFixed(8)+' ZEC'}`;
@@ -196,7 +206,7 @@ $('preview-costs').addEventListener('click',async()=>{
     const result=await response.json();
     if(JSON.stringify(draft())!==JSON.stringify(previewDraft))throw Error();
     if(!response.ok || result.broadcast !== false || result.zcash_transaction_signed !== false)throw Error();
-    $('fee-summary').textContent=`${previewDraft.title} · ${previewDraft.endpoint} · Service price: ${previewDraft.price} ZEC · Listing: ${result.listing_value_zat} zat · Network fee: ${result.network_fee_zat} zat · Total: ${result.total_cost_zat} zat (${(result.total_cost_zat/100000000).toFixed(8)} ZEC). Memo payload: ${result.payload_bytes}/504 bytes.`;
+    $('fee-summary').textContent=`${previewDraft.title} · ${previewDraft.commerce?`Service price: ${previewDraft.commerce.price.amount} ZEC`:`Discovery only`} · Listing: ${result.listing_value_zat} zat · Network fee: ${result.network_fee_zat} zat · Total: ${result.total_cost_zat} zat (${(result.total_cost_zat/100000000).toFixed(8)} ZEC). Memo payload: ${result.payload_bytes}/504 bytes.`;
     $('fee-board').textContent=`${result.network} · Board ${result.board_id} · Verified fingerprint: ${result.board_fingerprint}`;
     $('fee-preview').hidden=false;$('draft-message').textContent='Preview ready. Nothing has been published.';
   } catch { $('draft-message').textContent='Preview unavailable. Check synchronization, signed board policy and draft fields.'; }
@@ -248,13 +258,13 @@ function selectCommerceOffer(offer){
   commerceOffer=offer;document.querySelector('[data-tab="commerce"]').click();renderCommerce(commerce);$('commerce-input').focus();
 }
 function renderCommerce(flow){
-  const offer=flow.saved?.offer || commerceOffer;const order=flow.order;
+  const offer=flow.saved?.offer || commerceOffer;const order=flow.order;const terms=offer?offerCommerce(offer):null;
   const mode=DirectCommerce.paymentMode(offer,order);
   $('commerce-mode').textContent=mode.label;$('commerce-mode-notice').textContent=mode.notice;
   $('commerce-payment-title').textContent=order?.simulation ? 'Demonstration ZIP-321 request / QR · do not pay' : 'ZIP-321 payment request / QR';
   $('commerce-qr').alt=order?.simulation ? 'Simulation QR only — never send funds' : 'Complete Zcash payment request QR';
-  $('commerce-offer').textContent=offer ? `${offer.title} · ${offer.price.amount} ZEC · Seller: ${offer.endpoint}` : 'Choose Buy on a supported text.uppercase offer.';
-  $('commerce-create').disabled=flow.busy || !offer || Boolean(flow.saved?.order_id);
+  $('commerce-offer').textContent=terms ? `${offer.title} · ${terms.price.amount} ZEC · Seller: ${terms.endpoint}` : 'Choose Buy on a supported text.uppercase offer.';
+  $('commerce-create').disabled=flow.busy || !terms || Boolean(flow.saved?.order_id);
   $('commerce-create').textContent=flow.saved && !flow.saved.order_id ? 'Retry saved order with the same text' : 'Prepare seller order';
   $('commerce-check').disabled=flow.busy || !flow.saved?.order_id;
   $('commerce-forget').hidden=!flow.saved;$('commerce-forget').disabled=flow.busy;

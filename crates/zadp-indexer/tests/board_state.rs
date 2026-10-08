@@ -483,6 +483,7 @@ async fn signed_geo_on_v1_board_survives_restart_without_schema_migration() {
         lon_e5: -12241942,
         radius_m: 50000,
     });
+    local.commerce = None;
     local.signature = seller.sign(&signing_bytes(&local).unwrap());
     let mut changed = local.clone();
     changed.geo.as_mut().unwrap().radius_m = 60000;

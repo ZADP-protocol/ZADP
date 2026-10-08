@@ -10,6 +10,12 @@ A permissionless service-discovery protocol where sellers publish signed offers 
 
 **Publish services to a geographic area through Zcash and discover matching offers locally without publishing the buyer’s location.**
 
+**Discovery is core. Commerce is optional.** A discovery-only offer needs no
+commerce endpoint or service price. For example: **Bike repair — San Francisco
+area**, a 25 km service area with no automated checkout. A commerce-enabled
+**Text transformation service** additionally supplies an HTTPS seller endpoint,
+ZEC price and automated order flow. [Offer v2 model](docs/optional-commerce.md).
+
 ![ZADP concept: sellers publish shielded offers, independent indexers expose discovery, and humans or agents consume it](docs/images/zadp-ecosystem-concept.jpg)
 
 *Concept illustration. Web/game interfaces, autonomous buyers and real purchase settlement are planned capabilities; live mainnet publication and independent discovery were verified on 2026-10-05. Paid service execution remains planned.*

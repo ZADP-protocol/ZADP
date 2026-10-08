@@ -14,6 +14,7 @@ for(const issued_at of [2147483647,4294967295])cases.push({...base,issued_at});
 for(const geo of [{lat_e5:3777493,lon_e5:-12241942,radius_m:50000},{lat_e5:-9000000,lon_e5:-18000000,radius_m:500000},{lat_e5:0,lon_e5:0,radius_m:1},{lat_e5:9000001,lon_e5:0,radius_m:1},{lat_e5:0,lon_e5:0,radius_m:0},{lat_e5:0,lon_e5:0,radius_m:500001}]){
  cases.push({...base,geo});for(const n of [23,24,255,270,280,300])cases.push({...base,geo,description:'x'.repeat(n)});
 }
+for(const geo of [undefined,{lat_e5:3777500,lon_e5:-12241900,radius_m:25000}])for(const description of ['', 'x'.repeat(200),'x'.repeat(320),'x'.repeat(400)])cases.push({board_id:'ai-services',title:'Bike repair',capability:'local.service',commerce:null,geo,description,issued_at:1791228000});
 const result = spawnSync('cargo',['run','--quiet','-p','zadp-protocol','--example','memo_budget_reference'],{cwd:require('node:path').resolve(__dirname,'..'),input:cases.map(c=>JSON.stringify(c)).join('\n')+'\n',encoding:'utf8',timeout:300000});
 if (result.status !== 0) throw Error(result.stderr || result.error || 'Rust oracle failed');
 const rust = result.stdout.trim().split('\n').map(line=>JSON.parse(line));

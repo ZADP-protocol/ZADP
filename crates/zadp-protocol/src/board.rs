@@ -294,16 +294,18 @@ impl BoardDescriptor {
         {
             return Err(invalid("seller is not authorized"));
         }
-        let endpoint =
-            url::Url::parse(&offer.endpoint).map_err(|_| invalid("invalid endpoint URL"))?;
-        if endpoint.scheme() != "https"
-            || endpoint.host_str().is_none()
-            || !endpoint.username().is_empty()
-            || endpoint.password().is_some()
-        {
-            return Err(invalid(
-                "real offer endpoint requires HTTPS without credentials",
-            ));
+        if let Some(commerce) = &offer.commerce {
+            let endpoint =
+                url::Url::parse(&commerce.endpoint).map_err(|_| invalid("invalid endpoint URL"))?;
+            if endpoint.scheme() != "https"
+                || endpoint.host_str().is_none()
+                || !endpoint.username().is_empty()
+                || endpoint.password().is_some()
+            {
+                return Err(invalid(
+                    "real offer endpoint requires HTTPS without credentials",
+                ));
+            }
         }
         Ok(())
     }

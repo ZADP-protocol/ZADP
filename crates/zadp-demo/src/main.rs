@@ -67,7 +67,12 @@ async fn main() -> Result<()> {
     println!("Seller:");
     println!(
         "  Published offer {} @ {} ZEC",
-        offer.title, offer.price.amount
+        offer.title,
+        offer
+            .commerce
+            .as_ref()
+            .map(|c| c.price.amount.to_string())
+            .unwrap_or_else(|| "none (discovery only)".into())
     );
     println!("  offer_id={}", offer.id);
     println!();

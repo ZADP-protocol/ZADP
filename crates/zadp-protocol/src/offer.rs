@@ -15,6 +15,118 @@ pub const BOARD_DESCRIPTOR_VERSION: u16 = 1;
 pub const MAX_GEO_RADIUS_M: u32 = 500_000;
 
 /// Public offer/service area, not verified seller location. Integer degrees × 1e5.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Commerce {
+    pub endpoint: String,
+    pub price: Price,
+}
+impl Commerce {
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        self.price.validate()?;
+        if self.endpoint.is_empty() {
+            return Err(ProtocolError::InvalidOffer("empty endpoint".into()));
+        }
+        Ok(())
+    }
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct OfferJson {
+    zadp: u16,
+    #[serde(rename = "type")]
+    message_type: String,
+    id: String,
+    seller: SellerId,
+    capability: String,
+    title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    price: Option<Price>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    commerce: Option<Commerce>,
+    expires_at: DateTime<Utc>,
+    nonce: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    board_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    issued_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    geo: Option<GeoArea>,
+    signature: Signature,
+}
+impl TryFrom<OfferJson> for Offer {
+    type Error = String;
+    fn try_from(o: OfferJson) -> Result<Self, Self::Error> {
+        let commerce = match o.zadp {
+            OFFER_VERSION_V1 => {
+                if o.commerce.is_some() {
+                    return Err("v1 uses legacy commerce fields".into());
+                }
+                Some(Commerce {
+                    endpoint: o.endpoint.ok_or("missing endpoint")?,
+                    price: o.price.ok_or("missing price")?,
+                })
+            }
+            OFFER_VERSION_V2 => {
+                if o.endpoint.is_some() || o.price.is_some() {
+                    return Err("v2 uses optional commerce block, not legacy price/endpoint".into());
+                }
+                o.commerce
+            }
+            _ => return Err("unsupported offer version".into()),
+        };
+        Ok(Self {
+            commerce,
+            zadp: o.zadp,
+            message_type: o.message_type,
+            id: o.id,
+            seller: o.seller,
+            capability: o.capability,
+            title: o.title,
+            description: o.description,
+            expires_at: o.expires_at,
+            nonce: o.nonce,
+            board_id: o.board_id,
+            issued_at: o.issued_at,
+            geo: o.geo,
+            signature: o.signature,
+        })
+    }
+}
+impl From<Offer> for OfferJson {
+    fn from(o: Offer) -> Self {
+        let (price, endpoint, commerce) = if o.zadp == OFFER_VERSION_V1 {
+            match o.commerce {
+                Some(c) => (Some(c.price), Some(c.endpoint), None),
+                None => (None, None, None),
+            }
+        } else {
+            (None, None, o.commerce)
+        };
+        Self {
+            price,
+            endpoint,
+            commerce,
+            zadp: o.zadp,
+            message_type: o.message_type,
+            id: o.id,
+            seller: o.seller,
+            capability: o.capability,
+            title: o.title,
+            description: o.description,
+            expires_at: o.expires_at,
+            nonce: o.nonce,
+            board_id: o.board_id,
+            issued_at: o.issued_at,
+            geo: o.geo,
+            signature: o.signature,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GeoArea {
@@ -68,25 +180,20 @@ impl Price {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "OfferJson", into = "OfferJson")]
 pub struct Offer {
     pub zadp: u16,
-    #[serde(rename = "type")]
     pub message_type: String,
     pub id: String,
     pub seller: SellerId,
     pub capability: String,
     pub title: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    pub price: Price,
-    pub endpoint: String,
+    pub commerce: Option<Commerce>,
     pub expires_at: DateTime<Utc>,
     pub nonce: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub issued_at: Option<DateTime<Utc>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub geo: Option<GeoArea>,
     pub signature: Signature,
 }
@@ -107,8 +214,7 @@ pub struct OfferDraft {
     pub title: String,
     pub description: Option<String>,
     pub geo: Option<GeoArea>,
-    pub price: Price,
-    pub endpoint: String,
+    pub commerce: Option<Commerce>,
     pub expires_at: DateTime<Utc>,
     pub nonce: String,
 }
@@ -130,11 +236,38 @@ impl OfferDraft {
             title: title.into(),
             description: None,
             geo: None,
-            price,
-            endpoint: endpoint.into(),
+            commerce: Some(Commerce {
+                price,
+                endpoint: endpoint.into(),
+            }),
             expires_at,
             nonce: nonce_b64.into(),
         }
+    }
+
+    pub fn new_discovery(
+        seller: SellerId,
+        capability: impl Into<String>,
+        title: impl Into<String>,
+        expires_at: DateTime<Utc>,
+        nonce_b64: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: Ulid::new().to_string(),
+            seller,
+            capability: capability.into(),
+            title: title.into(),
+            description: None,
+            geo: None,
+            commerce: None,
+            expires_at,
+            nonce: nonce_b64.into(),
+        }
+    }
+
+    pub fn discovery_only(mut self) -> Self {
+        self.commerce = None;
+        self
     }
 
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
@@ -153,12 +286,14 @@ impl OfferDraft {
                 "signing key does not match seller id".into(),
             ));
         }
-        self.price.validate()?;
+        if let Some(c) = &self.commerce {
+            c.validate()?;
+        }
 
         // Placeholder signature so we can reuse Offer for canonicalization.
         let placeholder = Signature::from_bytes(&ed25519_dalek::Signature::from_bytes(&[0u8; 64]));
         let mut offer = Offer {
-            zadp: if self.geo.is_some() {
+            zadp: if self.geo.is_some() || self.commerce.is_none() {
                 OFFER_VERSION_V2
             } else {
                 OFFER_VERSION_V1
@@ -170,8 +305,7 @@ impl OfferDraft {
             title: self.title,
             description: self.description,
             geo: self.geo,
-            price: self.price,
-            endpoint: self.endpoint,
+            commerce: self.commerce,
             expires_at: self.expires_at,
             nonce: self.nonce,
             board_id: None,
@@ -188,6 +322,9 @@ impl Offer {
     pub fn validate_geo_version(&self) -> Result<(), ProtocolError> {
         if ![OFFER_VERSION_V1, OFFER_VERSION_V2].contains(&self.zadp) {
             return Err(ProtocolError::UnsupportedVersion(self.zadp));
+        }
+        if self.zadp == OFFER_VERSION_V1 && self.commerce.is_none() {
+            return Err(ProtocolError::InvalidOffer("v1 requires commerce".into()));
         }
         if let Some(geo) = self.geo {
             if self.zadp != OFFER_VERSION_V2 {
@@ -212,13 +349,25 @@ pub fn verify_offer(offer: &Offer, now: DateTime<Utc>) -> Result<(), ProtocolErr
     if offer.title.is_empty() {
         return Err(ProtocolError::InvalidOffer("empty title".into()));
     }
-    if offer.endpoint.is_empty() {
-        return Err(ProtocolError::InvalidOffer("empty endpoint".into()));
-    }
     if offer.nonce.is_empty() {
         return Err(ProtocolError::InvalidOffer("empty nonce".into()));
     }
-    offer.price.validate()?;
+    if let Some(c) = &offer.commerce {
+        c.validate()?;
+        if offer.zadp == OFFER_VERSION_V2 {
+            let url = url::Url::parse(&c.endpoint)
+                .map_err(|_| ProtocolError::InvalidOffer("invalid endpoint URL".into()))?;
+            if url.scheme() != "https"
+                || url.host_str().is_none()
+                || !url.username().is_empty()
+                || url.password().is_some()
+            {
+                return Err(ProtocolError::InvalidOffer(
+                    "commerce requires credential-free HTTPS".into(),
+                ));
+            }
+        }
+    }
     if offer.expires_at <= now {
         return Err(ProtocolError::Expired(offer.expires_at.to_rfc3339()));
     }
@@ -257,7 +406,7 @@ mod tests {
     #[test]
     fn tampered_price_fails() {
         let mut offer = sample_offer();
-        offer.price.amount = Decimal::new(2, 2);
+        offer.commerce.as_mut().unwrap().price.amount = Decimal::new(2, 2);
         assert!(verify_offer(&offer, Utc::now()).is_err());
     }
 

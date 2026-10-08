@@ -1,5 +1,7 @@
 # Local ZADP UI
 
+My offer defaults to discovery-only. Enable automated commerce only to add a complete HTTPS endpoint and positive ZEC price. Nearby matching and browser-memory-only buyer location work identically for both offer types. See [optional-commerce model](../docs/optional-commerce.md).
+
 Run `python3 ui/server.py` and open http://127.0.0.1:8090.
 The existing read-only mainnet indexer must listen on 127.0.0.1:8080.
 Alternative ports: `--port 8091 --indexer-port 8081`.
@@ -193,7 +195,7 @@ never guarantees anonymity; the final center is public. GPS does not save,
 submit, preview a transaction or broadcast automatically.
 
 Saving/exporting a seller draft intentionally stores that public area; it never borrows buyer coordinates. Drafts with geo select
-Offer v2 in CLI previews; absent geo retains v1. Exact memo budget and Python
+Offer v2 in CLI previews; discovery-only also selects v2 without geo. Commerce-only legacy drafts retain v1. Exact memo budget and Python
 operator preview validate complete integer e5 fields. There is still no browser
 publication/signing/broadcast endpoint.
 

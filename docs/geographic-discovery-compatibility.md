@@ -9,14 +9,13 @@ This supersedes the earlier server-search proposal and compatibility pause.
 - Offer/wire v1 and `ZADP1\0offer\0` remain byte-compatible. A deterministic
   legacy memo and signature preimage was captured before modifying the encoder;
   the regression suite compares exact bytes against that fixture.
-- Offer v2 uses `ZADP2\0offer\0`. Optional geo is signed as an integer triple
-  `[lat_e5, lon_e5, radius_m]` under canonical map key `geo`. Wire v2 is the
-  existing 13-field tuple followed by that triple or null: 14 elements. Offer
-  and wire versions must agree. Geo is rejected on v1; no-geo drafts default v1.
+- Offer v2 signs optional geo and optional commerce with `ZADP2\0offer\0`.
+  Wire v2 is a corrected 13-element tuple containing nullable commerce
+  `[endpoint, price_zat]` and nullable geo. This replaces the experimental
+  14-element v2 before first recorded mainnet use; v1 remains unchanged.
 - Integers: latitude ±9,000,000, longitude ±18,000,000, offer radius 1..500,000 m.
-  Buyer radius 0..500,000 m. Geo must be complete. The maximum geo overhead is
-  16 payload bytes; v2 without geo adds one null byte. The payload limit remains
-  504 bytes with unchanged individual text limits and whole-second timestamps.
+  Buyer radius 0..500,000 m. Geo must be complete; maximum payload remains 504
+  bytes. See [exact optional-commerce encoding](optional-commerce.md).
 - Store geo inside existing serialized OFFER JSON. No SQLite migration, buyer
   data table or live database/runtime changes. First-wins/reorg/moderation and
   expiry remain unchanged; UPDATE/CLOSE messages remain unimplemented.
@@ -28,7 +27,7 @@ This supersedes the earlier server-search proposal and compatibility pause.
   filtering cause no network request and write no browser storage/history.
 - Seller Offer area is optional public discovery metadata. Explicit warning,
   manual approximate coordinates and click-only GPS; no addresses or maps.
-- Preserve existing commerce without extending it or attaching buyer coordinates
+- Preserve existing commerce as an optional seller capability or attaching buyer coordinates
   to orders. Reclassify real paid commerce/SLA as post-MVP work.
 
 Implementation order: legacy baseline; versioned protocol/signatures/memos;

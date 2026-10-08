@@ -66,7 +66,12 @@ impl Config {
                 .can_receive_memo(),
             "shielded recipient required"
         );
-        let endpoint = url::Url::parse(&self.offer.endpoint)?;
+        let commerce = self
+            .offer
+            .commerce
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("offer has no automated commerce"))?;
+        let endpoint = url::Url::parse(&commerce.endpoint)?;
         let origin = url::Url::parse(&self.browser_origin)?;
         ensure!(
             origin.origin().ascii_serialization() == self.browser_origin,
@@ -100,7 +105,14 @@ impl Config {
     }
     pub fn amount_zat(&self) -> Result<u64> {
         use rust_decimal::prelude::ToPrimitive;
-        let zat = self.offer.price.amount * rust_decimal::Decimal::from(100_000_000u64);
+        let zat = self
+            .offer
+            .commerce
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("offer has no automated commerce"))?
+            .price
+            .amount
+            * rust_decimal::Decimal::from(100_000_000u64);
         ensure!(zat.fract().is_zero(), "price exceeds ZEC precision");
         let value = zat
             .to_u64()

@@ -2,7 +2,7 @@
 
 Publish a service to a public approximate area through a signed Zcash OFFER;
 discover it by matching downloaded offers with a private local point. Geographic
-discovery is a primary MVP feature. Commerce remains separate and unchanged.
+discovery is a primary MVP feature. Commerce remains separate and optional; discovery needs no endpoint or price.
 
 ## Formats and compatibility
 
@@ -12,10 +12,10 @@ discovery is a primary MVP feature. Commerce remains separate and unchanged.
   geo is `{"lat_e5":3777493,"lon_e5":-12241942,"radius_m":50000}`.
 - Integer coordinate limits: latitude ±9000000, longitude ±18000000;
   offer radius 1..500000 m. Geo is either absent or a complete valid triple.
-- Wire v2 appends `[lat_e5,lon_e5,radius_m]` or null to the 13-field v1 tuple.
-  Major versions must agree. Framing/padding stay unchanged: 504 payload bytes
-  within a 512-byte memo. Null adds one byte, geo adds up to 16; no old field
-  limits are reduced. Actual total budget, not a character count, decides fit.
+- Wire v2 is a 13-element discovery tuple with nullable commerce and geo;
+  see [optional commerce](optional-commerce.md). Mainnet v2 has not yet been
+  published in the recorded deployment. Upgrade readers and rebuild old
+  experimental v2 fixtures. Framing stays 512 bytes with 504 payload bytes.
 - BoardDescriptor v1 domain, address, UIVK and fingerprint remain unchanged.
   One board can accept both offer versions. Full JSON SQLite persistence needs
   no migration. Old software rejects v2; upgrade before publishing it. Rebuild
@@ -72,7 +72,7 @@ Other clients may intentionally publish different precision. A conforming client
 must not assume all offer centers have three decimals or e5 multiples of 100.
 
 A custom radius uses integer meters 1..500000. Unsigned drafts may intentionally save or
-export this public area. Memo budget checks select v2 only when geo is present.
+export this public area. Memo budget checks select v2 when geo is present or commerce is absent.
 The protected operator preview passes the complete e5 triple to the real CLI;
 there is no browser signing/publication/broadcast route.
 
@@ -185,7 +185,7 @@ include delivery details; discovery never adds them automatically.
 
 Source implementation is ready for manual local review. A first real geo offer
 still requires review/deployment of upgraded readers/writer, a protected backup
-before any future runtime change, a public approximate area, real HTTPS endpoint,
+before any future runtime change, a public approximate area, optional valid commerce,
 valid signed-board policy, authoritative fee preview and explicit approval.
 No mainnet geo transaction is prepared or broadcast by this development task.
 

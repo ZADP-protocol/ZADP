@@ -14,11 +14,9 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
     offer.validate_geo_version()?;
     let mut entries: Vec<(Vec<u8>, String, Value)> = vec![
         entry_text("capability", offer.capability.clone())?,
-        entry_text("endpoint", offer.endpoint.clone())?,
         entry_text("expires_at", offer.expires_at.to_rfc3339())?,
         entry_text("id", offer.id.clone())?,
         entry_text("nonce", offer.nonce.clone())?,
-        entry_map("price", price_map(offer)?)?,
         entry_text("seller", offer.seller.as_str().to_string())?,
         entry_text("title", offer.title.clone())?,
         entry_text("type", offer.message_type.clone())?,
@@ -29,6 +27,31 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
         ),
     ];
 
+    if offer.zadp == crate::OFFER_VERSION_V1 {
+        let c = offer
+            .commerce
+            .as_ref()
+            .ok_or_else(|| ProtocolError::InvalidOffer("v1 requires commerce".into()))?;
+        entries.push(entry_text("endpoint", c.endpoint.clone())?);
+        entries.push(entry_map("price", price_map(&c.price)?)?);
+    } else {
+        let value = if let Some(c) = &offer.commerce {
+            let mut inner = vec![
+                entry_text("endpoint", c.endpoint.clone())?,
+                entry_map("price", price_map(&c.price)?)?,
+            ];
+            inner.sort_by(|a, b| a.0.cmp(&b.0));
+            Value::Map(
+                inner
+                    .into_iter()
+                    .map(|(_, k, v)| (Value::Text(k), v))
+                    .collect(),
+            )
+        } else {
+            Value::Null
+        };
+        entries.push((encode_text_key("commerce")?, "commerce".into(), value));
+    }
     if let Some(description) = &offer.description {
         if !description.is_empty() {
             entries.push(entry_text("description", description.clone())?);
@@ -78,10 +101,10 @@ pub fn signing_bytes(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
     Ok(out)
 }
 
-fn price_map(offer: &Offer) -> Result<Vec<(Value, Value)>, ProtocolError> {
+fn price_map(price: &crate::Price) -> Result<Vec<(Value, Value)>, ProtocolError> {
     let mut entries = vec![
-        entry_text("amount", offer.price.amount.to_string())?,
-        entry_text("currency", offer.price.currency.clone())?,
+        entry_text("amount", price.amount.to_string())?,
+        entry_text("currency", price.currency.clone())?,
     ];
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(entries

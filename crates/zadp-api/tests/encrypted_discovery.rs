@@ -93,13 +93,17 @@ fn encrypted_action(
 }
 #[tokio::test]
 async fn encrypted_memo_to_independent_persistent_indexes_and_get_offers() {
-    encrypted_discovery_fixture(false).await;
+    encrypted_discovery_fixture(false, false).await;
 }
 #[tokio::test]
 async fn encrypted_geo_memo_to_independent_indexes_and_public_feed() {
-    encrypted_discovery_fixture(true).await;
+    encrypted_discovery_fixture(true, false).await;
 }
-async fn encrypted_discovery_fixture(with_geo: bool) {
+#[tokio::test]
+async fn encrypted_discovery_only_geo_to_two_indices_and_api() {
+    encrypted_discovery_fixture(true, true).await;
+}
+async fn encrypted_discovery_fixture(with_geo: bool, discovery_only: bool) {
     let params = ZcashNetwork::Mainnet.parameters();
     let mut seed = [0u8; 64];
     rand::rngs::OsRng.fill_bytes(&mut seed);
@@ -145,6 +149,11 @@ async fn encrypted_discovery_fixture(with_geo: bool) {
         radius_m: 50000,
     };
     let draft = if with_geo { draft.with_geo(geo) } else { draft };
+    let draft = if discovery_only {
+        draft.discovery_only()
+    } else {
+        draft
+    };
     let offer = bind_offer(draft.sign(&seller).unwrap(), "ai-services", now, &seller).unwrap();
     let memo = encode_offer_memo(&offer).unwrap();
     let action = encrypted_action(*board_address.orchard().unwrap(), memo);
@@ -236,6 +245,12 @@ async fn encrypted_discovery_fixture(with_geo: bool) {
     let returned: Offer = serde_json::from_value(json["offers"][0].clone()).unwrap();
     verify_offer(&returned, Utc::now()).unwrap();
     assert_eq!(returned.geo, with_geo.then_some(geo));
+    if discovery_only {
+        assert!(returned.commerce.is_none());
+        assert!(json["offers"][0].get("endpoint").is_none());
+        assert!(json["offers"][0].get("price").is_none());
+    }
+
     assert_eq!(returned.zadp, if with_geo { 2 } else { 1 });
 }
 

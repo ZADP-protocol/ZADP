@@ -111,7 +111,7 @@ fn signed_geo_dual_wire_roundtrip_and_tampering() {
         let offer = geo_offer(geo);
         let memo = encode_offer_memo(&offer).unwrap();
         assert_eq!(memo[5], 2);
-        assert_eq!(memo[8], 0x8e);
+        assert_eq!(memo[8], 0x8d);
         let decoded = decode_offer_memo(&memo).unwrap().unwrap();
         assert_eq!(decoded, offer);
         verify_offer(&decoded, now()).unwrap();
@@ -155,14 +155,14 @@ fn exact_geo_budget_and_oversize_rejection() {
     let plain = encode_offer_memo(&base).unwrap();
     let used = usize::from(u16::from_be_bytes([plain[6], plain[7]]));
     for (g, extra) in [
-        (None, 1),
+        (None, 2),
         (
             Some(GeoArea {
                 lat_e5: -9000000,
                 lon_e5: -18000000,
                 radius_m: 500000,
             }),
-            16,
+            17,
         ),
     ] {
         let mut o = geo_offer(g);
@@ -192,8 +192,8 @@ fn geo_draft_selects_v2_and_absent_geo_keeps_v1() {
         k.id.clone(),
         "cleaning",
         "Cabin cleaning",
-        o.price.clone(),
-        o.endpoint.clone(),
+        o.commerce.as_ref().unwrap().price.clone(),
+        o.commerce.as_ref().unwrap().endpoint.clone(),
         o.expires_at,
         o.nonce.clone(),
     );
@@ -234,7 +234,7 @@ fn malformed_wire_geo_is_rejected_before_signature_acceptance() {
         ]),
     ] {
         let mut modified = fields.clone();
-        modified[13] = invalid;
+        modified[12] = invalid;
         let mut bytes = vec![];
         ciborium::into_writer(&Value::Array(modified), &mut bytes).unwrap();
         let mut framed = [0u8; 512];

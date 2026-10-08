@@ -68,8 +68,11 @@ class Operator:
             if self.config['network'] not in ('mainnet','testnet'): raise ValueError()
             board=json.loads(Path(self.config['board']).read_text())
             if draft.get('board_id') != board['board']['board_id']: raise ValueError('Board mismatch')
-            for name in ('title','capability','endpoint','price'):
+            for name in ('title','capability'):
                 if not isinstance(draft.get(name),str) or len(draft[name])>2048: raise ValueError()
+            commerce=draft.get('commerce', {'endpoint':draft.get('endpoint'),'price':{'amount':draft.get('price'),'currency':'ZEC'}})
+            if commerce is not None:
+                if not isinstance(commerce,dict) or set(commerce)!={'endpoint','price'} or not isinstance(commerce['endpoint'],str) or len(commerce['endpoint'])>2048 or not isinstance(commerce['price'],dict) or commerce['price'].get('currency')!='ZEC' or not isinstance(commerce['price'].get('amount'),str): raise ValueError('Invalid commerce')
             geo=draft.get('geo')
             if geo is not None:
                 if (not isinstance(geo,dict) or set(geo)!={'lat_e5','lon_e5','radius_m'}
@@ -86,8 +89,8 @@ class Operator:
                     '--identity',self.config['seller_identity'],'--wallet-rpc',self.config['wallet_rpc'],
                     '--wallet-auth-file',self.config['wallet_auth_file'],'--wallet-account',self.config['account_uuid'],
                     '--lightwalletd',self.config['lightwalletd'],'--title',draft['title'],
-                    '--capability',draft['capability'],'--endpoint',draft['endpoint'],
-                    '--price-zec',draft['price'],'--ttl-seconds','86400']
+                    '--capability',draft['capability'],'--ttl-seconds','86400']
+                if commerce is not None: command+=['--endpoint',commerce['endpoint'],'--price-zec',commerce['price']['amount']]
                 if geo is not None: command+=['--geo-lat-e5',str(geo['lat_e5']),'--geo-lon-e5',str(geo['lon_e5']),'--geo-radius-m',str(geo['radius_m'])]
                 if description: command+=['--description',description]
                 result=subprocess.run(command,stdin=subprocess.DEVNULL,capture_output=True,timeout=90)

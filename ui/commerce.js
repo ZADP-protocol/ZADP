@@ -4,7 +4,9 @@ const DirectCommerce = (() => {
   const storageKey='zadp-direct-commerce-v1';
   function endpoint(offer) {
     if(offer.capability!=='text.uppercase' || Date.parse(offer.expires_at)<=Date.now()) throw Error('This offer is not available for the reference commerce flow.');
-    const url=new URL(offer.endpoint);
+    const commerce=offer.zadp===2?offer.commerce:{endpoint:offer.endpoint,price:offer.price};
+    if(!commerce)throw Error("Discovery-only offer");
+    const url=new URL(commerce.endpoint);
     const demo=offer.simulation===true && offer.chain?.network==='testnet';
     if(url.username || url.password || url.search || url.hash || !['','/'].includes(url.pathname)
        || !(url.protocol==='https:' || (demo && url.protocol==='http:' && url.hostname==='127.0.0.1' && url.port==='8094'))
@@ -16,11 +18,13 @@ const DirectCommerce = (() => {
     const [whole,fraction='']=amount.split('.');return BigInt(whole)*100000000n+BigInt(fraction.padEnd(8,'0'));
   }
   function validate(data,offer,id) {
+    const commerce=offer.zadp===2?offer.commerce:offer;
+    if(!commerce?.price)throw Error("Discovery-only offer");
     if(!data || data.offer_id!==offer.id || !/^[a-f0-9]{32}$/.test(data.order_id) || (id && data.order_id!==id)
       || !['waiting_payment','paid','processing','completed','expired','failed','cancelled'].includes(data.status)
       || !['mainnet','testnet'].includes(data.network) || (offer.chain?.network && data.network!==offer.chain.network)
       || data.simulation!==(offer.simulation===true) || !Number.isSafeInteger(data.amount_zat)
-      || BigInt(data.amount_zat)!==zat(offer.price.amount) || zat(data.amount_zec)!==zat(offer.price.amount)
+      || BigInt(data.amount_zat)!==zat(commerce.price.amount) || zat(data.amount_zec)!==zat(commerce.price.amount)
       || !Number.isSafeInteger(data.expires_at) || data.expires_at*1000>Date.parse(offer.expires_at)+1000
       || typeof data.recipient!=='string' || data.recipient.length>400 || !data.recipient.startsWith(data.network==='mainnet'?'u1':'utest1')
       || typeof data.memo!=='string' || !new RegExp(`^ZADP-COMMERCE/1:${data.order_id}:[a-f0-9]{64}$`).test(data.memo)

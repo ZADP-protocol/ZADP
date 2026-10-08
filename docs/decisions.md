@@ -1,5 +1,7 @@
 # Architectural decisions
 
+2026-10-07: discovery is core; commerce is optional. Correct the unbroadcast draft v2 before first recorded mainnet use; preserve v1 JSON/canonical/memo bytes and BoardDescriptor v1. See [optional-commerce model](optional-commerce.md).
+
 Updated 2026-10-05. These decisions distinguish live discovery from the retained
 mock commerce demo. First mainnet publication and discovery are verified;
 an experimental local payment-gated text service is implemented with synthetic

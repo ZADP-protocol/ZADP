@@ -34,6 +34,12 @@ class PreviewTests(unittest.TestCase):
                 self.assertEqual(command[command.index('--geo-radius-m')+1],'50000')
                 return run(command,**kwargs)
             with patch('operator_boundary.subprocess.run',side_effect=geo_run):operator.preview(draft)
+            def discovery_run(command,**kwargs):
+                self.assertNotIn('--endpoint',command);self.assertNotIn('--price-zec',command)
+                self.assertIn('--dry-run',command)
+                return run(command,**kwargs)
+            with patch('operator_boundary.subprocess.run',side_effect=discovery_run):
+                operator.preview({'board_id':'board','title':'Discovery','capability':'local.service','commerce':None})
             for bad in ({'lat_e5':0},{'lat_e5':0,'lon_e5':0,'radius_m':0},{'lat_e5':0,'lon_e5':0,'radius_m':500001}):
                 with patch('operator_boundary.subprocess.run') as command:
                     with self.assertRaises(ValueError):operator.preview({**draft,'geo':bad})

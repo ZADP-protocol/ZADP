@@ -75,10 +75,10 @@ struct Publish {
     geo_lon_e5: Option<i32>,
     #[arg(long, requires_all = ["geo_lat_e5", "geo_lon_e5"])]
     geo_radius_m: Option<u32>,
-    #[arg(long)]
-    price_zec: Decimal,
-    #[arg(long)]
-    endpoint: String,
+    #[arg(long, requires = "endpoint")]
+    price_zec: Option<Decimal>,
+    #[arg(long, requires = "price_zec")]
+    endpoint: Option<String>,
     #[arg(long,default_value_t=86400,value_parser=clap::value_parser!(u32).range(1..))]
     ttl_seconds: u32,
     /// Defaults to the operator's minimum listing value. This is not the service price.
@@ -101,6 +101,9 @@ struct Publish {
     /// Save a public unsigned-transaction preview; requires --dry-run.
     #[arg(long, requires = "dry_run")]
     preview_output: Option<PathBuf>,
+    /// Reuse the exact signed public offer from a reviewed preview, never regenerate its ID.
+    #[arg(long)]
+    prepared_offer: Option<PathBuf>,
     /// Save signed OFFER + txid as a public acceptance-test receipt, never wallet data.
     #[arg(long)]
     receipt: Option<PathBuf>,
@@ -179,15 +182,25 @@ async fn publish(args: Publish) -> Result<()> {
     let now = DateTime::from_timestamp(Utc::now().timestamp(), 0).context("invalid clock")?;
     let mut nonce = [0u8; 16];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
-    let mut draft = OfferDraft::new_ulid(
-        keys.id.clone(),
-        args.capability,
-        args.title,
-        Price::zec(args.price_zec.normalize()),
-        args.endpoint,
-        now + Duration::seconds(i64::from(args.ttl_seconds)),
-        B64.encode(nonce),
-    );
+    let mut draft = match (args.endpoint, args.price_zec) {
+        (Some(endpoint), Some(price)) => OfferDraft::new_ulid(
+            keys.id.clone(),
+            args.capability,
+            args.title,
+            Price::zec(price.normalize()),
+            endpoint,
+            now + Duration::seconds(i64::from(args.ttl_seconds)),
+            B64.encode(nonce),
+        ),
+        (None, None) => OfferDraft::new_discovery(
+            keys.id.clone(),
+            args.capability,
+            args.title,
+            now + Duration::seconds(i64::from(args.ttl_seconds)),
+            B64.encode(nonce),
+        ),
+        _ => anyhow::bail!("commerce requires both endpoint and price"),
+    };
     draft.description = args.description.filter(|s| !s.is_empty());
     match (args.geo_lat_e5, args.geo_lon_e5, args.geo_radius_m) {
         (Some(lat_e5), Some(lon_e5), Some(radius_m)) => {
@@ -202,7 +215,33 @@ async fn publish(args: Publish) -> Result<()> {
         (None, None, None) => {}
         _ => anyhow::bail!("offer area requires latitude, longitude and radius"),
     }
-    let offer = bind_offer(draft.sign(&keys)?, &board.board.board_id, now, &keys)?;
+    let candidate = bind_offer(draft.sign(&keys)?, &board.board.board_id, now, &keys)?;
+    let offer = if let Some(path) = &args.prepared_offer {
+        let prepared: zadp_protocol::Offer = read_json(path)?;
+        ensure!(
+            prepared.zadp == candidate.zadp
+                && prepared.seller == candidate.seller
+                && prepared.title == candidate.title
+                && prepared.capability == candidate.capability
+                && prepared.description == candidate.description
+                && prepared.geo == candidate.geo
+                && prepared.commerce == candidate.commerce
+                && prepared.board_id == candidate.board_id,
+            "prepared offer differs from requested content"
+        );
+        ensure!(
+            prepared.issued_at.is_some_and(|issued| prepared
+                .expires_at
+                .signed_duration_since(issued)
+                .num_seconds()
+                == i64::from(args.ttl_seconds)),
+            "prepared offer TTL differs"
+        );
+        prepared
+    } else {
+        candidate
+    };
+
     board.validate_offer(&offer, value, now)?;
     let memo = encode_offer_memo(&offer)?;
     let wallet = LocalWallet::connect(&args.wallet_rpc, &args.wallet_auth_file)?;
@@ -241,7 +280,7 @@ async fn publish(args: Publish) -> Result<()> {
         .checked_add(fee)
         .filter(|v| *v <= 2_100_000_000_000_000)
         .context("spend exceeds Zcash money range")?;
-    println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.price.amount,zec(value),zec(fee),zec(total),network,memo.len());
+    println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.commerce.as_ref().map(|c|c.price.amount.to_string()).unwrap_or_else(||"none (discovery only)".into()),zec(value),zec(fee),zec(total),network,memo.len());
     if args.dry_run {
         if let Some(path) = args.preview_output {
             let mut file = std::fs::OpenOptions::new()
@@ -359,6 +398,40 @@ async fn publish(args: Publish) -> Result<()> {
 #[cfg(test)]
 mod geo_cli_tests {
     use super::*;
+    #[test]
+    fn discovery_cli_needs_neither_price_nor_endpoint() {
+        let base = [
+            "zadp-seller",
+            "publish",
+            "--board",
+            "unused",
+            "--identity",
+            "unused",
+            "--capability",
+            "local.service",
+            "--title",
+            "Discovery",
+            "--wallet-auth-file",
+            "unused",
+            "--wallet-account",
+            "unused",
+            "--lightwalletd",
+            "https://fixture.invalid",
+            "--dry-run",
+        ];
+        assert!(Args::try_parse_from(base).is_ok());
+        assert!(Args::try_parse_from(
+            base.into_iter()
+                .chain(["--endpoint", "https://fixture.invalid"])
+        )
+        .is_err());
+        assert!(Args::try_parse_from(base.into_iter().chain(["--price-zec", "0.01"])).is_err());
+        assert!(Args::try_parse_from(
+            base.into_iter()
+                .chain(["--prepared-offer", "reviewed.json"])
+        )
+        .is_ok());
+    }
     #[test]
     fn public_area_flags_are_complete_and_negative_coordinates_parse() {
         let base = [

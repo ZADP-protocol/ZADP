@@ -1,5 +1,7 @@
 # Explicit mainnet publication
 
+Omit both --endpoint and --price-zec for discovery-only Offer/wire v2. Supply both for commerce; geo remains independent. No fake URL or service price is needed. Board listing value and wallet-derived network fee still apply. See [optional-commerce model](optional-commerce.md).
+
 **Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. The Rust commerce demo remains mocked; a separate local text service has an experimental authenticated payment gate. Live buyer settlement and delivery acceptance remain pending.
 
 ## Wallet version and verification status

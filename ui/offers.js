@@ -72,14 +72,16 @@ const GeoDiscovery = (() => {
 
 'use strict';
 const OfferGeo=GeoDiscovery;
+function offerCommerce(offer) { return offer.zadp===2 ? (offer.commerce ?? null) : {endpoint:offer.endpoint,price:offer.price}; }
 // Validate untrusted index JSON before rendering nested fields. Never execute URLs.
 function parseOffersResponse(data) {
   if (!data || !Array.isArray(data.offers) || data.offers.length > 1000) throw Error('Invalid index response');
   for (const offer of data.offers) {
     if (!offer || typeof offer !== 'object') throw Error('Invalid offer');
-    for (const key of ['id','seller','title','capability','endpoint','expires_at']) {
+    for (const key of ['id','seller','title','capability','expires_at']) {
       if (typeof offer[key] !== 'string' || !offer[key] || offer[key].length > 4096) throw Error('Invalid offer field');
     }
+    if(offer.zadp!=null && ![1,2].includes(offer.zadp))throw Error('Unsupported offer version');
     if(offer.geo != null) {
       if(offer.zadp!==2)throw Error('Geo requires Offer v2');
       OfferGeo.validateArea(offer.geo);
@@ -87,9 +89,14 @@ function parseOffersResponse(data) {
     if (offer.board_id != null && (typeof offer.board_id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(offer.board_id))) throw Error('Invalid board');
     if (offer.board_id != null && offer.chain?.board_id != null && offer.board_id !== offer.chain.board_id) throw Error('Board binding mismatch');
     if (!Number.isFinite(Date.parse(offer.expires_at))) throw Error('Invalid expiry');
-    if (!offer.price || offer.price.currency !== 'ZEC' || typeof offer.price.amount !== 'string'
-        || !/^\d+(\.\d{1,8})?$/.test(offer.price.amount)
-        || !(Number(offer.price.amount) > 0 && Number(offer.price.amount) <= 21000000)) throw Error('Invalid price');
+    if(offer.zadp===2 && ('endpoint' in offer || 'price' in offer))throw Error('V2 requires commerce block');
+    const commerce=offerCommerce(offer);
+    if(commerce!==null) {
+      if(!commerce || typeof commerce.endpoint!=='string' || !commerce.endpoint || commerce.endpoint.length>4096)throw Error('Invalid endpoint');
+      if(offer.zadp===2){const url=new URL(commerce.endpoint);if(url.protocol!=='https:'||!url.hostname||url.username||url.password)throw Error('Invalid HTTPS endpoint');}
+      const price=commerce.price;
+      if(!price || price.currency!=='ZEC' || typeof price.amount!=='string' || !/^\d+(\.\d{1,8})?$/.test(price.amount) || !(Number(price.amount)>0 && Number(price.amount)<=21000000))throw Error('Invalid price');
+    }
     if (offer.chain != null) {
       if (!['mainnet','testnet'].includes(offer.chain.network)) throw Error('Invalid network');
       for (const key of ['block_height','scanned_height','confirmations']) {
@@ -106,4 +113,4 @@ function offersNetwork(offers) {
 }
 function offerBoard(offer) { return offer.board_id ?? offer.chain?.board_id ?? ''; }
 function offersForBoard(offers, board) { return board ? offers.filter(o => offerBoard(o) === board) : offers; }
-if(typeof module !== 'undefined') module.exports={GeoDiscovery,parseOffersResponse,offersNetwork,offerBoard,offersForBoard};
+if(typeof module !== 'undefined') module.exports={offerCommerce,GeoDiscovery,parseOffersResponse,offersNetwork,offerBoard,offersForBoard};

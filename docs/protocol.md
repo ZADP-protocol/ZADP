@@ -78,8 +78,8 @@ Unknown `type` values MUST be rejected. The memo encoder accepts only `type == "
 | `title` | Short title. Memo: 1..=128 UTF-8 bytes. |
 | `description` | Optional. Omitted from canonical CBOR when empty. |
 | `price.amount` | Positive decimal string in ZEC (not binary float). Memo encodes integer **zatoshis** (exact 8 decimals; 1..=2.1e15 zat). |
-| `price.currency` | Must be `"ZEC"` in both offer versions. |
-| `endpoint` | Absolute seller commerce URL. Board admission requires **HTTPS**. Mock demo may use `http://127.0.0.1`. |
+| `price.currency` | V1 legacy price or v2 commerce price must be `"ZEC"`; absent commerce has no price. |
+| `endpoint` | V1 legacy field; v2 uses optional `commerce.endpoint`. Complete commerce requires **HTTPS**; no endpoint for discovery-only v2. Legacy mock may use loopback HTTP. |
 | `expires_at` | RFC 3339; memo requires whole seconds. Indexers reject expired offers at API list time. |
 | `issued_at` | RFC 3339 whole seconds for memo; required when board-bound. |
 | `board_id` | Must match descriptor; descriptor IDs are lowercase `[a-z0-9-]{1..64}`. |
@@ -89,8 +89,8 @@ Unknown `type` values MUST be rejected. The memo encoder accepts only `type == "
 ### Validation (`verify_offer`)
 
 1. `zadp` is 1 or 2 and `type == "offer"`; geo is permitted only in v2 and must be complete and within bounds.
-2. Required fields present and well-typed (non-empty id/capability/title/endpoint/nonce).
-3. `price.currency == "ZEC"` and amount positive.
+2. Required fields present and well-typed (non-empty id/capability/title/nonce; v1 requires legacy endpoint/price, v2 allows absent commerce).
+3. When commerce exists, price currency is ZEC and amount positive; discovery-only v2 needs neither price nor endpoint.
 4. `expires_at` is in the future at validation time.
 5. `seller` parses as Ed25519 public key.
 6. Signature verifies over canonical signing bytes.
@@ -130,7 +130,7 @@ Transport encoding for shielded memos:
 | Constant | Value |
 | --- | --- |
 | Magic | `0xf5` + ASCII `ZADP` (5 bytes) |
-| Wire version | `1` (13-field legacy tuple) or `2` (14-field tuple) |
+| Wire version | `1` (13-field legacy tuple) or `2` (13-field optional-commerce tuple) |
 | Memo size | exactly **512** bytes |
 | Max CBOR payload | **504** bytes |
 | Padding | trailing bytes MUST be zero |
@@ -169,7 +169,7 @@ Separate constants are `OFFER_VERSION_V1=1`, `OFFER_VERSION_V2=2`,
 `WIRE_VERSION_V1=1`, `WIRE_VERSION_V2=2`, `BOARD_DESCRIPTOR_VERSION=1`.
 `PROTOCOL_VERSION` remains a legacy alias for Offer v1; it is not a board bump.
 
-Offer v2 adds optional `geo` to the typed JSON model:
+Offer v2 adds optional `geo` and optional `commerce` to the typed JSON model. Discovery requires no commerce endpoint; see [exact model and wire](optional-commerce.md). Geo example:
 
 ```json
 "geo": { "lat_e5": 3777493, "lon_e5": -12241942, "radius_m": 50000 }
@@ -200,17 +200,13 @@ When present, the `geo` map entry is a compact CBOR array
 omitted. Changing any geo value invalidates the signature. The map and the
 transport tuple remain distinct signing/transport representations.
 
-Wire v2 appends one element to the unchanged 13-field v1 tuple: the geo triple
-or CBOR null. Envelope byte 5 is 2 and payload `zadp` must be 2; wire/offer major
-mismatches are rejected. Wire v1 must carry `zadp=1` and no geo. Framing, exact
-512-byte length, 504-byte payload and zero padding are unchanged.
-
-Compared to the same v1 fields, a v2 null adds one byte; present geo adds up to
-16 bytes. Individual field limits are unchanged, but the shared payload budget
-still applies: all independently maximal fields cannot necessarily fit together.
-UTF-8 byte length, integer encoding and description consume that same budget.
-Oversize is an error, never truncation. The actual Rust encoder is authoritative;
-86 browser/Rust parity cases include geo and exact fit/overflow.
+Wire v2 uses the corrected 13-element tuple documented in
+[optional commerce](optional-commerce.md): common discovery fields, nullable
+`[endpoint, price_zat]` commerce, times/nonce/signature, nullable geo triple.
+The old experimental 14-element v2 tuple was replaced before first recorded
+mainnet v2 publication. Canonical v2 always signs `commerce` as null or a map;
+legacy `price` and `endpoint` keys apply only to v1. Adding/removing commerce
+invalidates the signature. Framing and the 504-byte payload budget are unchanged.
 
 A BoardDescriptor v1 admits both versions without changing its domain, address,
 UIVK, fingerprint or policy. Legacy readers continue reading v1 but reject v2;
@@ -260,7 +256,7 @@ Board fingerprint: SHA-256 hex of canonical CBOR of the **entire** descriptor (b
 | `confirmed_after_blocks` | 3 |
 | `max_clock_skew_seconds` | 300 |
 
-Binding requires `offer.board_id == descriptor.board_id`, issued time, TTL/skew checks, listing value, allowlist when authorized, and HTTPS endpoint. See [board-descriptor.md](./board-descriptor.md).
+Binding requires `offer.board_id == descriptor.board_id`, issued time, TTL/skew checks, listing value, allowlist when authorized, and HTTPS endpoint when commerce is present. See [board-descriptor.md](./board-descriptor.md).
 
 **Note:** a new seller key can bypass per-seller quotas on an `open` board; listing value or `authorized` mode strengthens admission.
 

@@ -13,8 +13,9 @@ pub use canonical::{canonical_offer_cbor, signing_bytes};
 pub use error::ProtocolError;
 pub use identity::{SellerId, SellerKeyPair, Signature};
 pub use offer::{
-    verify_offer, GeoArea, Offer, OfferDraft, OfferStatus, Price, BOARD_DESCRIPTOR_VERSION,
-    MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER, OFFER_VERSION_V1, OFFER_VERSION_V2, PROTOCOL_VERSION,
+    verify_offer, Commerce, GeoArea, Offer, OfferDraft, OfferStatus, Price,
+    BOARD_DESCRIPTOR_VERSION, MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER, OFFER_VERSION_V1,
+    OFFER_VERSION_V2, PROTOCOL_VERSION,
 };
 
 mod board;

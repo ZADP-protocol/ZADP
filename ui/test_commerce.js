@@ -18,6 +18,9 @@ function response(status='waiting_payment'){
  assert.equal(paymentMode({...offer,simulation:false},null).label,'TESTNET PAYMENT REQUEST');
  assert.equal(paymentMode({...offer,simulation:true,chain:{network:'mainnet'}},null).walletAllowed,false);
  assert.equal(endpoint(offer),'http://127.0.0.1:8094');
+ const v2={...offer,zadp:2,commerce:{endpoint:'https://seller.example',price:offer.price}};delete v2.endpoint;delete v2.price;
+ assert.equal(endpoint(v2),'https://seller.example');assert.equal(validate(response(),v2).order_id,orderId);
+ assert.throws(()=>endpoint({...v2,commerce:null}));assert.throws(()=>validate(response(),{...v2,commerce:null}));
  for(const endpointURL of ['http://external.example','https://user:pass@seller.example','https://example.com/zadp','https://seller.example?q=1','https://seller.example/not-root','javascript:alert(1)'])assert.throws(()=>endpoint({...offer,endpoint:endpointURL}));
  assert.throws(()=>endpoint({...offer,simulation:false}));
  assert.throws(()=>endpoint({...offer,expires_at:'2000-01-01'}));

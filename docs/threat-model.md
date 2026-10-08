@@ -1,5 +1,7 @@
 # ZADP Threat Model
 
+Optional commerce is seller-signed v2 state. Indexers cannot add/remove commerce or alter endpoint/price without invalidating authenticity. Discovery-only offers expose no purchase endpoint; buyer UI cannot create an automated order for them. Legacy v1 bytes remain unchanged. See [optional-commerce model](optional-commerce.md).
+
 This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, the retained mock commerce demo, optional local operator UI and experimental payment-gated text endpoint. First live mainnet discovery acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
 
 ## Assets

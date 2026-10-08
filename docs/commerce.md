@@ -1,5 +1,7 @@
 # Direct seller commerce
 
+ZADP discovery does not require a commerce endpoint. Only offers with a complete signed commerce block (legacy v1 flat fields or v2 nested endpoint/price) enter the automated order flow. Discovery-only offers are not purchasable through this API. See [optional-commerce model](optional-commerce.md).
+
 Discovery answers **what is for sale**. A seller commerce endpoint answers **how
 to buy one offer and retrieve its result**. Zcash carries payment directly from
 buyer to seller. The ZADP discovery host is not a payment intermediary: it holds

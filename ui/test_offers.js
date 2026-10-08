@@ -21,3 +21,8 @@ assert.deepEqual(offersForBoard(two,'board-b'),[b]);
 assert.deepEqual(offersForBoard(two,''),two);
 assert.throws(()=>parseOffersResponse({offers:[{...a,board_id:'board-b'}]}));
 console.log('Multi-board UI: same offer ids, board filtering and binding mismatch passed.');
+
+const discovery={...offer,zadp:2,geo:{lat_e5:3777500,lon_e5:-12241900,radius_m:25000},commerce:null};delete discovery.endpoint;delete discovery.price;
+assert.equal(parseOffersResponse({offers:[discovery]}).length,1);
+for(const commerce of [{endpoint:'https://seller.example'}, {price:{amount:'0.01',currency:'ZEC'}}, {endpoint:'http://seller.example',price:{amount:'0.01',currency:'ZEC'}}])assert.throws(()=>parseOffersResponse({offers:[{...discovery,commerce}]}));
+assert.equal(parseOffersResponse({offers:[{...discovery,commerce:{endpoint:'https://seller.example',price:{amount:'0.01',currency:'ZEC'}}}]}).length,1);

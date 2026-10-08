@@ -13,8 +13,9 @@ struct Draft {
     board_id: String,
     title: String,
     capability: String,
-    endpoint: String,
-    price: String,
+    endpoint: Option<String>,
+    price: Option<String>,
+    commerce: Option<zadp_protocol::Commerce>,
     description: Option<String>,
     issued_at: i64,
     geo: Option<zadp_protocol::GeoArea>,
@@ -23,15 +24,37 @@ struct Draft {
 fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
     let issued = DateTime::from_timestamp(draft.issued_at, 0).ok_or("invalid issue time")?;
     let keys = SellerKeyPair::generate();
-    let mut offer = OfferDraft::new_ulid(
-        keys.id.clone(),
-        draft.capability,
-        draft.title,
-        Price::zec(draft.price.parse::<Decimal>()?),
-        draft.endpoint,
-        issued + Duration::days(1),
-        B64.encode([0u8; 16]),
-    );
+    let commerce = draft.commerce.or_else(|| {
+        draft.endpoint.map(|endpoint| zadp_protocol::Commerce {
+            endpoint,
+            price: Price::zec(
+                draft
+                    .price
+                    .as_deref()
+                    .unwrap_or("0")
+                    .parse::<Decimal>()
+                    .unwrap_or_default(),
+            ),
+        })
+    });
+    let mut offer = match commerce {
+        Some(c) => OfferDraft::new_ulid(
+            keys.id.clone(),
+            draft.capability,
+            draft.title,
+            c.price,
+            c.endpoint,
+            issued + Duration::days(1),
+            B64.encode([0u8; 16]),
+        ),
+        None => OfferDraft::new_discovery(
+            keys.id.clone(),
+            draft.capability,
+            draft.title,
+            issued + Duration::days(1),
+            B64.encode([0u8; 16]),
+        ),
+    };
     if let Some(geo) = draft.geo {
         offer = offer.with_geo(geo);
     }

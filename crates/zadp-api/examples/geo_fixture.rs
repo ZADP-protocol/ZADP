@@ -103,7 +103,7 @@ async fn main() -> Result<()> {
                 B64.encode([i as u8; 16]),
             );
             if let Some(area) = geo {
-                draft = draft.with_geo(area);
+                draft = draft.with_geo(area).discovery_only();
             }
             let offer = bind_offer(draft.sign(&seller)?, &board.board.board_id, now, &seller)?;
             outputs.push(BoardOutput {

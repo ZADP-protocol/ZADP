@@ -1,5 +1,7 @@
 # ZADP Roadmap
 
+Optional-commerce Offer v2 is implemented before first recorded mainnet v2 use. The next geographic discovery demo is discovery-only, with manual San Francisco area and no fake endpoint. Reader upgrades and an exact unsigned publication preview precede separate human approval. See [optional-commerce model](optional-commerce.md).
+
 Status labels reflect the **reference repository today**. First live mainnet publish → mine → scan → API acceptance completed on 2026-10-05; [public evidence](./mainnet-acceptance.md). The retained Rust commerce demo is mocked; the experimental local text service
 has an authenticated payment gate tested with synthetic observations. A live
 buyer payment and paid fulfillment acceptance remain pending.
