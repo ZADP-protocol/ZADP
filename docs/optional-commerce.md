@@ -99,3 +99,7 @@ against the Rust encoder; encrypted notes reconstructed by two independent
 persistent indexes and GET /offers; buyer UI and local GPS privacy; existing
 commerce, restart/idempotency, payment matching and network checks.
 Offline encrypted fixtures are not evidence of a live v2 mainnet publication.
+
+## Endpoint ownership
+
+Hosted automated buying requires a separate [offline-signed endpoint ownership proof](endpoint-ownership.md). Endpoint downtime disables commerce without invalidating signed discovery. Discovery-only Offers are unchanged.

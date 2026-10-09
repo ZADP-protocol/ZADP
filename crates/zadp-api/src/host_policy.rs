@@ -231,58 +231,7 @@ impl ManualPolicy {
         if !self.categories.contains(category) {
             return false;
         }
-        if let Some(commerce) = &offer.commerce {
-            if !public_endpoint(&commerce.endpoint) {
-                return false;
-            }
-        }
         true
-    }
-}
-fn public_endpoint(endpoint: &str) -> bool {
-    let Ok(u) = url::Url::parse(endpoint) else {
-        return false;
-    };
-    if u.scheme() != "https"
-        || !u.username().is_empty()
-        || u.password().is_some()
-        || u.fragment().is_some()
-    {
-        return false;
-    }
-    let Some(host) = u.host() else {
-        return false;
-    };
-    match host {
-        url::Host::Domain(d) => {
-            !(d == "localhost"
-                || d.ends_with(".localhost")
-                || d.ends_with(".local")
-                || d.ends_with(".internal")
-                || !d.contains('.'))
-        }
-        url::Host::Ipv4(ip) => {
-            !(ip.is_private()
-                || ip.is_loopback()
-                || ip.is_link_local()
-                || ip.is_unspecified()
-                || ip.is_multicast()
-                || ip.is_broadcast()
-                || ip.is_documentation()
-                || ip.octets()[0] == 0
-                || ip.octets()[0] >= 240
-                || (ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1])))
-        }
-        url::Host::Ipv6(ip) => {
-            !(ip.is_loopback()
-                || ip.is_unspecified()
-                || ip.is_multicast()
-                || ip.is_unique_local()
-                || ip.is_unicast_link_local()
-                || ip
-                    .to_ipv4_mapped()
-                    .is_some_and(|v| v.is_private() || v.is_loopback() || v.is_link_local()))
-        }
     }
 }
 fn read_manual(path: &std::path::Path) -> Result<ManualPolicy, &'static str> {
@@ -392,16 +341,8 @@ mod manual_tests {
     #[test]
     fn mechanical_restrictions_are_host_policy_not_protocol() {
         let key = SellerKeyPair::generate();
-        for (title, endpoint) in [
-            ("<script>bad</script>", "https://service.example"),
-            ("Repair", "https://127.0.0.1"),
-            ("Repair", "https://localhost"),
-            ("Repair", "https://[::ffff:127.0.0.1]"),
-        ] {
-            let r = record(&key, title, endpoint);
-            let p = policy(&key, &r);
-            assert!(!p.permits(&r));
-        }
+        let r = record(&key, "<script>bad</script>", "https://service.example");
+        assert!(!policy(&key, &r).permits(&r));
         let r = record(&key, &"x".repeat(121), "https://service.example");
         assert!(!policy(&key, &r).permits(&r));
         let r = record(&key, "Repair", "https://service.example");
@@ -418,8 +359,22 @@ mod manual_tests {
             "https://host.local",
             "not a URL",
         ] {
-            assert!(!public_endpoint(endpoint), "{endpoint}");
+            assert!(
+                zadp_protocol::commerce_origin(endpoint).is_err(),
+                "{endpoint}"
+            );
         }
+    }
+    #[test]
+    fn endpoint_ownership_does_not_replace_manual_host_approval_or_visibility() {
+        let key = SellerKeyPair::generate();
+        let r = record(&key, "Repair", "https://127.0.0.1");
+        let mut p = policy(&key, &r);
+        assert!(p.permits(&r)); // Visible discovery; unsafe commerce stays disabled separately.
+        let v = crate::EndpointVerifier::default().status(&r.offer);
+        assert_eq!(v.status, crate::CommerceStatus::Unverified);
+        p.sellers[0].status = SellerStatus::Blocked;
+        assert!(!p.permits(&r));
     }
     #[test]
     fn atomic_file_reload_and_restart_remain_fail_closed() {

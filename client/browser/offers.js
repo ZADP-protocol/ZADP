@@ -97,6 +97,13 @@ function parseOffersResponse(data) {
       const price=commerce.price;
       if(!price || price.currency!=='ZEC' || typeof price.amount!=='string' || !/^\d+(\.\d{1,8})?$/.test(price.amount) || !(Number(price.amount)>0 && Number(price.amount)<=21000000))throw Error('Invalid price');
     }
+    if(offer.commerce_verification != null) {
+      const proof=offer.commerce_verification;
+      if(!proof || !['discovery_only','verified','unverified','unavailable'].includes(proof.status))throw Error('Invalid commerce verification status');
+      if(proof.status==='verified' && (typeof proof.origin!=='string' || proof.origin.length>2048
+        || typeof proof.expires_at!=='string' || !Number.isFinite(Date.parse(proof.expires_at))
+        || typeof proof.valid_until!=='string' || !Number.isFinite(Date.parse(proof.valid_until))))throw Error('Invalid commerce verification metadata');
+    }
     if (offer.chain != null) {
       if (!['mainnet','testnet'].includes(offer.chain.network)) throw Error('Invalid network');
       for (const key of ['block_height','scanned_height','confirmations']) {

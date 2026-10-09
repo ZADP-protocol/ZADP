@@ -1,5 +1,5 @@
 //! Public hosted views. No registration, moderation, descriptor or spending HTTP routes.
-use crate::{ApiError, HostPolicy, IndexedOffer, OffersQuery, OffersResponse};
+use crate::{ApiError, EndpointVerifier, HostPolicy, IndexedOffer, OffersQuery, OffersResponse};
 use axum::{
     extract::{Path, Query, State},
     routing::get,
@@ -12,6 +12,7 @@ use zadp_indexer::{BoardRegistry, BoardStatus, BoardSummary, OfferRepository};
 struct HostedState {
     registry: Arc<BoardRegistry>,
     policy: HostPolicy,
+    endpoints: EndpointVerifier,
     versions: Option<(String, String)>,
 }
 pub fn multi_board_router(registry: Arc<BoardRegistry>) -> Router {
@@ -34,6 +35,7 @@ pub fn multi_board_router_with_versions(
         .route("/offers/{id}", get(offer))
         .with_state(HostedState {
             registry,
+            endpoints: EndpointVerifier::default(),
             policy,
             versions,
         })
@@ -75,13 +77,27 @@ async fn board_offers(
         return Err(ApiError::bad_request("conflicting board filters"));
     }
     query.board_id = Some(id);
-    list(&state.registry, &state.policy, query, None).await
+    list(
+        &state.registry,
+        &state.policy,
+        &state.endpoints,
+        query,
+        None,
+    )
+    .await
 }
 async fn offers(
     State(state): State<HostedState>,
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<OffersResponse>, ApiError> {
-    list(&state.registry, &state.policy, query, None).await
+    list(
+        &state.registry,
+        &state.policy,
+        &state.endpoints,
+        query,
+        None,
+    )
+    .await
 }
 async fn offer(
     State(state): State<HostedState>,
@@ -89,7 +105,14 @@ async fn offer(
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<IndexedOffer>, ApiError> {
     // Reuse the exact active hosted view; knowing a canonical ID cannot bypass it.
-    let Json(view) = list(&state.registry, &state.policy, query, Some(&id)).await?;
+    let Json(view) = list(
+        &state.registry,
+        &state.policy,
+        &state.endpoints,
+        query,
+        Some(&id),
+    )
+    .await?;
     let mut matches = view.offers.into_iter().filter(|o| o.offer.id == id);
     let first = matches.next().ok_or_else(ApiError::not_found)?;
     if matches.next().is_some() {
@@ -100,6 +123,7 @@ async fn offer(
 async fn list(
     registry: &BoardRegistry,
     policy: &HostPolicy,
+    endpoints: &EndpointVerifier,
     query: OffersQuery,
     only_id: Option<&str>,
 ) -> Result<Json<OffersResponse>, ApiError> {
@@ -151,6 +175,7 @@ async fn list(
                 continue;
             }
             offers.push(IndexedOffer {
+                commerce_verification: endpoints.status(&r.offer),
                 offer: r.offer,
                 chain: r.chain,
             });

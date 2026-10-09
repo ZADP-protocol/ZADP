@@ -13,6 +13,7 @@ struct Service {
     store: Arc<Mutex<Store>>,
     observer: Arc<Observer>,
     origin: String,
+    endpoint_proof: Option<zadp_protocol::EndpointProof>,
 }
 fn error(status: StatusCode, message: &str) -> Response {
     (status, Json(serde_json::json!({"error":message}))).into_response()
@@ -30,10 +31,26 @@ fn claim(headers: &HeaderMap) -> &str {
         .unwrap_or("")
 }
 pub fn router(config: Config) -> anyhow::Result<Router> {
+    router_with_endpoint_proof(config, None)
+}
+pub fn router_with_endpoint_proof(
+    config: Config,
+    endpoint_proof: Option<zadp_protocol::EndpointProof>,
+) -> anyhow::Result<Router> {
+    if let Some(proof) = &endpoint_proof {
+        let endpoint = &config
+            .offer
+            .commerce
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing commerce"))?
+            .endpoint;
+        proof.verify(&config.offer.seller, endpoint, chrono::Utc::now())?;
+    }
     let state = Service {
         store: Arc::new(Mutex::new(Store::open(config.clone())?)),
         observer: Arc::new(Observer::new(config.clone())?),
         origin: config.browser_origin.clone(),
+        endpoint_proof,
     };
     let cors = CorsLayer::new()
         .allow_origin(config.browser_origin.parse::<HeaderValue>()?)
@@ -44,6 +61,7 @@ pub fn router(config: Config) -> anyhow::Result<Router> {
             header::HeaderName::from_static("idempotency-key"),
         ]);
     Ok(Router::new()
+        .route("/.well-known/zadp", get(endpoint_proof_document))
         .route("/healthz", get(|| async { "ok" }))
         .route("/orders", post(create))
         .route("/orders/{id}", get(check).delete(cancel))
@@ -136,5 +154,12 @@ async fn cancel(
     match store.cancel(&id, claim(&headers)) {
         Ok(response) => Json(response).into_response(),
         Err(_) => error(StatusCode::CONFLICT, "Order cannot be cancelled"),
+    }
+}
+
+async fn endpoint_proof_document(State(state): State<Service>) -> Response {
+    match &state.endpoint_proof {
+        Some(proof) if chrono::Utc::now() < proof.expires_at => Json(proof).into_response(),
+        _ => error(StatusCode::NOT_FOUND, "Endpoint proof unavailable"),
     }
 }

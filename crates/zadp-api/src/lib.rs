@@ -74,18 +74,21 @@ pub struct IndexedOffer {
     pub offer: Offer,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain: Option<ChainObservation>,
+    pub commerce_verification: CommerceVerification,
 }
 
 /// Read-only API for real board discovery. No invoice, fulfillment or wallet routes.
 pub struct BoardApiState<R> {
     repository: Arc<R>,
     policy: HostPolicy,
+    endpoints: EndpointVerifier,
 }
 impl<R> Clone for BoardApiState<R> {
     fn clone(&self) -> Self {
         Self {
             repository: Arc::clone(&self.repository),
             policy: self.policy.clone(),
+            endpoints: self.endpoints.clone(),
         }
     }
 }
@@ -96,6 +99,14 @@ pub fn board_router_with_policy<R: OfferRepository + 'static>(
     repository: Arc<R>,
     policy: HostPolicy,
 ) -> Router {
+    board_router_with_verifier(repository, policy, EndpointVerifier::default())
+}
+/// Dependency injection for offline verification tests; no HTTP endpoint accepts a URL.
+pub fn board_router_with_verifier<R: OfferRepository + 'static>(
+    repository: Arc<R>,
+    policy: HostPolicy,
+    endpoints: EndpointVerifier,
+) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/offers", get(board_offers::<R>))
@@ -105,7 +116,11 @@ pub fn board_router_with_policy<R: OfferRepository + 'static>(
                 tracing::info_span!("http_request", method = %request.method())
             },
         ))
-        .with_state(BoardApiState { repository, policy })
+        .with_state(BoardApiState {
+            repository,
+            policy,
+            endpoints,
+        })
 }
 
 async fn board_offers<R: OfferRepository + 'static>(
@@ -123,6 +138,7 @@ async fn board_offers<R: OfferRepository + 'static>(
             .into_iter()
             .filter(|r| policy.permits_record(r))
             .map(|r| IndexedOffer {
+                commerce_verification: state.endpoints.status(&r.offer),
                 offer: r.offer,
                 chain: r.chain,
             })
@@ -148,6 +164,16 @@ where
         offers: records
             .into_iter()
             .map(|r| IndexedOffer {
+                commerce_verification: CommerceVerification {
+                    status: if r.offer.commerce.is_none() {
+                        CommerceStatus::DiscoveryOnly
+                    } else {
+                        CommerceStatus::Unverified
+                    },
+                    origin: None,
+                    expires_at: None,
+                    valid_until: None,
+                },
                 offer: r.offer,
                 chain: r.chain,
             })
@@ -258,4 +284,9 @@ pub use boards::{
 mod host_policy;
 pub use host_policy::{
     HostPolicy, ManualPolicy, OfferDecision, OfferRule, SellerRule, SellerStatus,
+};
+
+mod endpoint_verification;
+pub use endpoint_verification::{
+    CommerceStatus, CommerceVerification, EndpointVerifier, ProofFetcher,
 };

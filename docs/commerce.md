@@ -191,3 +191,7 @@ See [process and storage boundaries](commerce-process-boundaries.md) for the
 separate Rust seller, TLS endpoint, persistent indexer, UI and buyer-client
 regression. The [mainnet preparation plan](commerce.md) keeps any
 new offer/publication and real buyer payment behind concrete human review.
+
+## Endpoint ownership
+
+Hosted automated buying requires a separate [offline-signed endpoint ownership proof](endpoint-ownership.md). Endpoint downtime disables commerce without invalidating signed discovery. Discovery-only Offers are unchanged.

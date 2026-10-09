@@ -24,3 +24,8 @@ pub use board::{Admission, BoardBody, BoardDescriptor, BoardPolicy, ZcashNetwork
 pub use memo::{
     bind_offer, decode_offer_memo, encode_offer_memo, zec_to_zat, WIRE_VERSION_V1, WIRE_VERSION_V2,
 };
+
+mod endpoint_proof;
+pub use endpoint_proof::{
+    commerce_origin, public_endpoint_ip, EndpointProof, ENDPOINT_PROOF_PREFIX,
+};

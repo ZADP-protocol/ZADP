@@ -61,6 +61,17 @@ enum Command {
         #[arg(long, value_parser=clap::value_parser!(u32).range(1..))]
         max_offer_ttl_seconds: u32,
     },
+    /// Offline endpoint proof; deploy only the public JSON, never the identity key.
+    EndpointProof {
+        #[arg(long)]
+        identity: PathBuf,
+        #[arg(long)]
+        origin: String,
+        #[arg(long)]
+        expires_at: chrono::DateTime<Utc>,
+        #[arg(long)]
+        output: PathBuf,
+    },
     Publish(Box<Publish>),
     /// Pay a local self-payment test invoice using an existing protected wallet.
     PayTest(Box<zadp_seller::purchase::Purchase>),
@@ -180,6 +191,30 @@ async fn main() -> Result<()> {
             println!(
                 "{}",
                 json!({"old_fingerprint":old.fingerprint()?,"new_fingerprint":new.fingerprint()?,"network":new.board.network,"board_id":new.board.board_id,"birthday_height":new.board.birthday_height,"max_offer_ttl_seconds":max_offer_ttl_seconds,"signature_valid":true,"address_uivk_binding_valid":true,"unrelated_fields_preserved":true,"activated":false})
+            );
+        }
+        Command::EndpointProof {
+            identity,
+            origin,
+            expires_at,
+            output,
+        } => {
+            let now = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+            let proof = zadp_protocol::EndpointProof::sign(
+                &load_identity(&identity)?,
+                &origin,
+                now,
+                expires_at,
+            )?;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(output)?;
+            file.write_all(serde_json::to_string_pretty(&proof)?.as_bytes())?;
+            file.sync_all()?;
+            println!(
+                "Public endpoint proof created for {}; expires {}",
+                proof.origin, proof.expires_at
             );
         }
         Command::Publish(args) => publish(*args).await?,

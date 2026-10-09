@@ -26,3 +26,8 @@ const discovery={...offer,zadp:2,geo:{lat_e5:3777500,lon_e5:-12241900,radius_m:2
 assert.equal(parseOffersResponse({offers:[discovery]}).length,1);
 for(const commerce of [{endpoint:'https://seller.example'}, {price:{amount:'0.01',currency:'ZEC'}}, {endpoint:'http://seller.example',price:{amount:'0.01',currency:'ZEC'}}])assert.throws(()=>parseOffersResponse({offers:[{...discovery,commerce}]}));
 assert.equal(parseOffersResponse({offers:[{...discovery,commerce:{endpoint:'https://seller.example',price:{amount:'0.01',currency:'ZEC'}}}]}).length,1);
+
+const verification={status:'verified',origin:'https://seller.example',expires_at:'2030-01-01T00:00:00Z',valid_until:'2029-01-01T00:00:00Z'};
+assert.equal(parseOffersResponse({offers:[{...offer,commerce_verification:verification}]}).length,1);
+for(const bad of [{status:'unknown'},{status:123},{status:'verified'}, {...verification,valid_until:'invalid'}])assert.throws(()=>parseOffersResponse({offers:[{...offer,commerce_verification:bad}]}));
+assert.equal(parseOffersResponse({offers:[{...offer,commerce_verification:{status:'unavailable'}}]}).length,1);

@@ -532,3 +532,73 @@ fn refuses_existing_board_database_without_modifying_it() {
         .unwrap();
     assert_eq!(count, 1);
 }
+
+#[tokio::test]
+async fn static_well_known_proof_is_served_without_a_signing_key() {
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
+    use tower::ServiceExt;
+    let (_dir, mut c, _) = fixture();
+    let key = SellerKeyPair::from_secret_bytes(&[9; 32]);
+    c.offer = OfferDraft::new_ulid(
+        key.id.clone(),
+        "text.uppercase",
+        "Public endpoint fixture",
+        Price::zec("0.01".parse().unwrap()),
+        "https://seller.example",
+        Utc::now() + Duration::days(1),
+        "nonce",
+    )
+    .sign(&key)
+    .unwrap();
+    let now = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+    let proof = zadp_protocol::EndpointProof::sign(
+        &key,
+        "https://seller.example",
+        now,
+        now + Duration::days(1),
+    )
+    .unwrap();
+    let document = serde_json::to_value(&proof).unwrap();
+    drop(key); // The server receives only Config and public signed JSON.
+    let app = zadp_commerce::http::router_with_endpoint_proof(c.clone(), Some(proof)).unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/.well-known/zadp")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let bytes = to_bytes(response.into_body(), 16384).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        document
+    );
+    let other = SellerKeyPair::generate();
+    let wrong = zadp_protocol::EndpointProof::sign(
+        &other,
+        "https://seller.example",
+        now,
+        now + Duration::days(1),
+    )
+    .unwrap();
+    assert!(zadp_commerce::http::router_with_endpoint_proof(c.clone(), Some(wrong)).is_err());
+    let app = zadp_commerce::http::router(c).unwrap();
+    assert_eq!(
+        app.oneshot(
+            Request::builder()
+                .uri("/.well-known/zadp")
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await
+        .unwrap()
+        .status(),
+        404
+    );
+}
