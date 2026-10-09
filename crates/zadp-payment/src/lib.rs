@@ -10,3 +10,6 @@ mod policy;
 pub use controller::{InvoiceView, PaymentController, PaymentOutcome};
 pub use error::PaymentError;
 pub use policy::{PolicyConfig, PolicyDecision, SpendingPolicy};
+
+pub mod reviewed_wallet;
+pub use reviewed_wallet::ReviewedWalletAdapter;

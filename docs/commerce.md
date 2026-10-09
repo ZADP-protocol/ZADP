@@ -215,3 +215,20 @@ not covered by the Offer signature; do not claim it is a signed protocol object.
 This implementation does not deploy a public seller, publish a commerce Offer or
 prove an external buyer mainnet payment. Those require separately approved
 endpoint/payment configuration and the real human E2E test.
+
+## Reviewed agent wallet boundary
+
+`zadp-payment::ReviewedWalletAdapter` connects PaymentController to one explicitly
+reviewed local `zadp-seller transfer` proposal. Agent requests contain an invoice,
+recipient, exact ZEC amount and memo, never keys. The operator binds the adapter
+to a specific invoice ID, separate buyer/seller accounts, preview SHA256,
+protected PCZT/config paths and a new recovery journal. The adapter rejects any
+changed amount/recipient/memo, expired preview, wrong account or existing journal.
+A model cannot turn an unreviewed InvoiceView into a payment through this adapter.
+
+This is an integration boundary, not evidence of a completed agent mainnet E2E.
+The existing policy still returns REQUIRE_APPROVAL when its limits demand it;
+do not use the demo auto-approve helper in production. Order discovery, endpoint
+verification, InvoiceView construction and result polling must be composed by the
+buyer application. Use the actual ZIP-321 memo as the string `memo_hint`. Human
+review covers the exact wallet fee separately from service-price policy ceilings.

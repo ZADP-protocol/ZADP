@@ -66,9 +66,21 @@ The reusable [browser modules](client/browser/README.md) provide parsing, memo b
 
 Commerce is optional. A discovery-only v2 Offer has no purchase endpoint or service price. Commerce-enabled Offers may advertise an HTTPS seller endpoint; orders, payment correlation and results belong directly to seller and buyer, not discovery. Reference commerce services and [isolated offline tests](docs/commerce-process-boundaries.md) demonstrate this boundary. They do not authorize a real payment.
 
+## Hosted alpha interface
+
+[Open the ZADP hosted alpha at zadp.io](https://zadp.io/).
+The alpha currently requires access credentials; it is a separate reference
+product, not a requirement for independent protocol implementations.
+
+![ZADP globe with clearly labelled synthetic demo inventory](docs/images/zadp-globe-demo.png)
+
+*Reference UI screenshot with Web-only DEMO inventory enabled. Synthetic listings
+are not published on Zcash and cannot be purchased. Real signed chain inventory
+remains separate. The screenshot is not evidence of a completed buyer payment.*
+
 ## Status and validation
 
-Alpha software: protocol/model details can still evolve. The first funded mainnet publication and independent reconstruction were verified; this is discovery evidence, not evidence of a live geographic business or completed buyer purchase. See [mainnet acceptance](docs/mainnet-acceptance.md).
+Alpha software: protocol/model details can still evolve. The first funded mainnet publication and independent reconstruction were verified, including a real discovery-only geographic Offer v2 on 2026-10-10 (Helsinki date); this is discovery evidence, not evidence of a live geographic business or completed buyer purchase. See [mainnet acceptance](docs/mainnet-acceptance.md).
 
 ```sh
 cargo fmt --all -- --check
