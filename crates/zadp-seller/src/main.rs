@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 use rand::RngCore;
 use rust_decimal::Decimal;
 use serde_json::{json, Value};
+use sha2::Digest;
 use std::{
     io::{self, Write},
     path::PathBuf,
@@ -375,6 +376,9 @@ async fn publish(args: Publish) -> Result<()> {
                     "board_fingerprint":board.fingerprint()?, "board_id":board.board.board_id,
                     "offer":offer, "payload_bytes":u16::from_be_bytes([memo[6],memo[7]]),
                     "listing_value_zat":value, "network_fee_zat":fee, "total_cost_zat":total,
+                    "board_recipient":board.board.address,
+                    "proposal_fingerprint":hex::encode(sha2::Sha256::digest(pczt(&created)?.as_bytes())),
+                    "fee_source":"wallet-inspected-unsigned-proposal",
                     "zcash_transaction_signed":false, "broadcast":false
                 }))?
                 .as_bytes(),
