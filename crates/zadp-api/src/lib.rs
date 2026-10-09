@@ -279,7 +279,8 @@ impl IntoResponse for ApiError {
 
 mod boards;
 pub use boards::{
-    multi_board_router, multi_board_router_with_policy, multi_board_router_with_versions,
+    multi_board_router, multi_board_router_with_metadata, multi_board_router_with_policy,
+    multi_board_router_with_versions, BoardPresentation,
 };
 mod host_policy;
 pub use host_policy::{

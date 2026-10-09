@@ -26,6 +26,9 @@ struct Args {
     /// Operator-managed registry file. Descriptor/database paths are relative to this file.
     #[arg(long)]
     registry: Option<PathBuf>,
+    /// Operator-only public presentation metadata; never modifies signed descriptors.
+    #[arg(long)]
+    board_metadata: Option<PathBuf>,
     #[arg(long, default_value = "mainnet")]
     network: String,
     #[arg(long, required_unless_present = "moderation_only")]
@@ -219,7 +222,21 @@ async fn main() -> Result<()> {
     }
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     let versions = transport.backend_versions().await.ok();
-    let app = zadp_api::multi_board_router_with_versions(registry, host_policy, versions);
+    let metadata: std::collections::BTreeMap<String, zadp_api::BoardPresentation> =
+        match args.board_metadata {
+            Some(path) => read_json(&path)?,
+            None => Default::default(),
+        };
+    for (id, m) in &metadata {
+        ensure!(
+            registry.get(id).is_some()
+                && !m.display_name.is_empty()
+                && m.display_name.len() <= 128
+                && m.description.len() <= 512,
+            "invalid board presentation metadata"
+        );
+    }
+    let app = zadp_api::multi_board_router_with_metadata(registry, host_policy, versions, metadata);
     // Independent workers: one board's failure or older birthday cannot block others.
     for (id, indexer) in scanners {
         tokio::spawn(async move {

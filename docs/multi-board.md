@@ -179,3 +179,26 @@ Older readers reject v2: upgrade before geo publication; if an old reader alread
 passed/rejected geo blocks, reconstruct separately from the signed birthday.
 Never overwrite an active index or silently replay a publication.
 [Geo compatibility and demo](geographic-discovery.md).
+
+## Current zadp.io alpha product policy
+
+Board onboarding is closed: no user board creation, import or self-registration.
+Only the operator edits the local hosted registry. Caddy exposes GET/HEAD discovery
+only, and the multi-board API has no creation/registration/mutation routes.
+This is hosted policy, not a protocol ban on independent boards elsewhere.
+
+The agreed operator catalog is `ai-services` (AI & Agent Services),
+`digital-services` (Digital Services), `local-services` (Local Services),
+`jobs` (Jobs & Bounties), `games` (Gaming Services), `general` (General Services)
+and `hello` (Hello ZADP). Only the existing `ai-services` is currently provisioned.
+The remaining IDs are plans, not advertised live boards. New descriptors, isolated
+viewing scopes and databases require separate operator provisioning and approval.
+Board IDs are unique within this hosted registry, not globally reserved names.
+Capability and presentation category are independent; geographic scope can occur
+on any board. Existing descriptor IDs and signed Offers are never renamed in place.
+
+Hosted presentation metadata may be supplied using `--board-metadata` with a JSON
+map from board ID to `display_name` and `description`. It is operator configuration,
+not signed BoardDescriptor content. Unknown board IDs and oversized/empty names
+fail startup. This permits a friendly hosted name without changing a descriptor
+or fingerprint. Public `/boards` responses never expose addresses or UIVKs.

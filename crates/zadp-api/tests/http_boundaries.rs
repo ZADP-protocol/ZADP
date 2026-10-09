@@ -176,3 +176,56 @@ async fn public_geo_feed_never_needs_or_accepts_buyer_coordinates() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn hosted_boards_have_no_public_creation_or_registration_routes() {
+    use zadp_indexer::BoardRegistry;
+    use zadp_protocol::ZcashNetwork;
+    let registry = Arc::new(BoardRegistry::new(ZcashNetwork::Mainnet));
+    let app = zadp_api::multi_board_router(registry.clone());
+    for method in ["POST", "PUT", "PATCH", "DELETE"] {
+        for uri in [
+            "/boards",
+            "/boards/register",
+            "/boards/create",
+            "/boards/hello",
+            "/boards/hello/offers",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"board_id":"hello"}"#))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(
+                matches!(
+                    response.status(),
+                    StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+                ),
+                "{method} {uri}"
+            );
+        }
+    }
+    assert_eq!(registry.contexts().count(), 0);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/boards")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), 1_048_576).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({"boards":[]})
+    );
+}

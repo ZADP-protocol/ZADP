@@ -52,6 +52,10 @@ impl BoardContext {
 pub struct BoardSummary {
     pub board_id: String,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub network: ZcashNetwork,
     pub owner_identity: String,
     pub descriptor_fingerprint: String,
@@ -67,6 +71,8 @@ impl BoardContext {
         Ok(BoardSummary {
             board_id: b.board_id.clone(),
             name: b.name.clone(),
+            display_name: None,
+            description: None,
             network: b.network,
             owner_identity: b.operator_key.as_str().into(),
             descriptor_fingerprint: self.descriptor().fingerprint()?,

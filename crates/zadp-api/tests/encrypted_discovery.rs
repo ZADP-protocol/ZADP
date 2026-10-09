@@ -563,3 +563,99 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
         assert!(matches!(response.status().as_u16(), 404 | 405));
     }
 }
+
+#[tokio::test]
+async fn seven_hosted_boards_metadata_and_wrong_board_admission() {
+    use zadp_indexer::{
+        BoardContext, BoardRegistry, BoardSourceType, BoardStatus, HostedBoardPolicy,
+    };
+    let ids = [
+        "ai-services",
+        "digital-services",
+        "local-services",
+        "jobs",
+        "games",
+        "general",
+        "hello",
+    ];
+    let seller = SellerKeyPair::generate();
+    let now = DateTime::from_timestamp(Utc::now().timestamp() - 1, 0).unwrap();
+    let descriptors: Vec<_> = ids
+        .iter()
+        .map(|id| isolated_descriptor(id, 3_000_000))
+        .collect();
+    let mut registry = BoardRegistry::new(ZcashNetwork::Mainnet);
+    let mut metadata = std::collections::BTreeMap::new();
+    for board in &descriptors {
+        board.validate(ZcashNetwork::Mainnet).unwrap();
+        let offer = same_id_offer(board, &seller, now);
+        board.validate_offer(&offer, 1000, now).unwrap();
+        for other in &descriptors {
+            if other.board.board_id != board.board.board_id {
+                assert!(other.validate_offer(&offer, 1000, now).is_err());
+                assert_ne!(
+                    other.incoming_scope_fingerprint().unwrap(),
+                    board.incoming_scope_fingerprint().unwrap()
+                );
+            }
+        }
+        let repo = Arc::new(SqliteOfferRepository::open(":memory:", board.clone()).unwrap());
+        let context = BoardContext {
+            repository: repo,
+            source_type: BoardSourceType::Hosted,
+            status: BoardStatus::Active,
+        };
+        registry
+            .register(
+                BoardContext {
+                    repository: Arc::clone(&context.repository),
+                    source_type: context.source_type,
+                    status: context.status,
+                },
+                &HostedBoardPolicy::default(),
+                false,
+            )
+            .unwrap();
+        assert!(registry
+            .register(context, &HostedBoardPolicy::default(), false)
+            .is_err());
+        metadata.insert(
+            board.board.board_id.clone(),
+            zadp_api::BoardPresentation {
+                display_name: format!("Friendly {}", board.board.board_id),
+                description: "Operator presentation only".into(),
+            },
+        );
+    }
+    let app = zadp_api::multi_board_router_with_metadata(
+        Arc::new(registry),
+        Default::default(),
+        Default::default(),
+        metadata,
+    );
+    for path in std::iter::once("/boards".to_string()).chain(ids.iter().flat_map(|id| {
+        [
+            format!("/boards/{id}"),
+            format!("/boards/{id}/offers"),
+            format!("/offers?board_id={id}"),
+        ]
+    })) {
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri(&path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200, "{path}");
+        let json: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1_048_576).await.unwrap())
+                .unwrap();
+        if path == "/boards" {
+            assert_eq!(json["boards"].as_array().unwrap().len(), 7);
+        } else if !path.contains("offers") {
+            assert!(json["display_name"]
+                .as_str()
+                .unwrap()
+                .starts_with("Friendly "));
+        }
+    }
+}

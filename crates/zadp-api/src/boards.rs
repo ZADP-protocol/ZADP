@@ -14,6 +14,7 @@ struct HostedState {
     policy: HostPolicy,
     endpoints: EndpointVerifier,
     versions: Option<(String, String)>,
+    metadata: std::collections::BTreeMap<String, BoardPresentation>,
 }
 pub fn multi_board_router(registry: Arc<BoardRegistry>) -> Router {
     multi_board_router_with_policy(registry, HostPolicy::default())
@@ -25,6 +26,22 @@ pub fn multi_board_router_with_versions(
     registry: Arc<BoardRegistry>,
     policy: HostPolicy,
     versions: Option<(String, String)>,
+) -> Router {
+    multi_board_router_with_metadata(registry, policy, versions, Default::default())
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoardPresentation {
+    pub display_name: String,
+    pub description: String,
+}
+
+pub fn multi_board_router_with_metadata(
+    registry: Arc<BoardRegistry>,
+    policy: HostPolicy,
+    versions: Option<(String, String)>,
+    metadata: std::collections::BTreeMap<String, BoardPresentation>,
 ) -> Router {
     Router::new()
         .route("/healthz", get(health))
@@ -38,7 +55,19 @@ pub fn multi_board_router_with_versions(
             endpoints: EndpointVerifier::default(),
             policy,
             versions,
+            metadata,
         })
+}
+fn summary(
+    state: &HostedState,
+    context: &zadp_indexer::BoardContext,
+) -> Result<BoardSummary, zadp_indexer::IndexerError> {
+    let mut summary = context.summary()?;
+    if let Some(metadata) = state.metadata.get(&summary.board_id) {
+        summary.display_name = Some(metadata.display_name.clone());
+        summary.description = Some(metadata.description.clone());
+    }
+    Ok(summary)
 }
 async fn health(State(state): State<HostedState>) -> Json<serde_json::Value> {
     let mut status = serde_json::json!({"status":"ok"});
@@ -52,7 +81,7 @@ async fn boards(State(state): State<HostedState>) -> Result<Json<serde_json::Val
     let summaries = state
         .registry
         .contexts()
-        .map(|b| b.summary())
+        .map(|b| summary(&state, b))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(Json(serde_json::json!({"boards":summaries})))
@@ -63,9 +92,7 @@ async fn board(
 ) -> Result<Json<BoardSummary>, ApiError> {
     let context = state.registry.get(&id).ok_or_else(ApiError::not_found)?;
     Ok(Json(
-        context
-            .summary()
-            .map_err(|e| ApiError::internal(e.to_string()))?,
+        summary(&state, context).map_err(|e| ApiError::internal(e.to_string()))?,
     ))
 }
 async fn board_offers(
