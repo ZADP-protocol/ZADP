@@ -61,3 +61,22 @@ registration and independent host moderation. External owners retain seed and
 spending authority. The host receives only the signed descriptor/UIVK and does
 not become the board owner. Public UIVKs permit independent reconstruction;
 privately shared UIVKs are excluded from public board metadata endpoints.
+
+## Hosted lifetime policy revision
+
+The hosted product proposes 30/60/90 days (default 30), with a maximum of
+7,776,000 seconds. This is an operator policy, not a change to the default
+reference policy, Offer v1/v2, canonical signing, IDs or BoardDescriptor v1.
+
+`zadp-seller board-policy-prepare --board old-board.json --identity operator.identity
+--output candidate-board.json --max-offer-ttl-seconds 7776000` verifies the old
+descriptor, preserves its network/address/UIVK/birthday and unrelated policy,
+and signs a separate candidate. It never overwrites or activates a descriptor,
+accesses a Zcash wallet, or broadcasts. The protected identity stays local.
+
+A changed descriptor fingerprint requires a **fresh database**, rebuilt from the
+unchanged birthday through the normal read-only scanner. Verify signatures,
+receiver/viewing binding, tip, historical publications and expired filtering
+before separate human approval to switch the descriptor/database pair. Never
+reuse the old database or silently extend an existing signed Offer. MVP renewal
+creates a new signed Offer and requires a separately reviewed publication.

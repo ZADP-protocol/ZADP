@@ -193,3 +193,51 @@ fn nonce_lengths_precision_and_wrong_board_are_checked_at_the_right_boundary() {
     let other = SellerKeyPair::generate();
     assert!(bind_offer(offer(&keys), "ai-services", Utc::now(), &other).is_err());
 }
+
+#[test]
+fn ninety_day_board_accepts_bounded_v1_v2_lifetimes_without_wire_changes() {
+    let operator = SellerKeyPair::generate();
+    let seller = SellerKeyPair::generate();
+    let old = board(&operator);
+    let mut body = old.board.clone();
+    body.policy.max_offer_ttl_seconds = 7_776_000;
+    let new = body.sign(&operator).unwrap();
+    new.validate(ZcashNetwork::Mainnet).unwrap();
+    assert_ne!(old.fingerprint().unwrap(), new.fingerprint().unwrap());
+    assert_eq!(
+        old.incoming_scope_fingerprint().unwrap(),
+        new.incoming_scope_fingerprint().unwrap()
+    );
+    for version in [OFFER_VERSION_V1, OFFER_VERSION_V2] {
+        for days in [30, 60, 90] {
+            let mut o = offer(&seller);
+            o.zadp = version;
+            if version == OFFER_VERSION_V2 {
+                o.commerce = None;
+            }
+            let issued = o.issued_at.unwrap();
+            o.expires_at = issued + Duration::days(days);
+            o.signature = seller.sign(&signing_bytes(&o).unwrap());
+            assert!(old.validate_offer(&o, 1000, issued).is_err());
+            new.validate_offer(&o, 1000, issued).unwrap();
+            let decoded = decode_offer_memo(&encode_offer_memo(&o).unwrap())
+                .unwrap()
+                .unwrap();
+            assert_eq!(decoded, o);
+            new.validate_offer(&o, 1000, o.expires_at - Duration::seconds(1))
+                .unwrap();
+            assert!(new.validate_offer(&o, 1000, o.expires_at).is_err());
+            assert!(new
+                .validate_offer(&o, 1000, o.expires_at + Duration::seconds(1))
+                .is_err());
+            o.expires_at = issued + Duration::days(90) + Duration::seconds(1);
+            o.signature = seller.sign(&signing_bytes(&o).unwrap());
+            assert!(new.validate_offer(&o, 1000, issued).is_err());
+        }
+    }
+    let legacy = offer(&seller);
+    old.validate_offer(&legacy, 1000, legacy.issued_at.unwrap())
+        .unwrap();
+    new.validate_offer(&legacy, 1000, legacy.issued_at.unwrap())
+        .unwrap();
+}

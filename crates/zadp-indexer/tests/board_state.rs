@@ -535,3 +535,40 @@ async fn signed_geo_on_v1_board_survives_restart_without_schema_migration() {
         .iter()
         .any(|r| r.offer == local));
 }
+
+#[tokio::test]
+async fn policy_revision_requires_separate_database_and_preserves_expired_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let old = descriptor(BoardPolicy::default());
+    let operator = SellerKeyPair::generate();
+    // Use a fixture operator for both signed policies; receiver and birthday are unchanged.
+    let mut body = old.board.clone();
+    body.operator_key = operator.id.clone();
+    let old = body.clone().sign(&operator).unwrap();
+    body.policy.max_offer_ttl_seconds = 7_776_000;
+    let new = body.sign(&operator).unwrap();
+    let seller = SellerKeyPair::generate();
+    let mut expired = offer(&seller, 1);
+    let now = DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+    expired.issued_at = Some(now - Duration::days(2));
+    expired.expires_at = now - Duration::days(1);
+    expired.signature = seller.sign(&signing_bytes(&expired).unwrap());
+    let mut historical = block(BIRTHDAY, 1, 0, vec![expired.clone()]);
+    historical.header.time = expired.issued_at.unwrap() + Duration::seconds(1);
+    let old_path = dir.path().join("old.sqlite");
+    let new_path = dir.path().join("new.sqlite");
+    let before = SqliteOfferRepository::open(&old_path, old.clone()).unwrap();
+    assert_eq!(before.apply_block(historical.clone()).unwrap(), 1);
+    assert!(before.list(None).await.unwrap().is_empty());
+    assert!(SqliteOfferRepository::open(&old_path, new.clone()).is_err());
+    let rebuilt = SqliteOfferRepository::open(&new_path, new.clone()).unwrap();
+    assert_eq!(rebuilt.apply_block(historical).unwrap(), 1);
+    assert!(rebuilt.list(None).await.unwrap().is_empty());
+    assert_eq!(
+        rebuilt.publication_audit(10).unwrap()[0].offer.as_ref(),
+        Some(&expired)
+    );
+    assert_eq!(before.board(), &old);
+    assert_eq!(rebuilt.board(), &new);
+    assert!(SqliteOfferRepository::open(&new_path, old).is_err());
+}

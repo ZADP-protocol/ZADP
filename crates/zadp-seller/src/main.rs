@@ -50,6 +50,17 @@ enum Command {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Offline board-policy revision. Never changes a live descriptor or database.
+    BoardPolicyPrepare {
+        #[arg(long)]
+        board: PathBuf,
+        #[arg(long)]
+        identity: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long, value_parser=clap::value_parser!(u32).range(1..))]
+        max_offer_ttl_seconds: u32,
+    },
     Publish(Box<Publish>),
     /// Pay a local self-payment test invoice using an existing protected wallet.
     PayTest(Box<zadp_seller::purchase::Purchase>),
@@ -138,6 +149,38 @@ async fn main() -> Result<()> {
             file.write_all(serde_json::to_string_pretty(&board)?.as_bytes())?;
             file.sync_all()?;
             println!("Signed descriptor fingerprint: {}", board.fingerprint()?);
+        }
+        Command::BoardPolicyPrepare {
+            board,
+            identity,
+            output,
+            max_offer_ttl_seconds,
+        } => {
+            let old: BoardDescriptor = read_json(&board)?;
+            old.validate(old.board.network)?;
+            ensure!(board != output, "A separate descriptor output is required");
+            let mut body = old.board.clone();
+            body.policy.max_offer_ttl_seconds = max_offer_ttl_seconds;
+            let new = body.sign(&load_identity(&identity)?)?;
+            new.validate(old.board.network)?;
+            ensure!(
+                old.fingerprint()? != new.fingerprint()?,
+                "Policy is unchanged"
+            );
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options.open(output)?;
+            file.write_all(serde_json::to_string_pretty(&new)?.as_bytes())?;
+            file.sync_all()?;
+            println!(
+                "{}",
+                json!({"old_fingerprint":old.fingerprint()?,"new_fingerprint":new.fingerprint()?,"network":new.board.network,"board_id":new.board.board_id,"birthday_height":new.board.birthday_height,"max_offer_ttl_seconds":max_offer_ttl_seconds,"signature_valid":true,"address_uivk_binding_valid":true,"unrelated_fields_preserved":true,"activated":false})
+            );
         }
         Command::Publish(args) => publish(*args).await?,
         Command::PayTest(args) => zadp_seller::purchase::purchase(*args).await?,
@@ -280,6 +323,10 @@ async fn publish(args: Publish) -> Result<()> {
         .checked_add(fee)
         .filter(|v| *v <= 2_100_000_000_000_000)
         .context("spend exceeds Zcash money range")?;
+    println!(
+        "Signed Offer expiry (UTC): {}",
+        offer.expires_at.to_rfc3339()
+    );
     println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.commerce.as_ref().map(|c|c.price.amount.to_string()).unwrap_or_else(||"none (discovery only)".into()),zec(value),zec(fee),zec(total),network,memo.len());
     if args.dry_run {
         if let Some(path) = args.preview_output {
