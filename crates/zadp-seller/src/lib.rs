@@ -10,3 +10,5 @@ pub mod local;
 pub mod publication;
 
 pub mod purchase;
+
+pub mod transfer;

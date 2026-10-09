@@ -14,6 +14,7 @@ struct Service {
     observer: Arc<Observer>,
     origin: String,
     endpoint_proof: Option<zadp_protocol::EndpointProof>,
+    capability: serde_json::Value,
 }
 fn error(status: StatusCode, message: &str) -> Response {
     (status, Json(serde_json::json!({"error":message}))).into_response()
@@ -50,6 +51,7 @@ pub fn router_with_endpoint_proof(
         store: Arc::new(Mutex::new(Store::open(config.clone())?)),
         observer: Arc::new(Observer::new(config.clone())?),
         origin: config.browser_origin.clone(),
+        capability: crate::capability::describe(&config.offer.capability, &config.offer.id),
         endpoint_proof,
     };
     let cors = CorsLayer::new()
@@ -63,6 +65,7 @@ pub fn router_with_endpoint_proof(
     Ok(Router::new()
         .route("/.well-known/zadp", get(endpoint_proof_document))
         .route("/healthz", get(|| async { "ok" }))
+        .route("/capabilities", get(service_capability))
         .route("/orders", post(create))
         .route("/orders/{id}", get(check).delete(cancel))
         .with_state(state)
@@ -162,4 +165,8 @@ async fn endpoint_proof_document(State(state): State<Service>) -> Response {
         Some(proof) if chrono::Utc::now() < proof.expires_at => Json(proof).into_response(),
         _ => error(StatusCode::NOT_FOUND, "Endpoint proof unavailable"),
     }
+}
+
+async fn service_capability(State(state): State<Service>) -> Json<serde_json::Value> {
+    Json(state.capability)
 }

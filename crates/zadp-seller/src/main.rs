@@ -76,6 +76,8 @@ enum Command {
     Publish(Box<Publish>),
     /// Pay a local self-payment test invoice using an existing protected wallet.
     PayTest(Box<zadp_seller::purchase::Purchase>),
+    /// Explicit reviewed local shielded transfer; never called by discovery.
+    Transfer(Box<zadp_seller::transfer::Transfer>),
 }
 #[derive(clap::Args)]
 struct Publish {
@@ -124,6 +126,14 @@ struct Publish {
     /// Save a public unsigned-transaction preview; requires --dry-run.
     #[arg(long, requires = "dry_run")]
     preview_output: Option<PathBuf>,
+    /// Save protected unsigned PCZT for a later exact human-approved publication.
+    #[arg(long, requires = "dry_run")]
+    proposal_output: Option<PathBuf>,
+    /// Reuse the exact reviewed unsigned proposal, not a newly generated payment.
+    #[arg(long, requires_all = ["approved_preview", "prepared_offer", "yes"])]
+    approved_proposal: Option<PathBuf>,
+    #[arg(long, requires = "approved_proposal")]
+    approved_preview: Option<PathBuf>,
     /// Reuse the exact signed public offer from a reviewed preview, never regenerate its ID.
     #[arg(long)]
     prepared_offer: Option<PathBuf>,
@@ -220,6 +230,7 @@ async fn main() -> Result<()> {
         }
         Command::Publish(args) => publish(*args).await?,
         Command::PayTest(args) => zadp_seller::purchase::purchase(*args).await?,
+        Command::Transfer(args) => zadp_seller::transfer::transfer(*args).await?,
     }
     Ok(())
 }
@@ -348,7 +359,11 @@ async fn publish(args: Publish) -> Result<()> {
         "local wallet and mainnet service are on different chains"
     );
     let amount: Value = serde_json::from_str(&zec(value).to_string())?;
-    let created=wallet.rpc("pczt_create",json!([args.wallet_account,[{"address":board.board.address,"amount":amount,"memo":hex::encode(memo)}],null,"FullPrivacy","orchard"])).await?;
+    let created = if let Some(path) = &args.approved_proposal {
+        serde_json::from_slice(&zadp_seller::local::read_protected(path)?)?
+    } else {
+        wallet.rpc("pczt_create",json!([args.wallet_account,[{"address":board.board.address,"amount":amount,"memo":hex::encode(memo)}],null,"FullPrivacy","orchard"])).await?
+    };
     ensure!(
         created["privacy_policy"] == "FullPrivacy",
         "wallet proposal requires privacy downgrade"
@@ -359,12 +374,35 @@ async fn publish(args: Publish) -> Result<()> {
         .checked_add(fee)
         .filter(|v| *v <= 2_100_000_000_000_000)
         .context("spend exceeds Zcash money range")?;
+    if let Some(path) = &args.approved_preview {
+        let approved: Value = read_json(path)?;
+        zadp_seller::publication::validate_approval(
+            &approved,
+            &offer,
+            &board,
+            value,
+            fee,
+            pczt(&created)?,
+            Utc::now(),
+        )?;
+    }
     println!(
         "Signed Offer expiry (UTC): {}",
         offer.expires_at.to_rfc3339()
     );
     println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.commerce.as_ref().map(|c|c.price.amount.to_string()).unwrap_or_else(||"none (discovery only)".into()),zec(value),zec(fee),zec(total),network,memo.len());
     if args.dry_run {
+        if let Some(path) = &args.proposal_output {
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(path)?;
+            file.write_all(serde_json::to_vec(&created)?.as_slice())?;
+            file.sync_all()?;
+        }
         if let Some(path) = args.preview_output {
             let mut file = std::fs::OpenOptions::new()
                 .write(true)
@@ -372,7 +410,7 @@ async fn publish(args: Publish) -> Result<()> {
                 .open(path)?;
             file.write_all(
                 serde_json::to_string_pretty(&json!({
-                    "kind":"unsigned-publication-preview", "network": network,
+                    "kind":"unsigned-publication-preview", "network": network, "preview_expires_at":Utc::now().timestamp()+900,
                     "board_fingerprint":board.fingerprint()?, "board_id":board.board.board_id,
                     "offer":offer, "payload_bytes":u16::from_be_bytes([memo[6],memo[7]]),
                     "listing_value_zat":value, "network_fee_zat":fee, "total_cost_zat":total,

@@ -602,3 +602,71 @@ async fn static_well_known_proof_is_served_without_a_signing_key() {
         404
     );
 }
+
+#[tokio::test]
+async fn summarize_capability_description_and_idempotent_execution() {
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
+    use tower::ServiceExt;
+    let (_dir, mut c, now) = fixture();
+    let keys = SellerKeyPair::generate();
+    c.offer = OfferDraft::new_ulid(
+        keys.id.clone(),
+        "text.summarize",
+        "Extractive text summary",
+        Price::zec(rust_decimal::Decimal::new(1, 2)),
+        "http://127.0.0.1:8094",
+        Utc::now() + Duration::hours(24),
+        "bG9jYWw=",
+    )
+    .sign(&keys)
+    .unwrap();
+    let app = zadp_commerce::http::router(c.clone()).unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/capabilities")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let descriptor: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap()).unwrap();
+    assert_eq!(descriptor["offer_id"], c.offer.id);
+    assert_eq!(descriptor["capability"], "text.summarize");
+    assert_eq!(descriptor["response_schema"]["type"], "string");
+    let mut store = Store::open(c.clone()).unwrap();
+    let req = OrderRequest {
+        offer_id: c.offer.id.clone(),
+        request: TextRequest {
+            text: "One. Two! Three? Four.".into(),
+        },
+    };
+    let order = store.create(req, &random_hex(32), now).unwrap();
+    let snapshot = evidence(&c, &order, now);
+    let completed = settle(&mut store, &order, &snapshot, now + 5);
+    assert_eq!(completed.result.as_deref(), Some("One. Two! Three?"));
+    for _ in 0..3 {
+        assert_eq!(
+            store
+                .check(
+                    &order.order_id,
+                    order.claim_token.as_ref().unwrap(),
+                    &snapshot,
+                    now + 7
+                )
+                .unwrap()
+                .result,
+            completed.result
+        );
+    }
+    let db = rusqlite::Connection::open(c.database).unwrap();
+    let count: i64 = db
+        .query_row("SELECT execution_count FROM orders", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+}

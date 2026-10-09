@@ -1,4 +1,6 @@
 //! Seller-owned orders. Discovery never receives commerce data.
+pub mod capability;
+
 use anyhow::{ensure, Result};
 use chrono::Utc;
 use rand::{rngs::OsRng, RngCore};
@@ -46,7 +48,7 @@ impl Config {
                 .ok_or_else(|| anyhow::anyhow!("invalid offer expiry"))?,
         )?;
         ensure!(
-            self.offer.capability == "text.uppercase",
+            capability::supported(&self.offer.capability),
             "unsupported capability"
         );
         ensure!(
@@ -476,7 +478,7 @@ impl Store {
         }
         if row.status == "processing" {
             // Trivial deterministic execution is atomic with result storage. No external effects.
-            let result = row.input.to_uppercase();
+            let result = capability::execute(&self.config.offer.capability, &row.input)?;
             if result.len() > 12000 {
                 self.transition(&mut row, "failed")?;
             } else {

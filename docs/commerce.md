@@ -195,3 +195,23 @@ new offer/publication and real buyer payment behind concrete human review.
 ## Endpoint ownership
 
 Hosted automated buying requires a separate [offline-signed endpoint ownership proof](endpoint-ownership.md). Endpoint downtime disables commerce without invalidating signed discovery. Discovery-only Offers are unchanged.
+
+## Reference capability metadata
+
+The independent seller now supports `text.uppercase` and `text.summarize`.
+Summarize is a deterministic extractive transformation: the first three
+punctuation-delimited sentences. It is not an LLM, translation service or promise
+of semantic summarization. The signed Offer selects the supported capability.
+
+`GET /capabilities` serves bounded seller-local metadata containing the Offer ID,
+capability, request/response JSON schemas, JSON content types and byte limits.
+Media is null; no external fetch is introduced. This is a reference service-layer
+format, not a new ZADP Offer field or globally finalized capability protocol.
+Its JSON is untrusted descriptive data, never executable instructions. Consumers
+must first verify the advertised endpoint's ownership proof, then check Offer ID
+and capability consistency and validate payloads locally. The document itself is
+not covered by the Offer signature; do not claim it is a signed protocol object.
+
+This implementation does not deploy a public seller, publish a commerce Offer or
+prove an external buyer mainnet payment. Those require separately approved
+endpoint/payment configuration and the real human E2E test.

@@ -1,6 +1,6 @@
 //! Zallet's supported PCZT RPC, restricted to authenticated local loopback.
 use crate::local::read_protected;
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 use std::{path::Path, time::Duration};
 use zeroize::Zeroizing;
@@ -119,6 +119,50 @@ pub fn inspect_fee(value: &Value, address: &str, listing_value_zat: u64) -> Resu
         .as_u64()
         .filter(|v| *v > 0 && *v <= 2_100_000_000_000_000)
         .ok_or_else(|| anyhow::anyhow!("wallet did not supply a positive fee"))
+}
+
+/// Exact local approval binding. Does not authorize a newly generated PCZT.
+pub fn validate_approval(
+    p: &Value,
+    offer: &zadp_protocol::Offer,
+    board: &zadp_protocol::BoardDescriptor,
+    value: u64,
+    fee: u64,
+    pczt: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    ensure!(
+        p["kind"] == "unsigned-publication-preview"
+            && p["broadcast"] == false
+            && p["zcash_transaction_signed"] == false,
+        "invalid approval preview"
+    );
+    ensure!(
+        p["offer"] == serde_json::to_value(offer)?
+            && p["board_id"] == board.board.board_id
+            && p["board_fingerprint"] == board.fingerprint()?
+            && p["board_recipient"] == board.board.address
+            && p["network"] == serde_json::to_value(board.board.network)?,
+        "approved offer/board changed"
+    );
+    ensure!(
+        p["listing_value_zat"] == value
+            && p["network_fee_zat"] == fee
+            && p["total_cost_zat"] == value.checked_add(fee).context("cost overflow")?,
+        "approved costs changed"
+    );
+    ensure!(
+        p["proposal_fingerprint"] == hex::encode(Sha256::digest(pczt.as_bytes())),
+        "approved proposal changed"
+    );
+    ensure!(
+        p["preview_expires_at"]
+            .as_i64()
+            .is_some_and(|expiry| expiry > now.timestamp()),
+        "approval expired"
+    );
+    Ok(())
 }
 
 #[cfg(test)]
