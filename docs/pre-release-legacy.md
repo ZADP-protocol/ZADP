@@ -1,5 +1,8 @@
 # Pre-release legacy Offer/wire 1 and 2
 
+> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+
+
 Historical, non-normative design record. These encodings remain readable and verifiable byte-for-byte but cannot be newly signed through OfferDraft or published through supported Protocol 1.0 tooling. The normative canonical model is [Protocol 1.0, wire 3](protocol.md). Existing mainnet test receipts remain valid evidence. BoardDescriptor 1 is a separate identifier and is not deprecated.
 
 # ZADP Protocol Specification (Offer v1/v2)

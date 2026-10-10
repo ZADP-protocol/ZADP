@@ -27,12 +27,8 @@ This is a light-client source, not independent full consensus/proof validation. 
 
 ## Signed geographic offers
 
-The reader accepts Offer/wire v1 and v2 under the existing BoardDescriptor v1.
-V2 optional geo is signed public offer-area metadata, exposed as integer e5
-fields in GET /offers. Full OFFER JSON persistence requires no schema migration;
-existing board fingerprints, addresses, UIVKs and policy remain unchanged.
-No buyer coordinates are accepted or stored. Matching occurs in the client.
-Older readers reject v2: upgrade before geo publication; if an old reader already
-passed/rejected geo blocks, reconstruct separately from the signed birthday.
-Never overwrite an active index or silently replay a publication.
-[Geo compatibility and demo](geographic-discovery.md).
+Readers accept canonical wire 3 and unchanged historical wire 1/2 under
+BoardDescriptor v1. New publications use wire 3; optional signed geo uses e5
+integers. No buyer location becomes canonical data. Separate board fingerprint
+and state boundaries remain enforced; never overwrite an active database or
+silently repeat a publication. See [geo](geographic-discovery.md).

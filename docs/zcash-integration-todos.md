@@ -1,5 +1,8 @@
 # Zcash Integration TODOs
 
+> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+
+
 Audit of Zcash-facing work against the **current** codebase. Do not treat offline fixtures or transport probes as live mainnet acceptance.
 
 **Hard rules (unchanged):** indexer never gets a spending key; no Zcash secrets in LLM/agent processes; do not invent unverified RPC shapes in app code without checking the pinned wallet/lightwalletd APIs.

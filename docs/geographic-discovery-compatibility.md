@@ -1,5 +1,8 @@
 # Geographic discovery compatibility and privacy plan
 
+> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+
+
 **Pre-release legacy record:** wire 1/2 remain read/historical compatibility only. New Offers use [Protocol 1.0 / wire 3](protocol.md).
 
 Status: implemented reference path with exact legacy-byte regression and local privacy tests.

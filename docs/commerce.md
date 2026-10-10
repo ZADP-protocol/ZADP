@@ -103,15 +103,16 @@ automatically pay, sign, broadcast or publish.
 ## Availability and receipts
 
 Payment is private buyer–seller state, never a public PAID message. Recurring
-offers may remain available; a seller may separately publish UPDATE/CLOSE when
-inventory changes, under existing protocol and approval rules. A future private
+offers may remain available; host hiding and ordinary expiry are current options.
+`offer_update` / `offer_revoke` are not implemented. Renewal creates a new signed
+Offer; do not infer a publishable UPDATE/CLOSE message. A future private
 signed receipt can bind order, paid amount/time and seller identity; it must not
 be written to a public board. Receipt signing is deferred.
 
 Escrow, disputes, identity/KYC, reputation, shipping, public purchase history,
 commissions, subscriptions and external AI providers are outside this slice.
 
-## Next real-payment gate
+## Gate for each new real payment
 
 First run the isolated mock vertical slice. A real test then requires a reachable
 HTTPS seller endpoint, an active signed offer pointing to it, confirmed ownership
@@ -206,6 +207,15 @@ new offer/publication and real buyer payment behind concrete human review.
 ## Endpoint ownership
 
 Hosted automated buying requires a separate [offline-signed endpoint ownership proof](endpoint-ownership.md). Endpoint downtime disables commerce without invalidating signed discovery. Discovery-only Offers are unchanged.
+
+## Current hosted acceptance
+
+The separate hosted Seller completed one human mainnet summary-service purchase
+after three confirmations with exactly-once execution. This is legacy wire-1
+evidence, not wire-3 or autonomous-agent payment acceptance. Tokyo/Shanghai
+wire-3 demos remain order-disabled. See [mainnet evidence](mainnet-evidence.md).
+Seller input/result are plaintext in private SQLite; automated redaction is not
+implemented. See [privacy](privacy.md).
 
 ## Reference capability metadata
 

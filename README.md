@@ -1,24 +1,19 @@
 # ZADP — Zcash Agent Discovery Protocol
 
-A protocol and reference implementation for discovering seller-signed service offers through Zcash shielded memos.
+ZADP discovers seller-signed service Offers through Zcash shielded memos.
+It separates public discovery from direct buyer–seller interaction and payment.
+Independent indexers can reconstruct a board without wallet spending authority;
+humans and agents can use the same discovery data without zadp.io.
 
-**Discovery is open. Settlement can remain private.**
+## Why it exists
 
-**ZADP publishes availability, not transactions.**
+A discovery host should not need custody of buyer funds, private order payloads,
+or buyer GPS to match services. Seller signatures authenticate declarations;
+they do not guarantee identity/KYC, quality, availability or fulfillment.
 
-This repository contains the interoperable protocol, read-only indexer, generic API, reference clients and tests. An official hosted web product and its operations live in separate private repositories. Neither is required to implement or operate ZADP.
-
-See the [HTTP API reference](docs/api.md) for implemented endpoints, response
-fields, authentication and the current hosted exposure.
-
-## Protocol overview
+## Architecture overview
 
 ![Signed offer discovery and direct settlement](docs/images/zadp-discovery-and-settlement.png)
-
-*Concept illustration: discovery uses seller-signed Offers and read-only board
-UIVK indexing. Buyer location matching stays local. Buyer-to-seller settlement
-is separate from the board; the illustration does not claim a completed public
-buyer mainnet purchase.*
 
 ![ZADP ecosystem concept](docs/images/zadp-ecosystem-concept.jpg)
 
@@ -33,23 +28,78 @@ flowchart LR
   Buyer --> Commerce[Optional direct seller commerce]
 ```
 
-## Boards and signed offers
+Core owns protocol, reference scanning/indexing/API, reusable clients and tests.
+Web owns the hosted product; Seller owns multi-Offer fulfillment; Server owns
+instance operations. No private repository is required to implement ZADP.
+See [architecture](docs/architecture.md) and [repository boundaries](docs/repository-boundaries.md).
 
-A board is defined by a signed [BoardDescriptor v1](docs/board-descriptor.md): its network, receiving address, incoming viewing capability, scan birthday and admission policy. The owner retains spending authority. An indexer needs only incoming viewing capability, which cannot spend funds or confer board ownership. An intentionally public board capability lets independent operators reconstruct the same offer board.
+## Protocol 1.0
 
-Sellers use a separate Ed25519 identity to sign canonical Offers. **ZADP Protocol 1.0 has one canonical Offer model: wire/model ID 3.** It supports signed geographic areas and independent ZEC price/automated endpoint fields. **Wire 1/2 are pre-release legacy**, retained only for read/historical compatibility; new publication tooling rejects them. Their mainnet test evidence remains byte-for-byte intact. Offer IDs, board binding, issue/expiry times and replay checks remain unchanged. See the [Protocol 1.0 specification](docs/protocol.md) and [commercial modes](docs/commercial-modes-v3.md).
+New publications use **canonical Offer/model/wire 3** and signing prefix
+`ZADP3\0offer\0`. BoardDescriptor remains version 1. **Wire 1/2 are
+pre-release legacy**, readable for historical verification only; supported
+new-publication tooling rejects them. Published signed bytes are not rewritten.
 
-The compact memo has a 512-byte envelope and a 504-byte payload budget. Names, descriptions, identifiers, optional commerce, geographic fields and signatures share that budget. See [protocol and wire format](docs/protocol.md) and [optional commerce](docs/optional-commerce.md).
+Optional primitives are `geo`, fixed ZEC `price`, and `commerce.endpoint`:
 
-## Local geographic discovery
+- No endpoint/price: discovery announcement.
+- Endpoint without price: seller service announcement, no ZADP payment.
+- Endpoint with price: fixed-price service candidate.
+- Price without endpoint: invalid.
 
-A seller can publish “Bike repair — San Francisco area”, available within 25 km of approximate coordinates 37.775, -122.419. Canonical fields are `lat_e5`, `lon_e5`, and `radius_m`.
+Geo is optional in all valid combinations. The memo envelope is 512 bytes with
+an exact 504-byte payload budget. Expired Offers leave active discovery; renewal
+creates a new signed Offer. `offer_update`/`offer_revoke` are not implemented.
+See the [normative specification](docs/protocol.md).
 
-A buyer's chosen location remains in volatile client memory. The reference client uses local Haversine matching: distance to the **published offer-area center** must not exceed buyer search radius plus offer radius. Buyer GPS is never an API query, transaction field or persistence key. A public offer-area center is not a verified seller location. See [geographic discovery](docs/geographic-discovery.md).
+## Discovery and privacy
 
-## Independent indexing and self-hosting
+Signed BoardDescriptor policy binds network, receiving address, incoming viewing
+capability, birthday and admission. Incoming capability cannot spend. Public
+Offer metadata is readable by holders of that capability; shielding does not
+make a public board confidential. Independent SQLite indexes pin descriptor
+fingerprints and keep board state isolated. Host visibility is separate from
+protocol validity and board admission.
 
-The indexer scans Zcash compact blocks, trial-decrypts board outputs, decodes memos, verifies signatures and board policy, and maintains canonical SQLite state. Expired offers remain historical records but disappear from active discovery. Separate boards have separate persistent state. Generic host visibility can restrict a particular API without changing canonical protocol validity.
+Buyer Nearby matching uses public service-area centers and local Haversine
+intersection. Buyer GPS stays in browser memory, not discovery requests or
+persistent storage. Ordinary network metadata remains visible to servers.
+See [geo](docs/geographic-discovery.md) and [privacy/data flow](docs/privacy.md).
+
+## Direct seller commerce
+
+A signed endpoint is only a candidate. Its offline-signed `/.well-known/zadp`
+proof binds seller identity to HTTPS-origin control. It proves neither KYC nor
+service quality. Hosted Buy also requires active/visible signed terms, fixed
+price, supported capability and fresh seller `orders_available`.
+
+Orders, input, payment correlation and results go directly to the seller.
+A separate buyer wallet approves payment; discovery neither processes payments
+nor holds spending keys. Seller SQLite currently stores private input/results
+in plaintext; automated retention/redaction is not implemented. An agent may
+request payment only through policy/controller boundaries.
+See [commerce](docs/commerce.md), [endpoint proof](docs/endpoint-ownership.md)
+and [threat model](docs/threat-model.md).
+
+## What has been verified on mainnet
+
+Legacy publication and independent reconstruction, geo publication, canonical
+wire-3 geo discovery and one real **human** buyer→seller summary-service purchase
+have been verified. Seller fulfillment waited for confirmations and executed
+exactly once. Tokyo/Shanghai wire-3 live demos remain **orders disabled**.
+Agent end-to-end payment/fulfillment remains offline/synthetic acceptance; a live
+unpaid order preparation is not a completed agent mainnet purchase.
+See [mainnet evidence summary](docs/mainnet-evidence.md).
+
+## Hosted alpha and reference implementation
+
+[Open zadp.io](https://zadp.io/). The hosted UI/API currently retain Basic Auth;
+the hosted product is optional and uses local/self-hosted cartography.
+
+![ZADP globe with clearly labelled synthetic demo inventory](docs/images/zadp-globe-demo.png)
+
+*Web-only DEMO inventory is separate from signed chain inventory, cannot be
+purchased and is not mainnet payment evidence.*
 
 ```sh
 cargo build --workspace
@@ -61,42 +111,19 @@ cargo run -p zadp-api -- \
   --listen 127.0.0.1:8080
 ```
 
-Use a valid signed descriptor for the same network as your transport. The API offers `GET /offers`, `GET /offers/{id}`, and board metadata/views. No wallet or spending key is required by the scanner. See [scanning](docs/zcash-scanning.md), [multi-board operation](docs/multi-board.md) and [self-hosting concepts](docs/hosting.md).
+Use a valid signed descriptor matching the transport network. Scanning needs no
+wallet/spending key. See [development and tests](docs/development.md),
+[reference browser](examples/browser/README.md) and
+[reusable browser modules](client/browser/README.md).
 
-## Reference clients and optional settlement
+## Documentation
 
-The reusable [browser modules](client/browser/README.md) provide parsing, memo budgeting and local geo matching. A [minimal browser client](examples/browser/README.md), a [local geo CLI](examples/geo/discover.js), Rust protocol examples and test vectors show how to build another client without the private web product.
-
-Seller service endpoints are optional. Protocol 1.0 wire 3 accepts discovery without endpoint/price, endpoint without price, or endpoint with a signed fixed ZEC price. A price requires an endpoint. Domain proof establishes origin control; only a verified, active supported fixed-price service enables hosted Buy. A no-price verified service exposes a service link without payment. Commerce-enabled Offers may advertise an HTTPS seller endpoint; orders, payment correlation and results belong directly to seller and buyer, not discovery. Reference commerce services and [isolated offline tests](docs/commerce-process-boundaries.md) demonstrate this boundary. They do not authorize a real payment.
-
-## Hosted alpha interface
-
-[Open the ZADP hosted alpha at zadp.io](https://zadp.io/).
-The alpha is a separate reference
-product, not a requirement for independent protocol implementations.
-
-![ZADP globe with clearly labelled synthetic demo inventory](docs/images/zadp-globe-demo.png)
-
-*Reference UI screenshot with Web-only DEMO inventory enabled. Synthetic listings
-are not published on Zcash and cannot be purchased. Real signed chain inventory
-remains separate. The screenshot is not evidence of a completed buyer payment.*
-
-## Status and validation
-
-Alpha software: protocol/model details can still evolve. The first funded mainnet publication and independent reconstruction were verified, including a real pre-release legacy discovery-only geographic wire 2 Offer on 2026-10-10 (Helsinki date); this is discovery evidence, not evidence of a live geographic business or completed buyer purchase. See [mainnet acceptance](docs/mainnet-acceptance.md).
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
-node client/browser/test_geo.js
-node client/browser/test_offers.js
-node client/browser/test_memo_budget.js
-node client/browser/test_memo_rust_parity.js
-python3 scripts/check_doc_links.py
-```
-
-Read [development](docs/development.md), [threat model](docs/threat-model.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md) and the [public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md).
+- [Normative protocol](docs/protocol.md) · [BoardDescriptor](docs/board-descriptor.md)
+- [HTTP API](docs/api.md) · [Architecture](docs/architecture.md)
+- [Security](SECURITY.md) · [Threat model](docs/threat-model.md)
+- [Privacy](docs/privacy.md) · [Glossary](docs/glossary.md)
+- [Mainnet evidence](docs/mainnet-evidence.md) · [Roadmap](docs/roadmap.md)
+- [Release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md) · [Contributing](CONTRIBUTING.md)
 
 ## Support the project
 

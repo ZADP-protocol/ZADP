@@ -1,5 +1,9 @@
 # ZADP Protocol 1.0
 
+This document is the normative ZADP Protocol 1.0 specification. Hosted product
+behavior, operational deployment state and historical acceptance evidence are
+documented separately and are not normative protocol semantics.
+
 Status: **Canonical specification for Protocol 1.0**. Implementation remains
 alpha software; this version designation is not a security-audit claim.
 
@@ -168,7 +172,8 @@ separate buyer wallet approval, observed payment, confirmation, execution and
 result. Endpoint proof binds the same seller identity to the HTTPS origin
 without installing seller identity private keys on the public seller server.
 No-price service announcements are outside this payment flow. See [commerce](commerce.md)
-and [process boundaries](commerce-process-boundaries.md).
+and [current architecture](architecture.md). Historical isolated-process tests
+remain in [process boundaries](commerce-process-boundaries.md).
 
 `offer_update` and `offer_revoke` are not implemented message types; Protocol 1.0
 currently supports `offer` only. Renewal creates a new signed Offer. Do not
@@ -178,8 +183,10 @@ infer escrow, refund, reputation, messaging or generic pricing extensions.
 
 [Mainnet acceptance](mainnet-acceptance.md) preserves the real pre-release wire
 1/2 publication evidence, including the first geographic wire 2 Offer. It is
-not relabelled as a Protocol 1.0 wire 3 publication. A real wire 3 mainnet
-publication remains a separately approved future action.
+not relabelled as a Protocol 1.0 wire 3 publication. Separately verified wire-3
+mainnet geo publications and human commerce acceptance are summarized in
+[mainnet evidence](mainnet-evidence.md). Further publications still require
+separate approval; this specification grants no spending authorization.
 
 Tests cover frozen v1/v2 golden/mainnet bytes, legacy read rejection at the new
 publication boundary, all valid model 3 primitive combinations, signatures, exact memo budgets,

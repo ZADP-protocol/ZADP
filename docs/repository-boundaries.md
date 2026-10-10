@@ -6,6 +6,8 @@ ZADP-Web contains the separate official hosted web product: branded UI, map pres
 
 ZADP-Server contains private instance deployment and operations. It records independent exact core and Web SHAs, runtime configuration and operational policy. Runtime secrets are outside Git.
 
-Dependency direction: Web consumes core; operations deploys both. Core depends on neither private repository. Generic host visibility is distinct from canonical protocol validity, and a particular host's commercial pricing is not a protocol rule.
+ZADP-Seller contains the approved multi-Offer hosted seller, isolated private order DBs, incoming-only observation and exactly-once fulfillment. Core retains a small independently runnable reference seller.
+
+Dependency direction: Web and Seller consume pinned core; operations deploys them. Core depends on neither private repository. Generic host visibility is distinct from canonical protocol validity, and a particular host's commercial pricing is not a protocol rule.
 
 All repository visibility changes require a separate owner decision. Historical visual UI commits remain private during review; a HEAD-only move does not erase Git history.

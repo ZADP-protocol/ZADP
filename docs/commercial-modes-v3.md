@@ -1,5 +1,8 @@
 # Protocol 1.0 seller endpoint primitives (wire/model ID 3)
 
+> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+
+
 ## Pre-release compatibility decision
 
 The 2026-10-10 audit found Core and Web private, no Core GitHub releases or

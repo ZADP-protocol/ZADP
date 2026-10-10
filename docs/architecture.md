@@ -1,282 +1,115 @@
-# ZADP Architecture
+# ZADP architecture
 
-The discovery Offer v2 contains core discovery fields, optional signed geo and optional signed commerce. Discovery-only offers need no endpoint or service price. Automated buying remains a separate seller-owned capability. See [optional-commerce model](optional-commerce.md).
+Current reference architecture; encoding requirements belong to the
+[normative Protocol 1.0 specification](protocol.md). Operations and product
+policy belong to their separate repositories, not the protocol.
 
-**ZADP** (Zcash Agent Discovery Protocol) is an open protocol and reference implementation for discovering signed service offers published through Zcash shielded memos.
-
-This document describes the **current** architecture: real CompactTxStreamer scanning + per-board SQLite indexing + read-only multi-board API, plus a retained **mock** commerce vertical slice. The first live mainnet publish → mine → scan → API acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
-
-## Goals
-
-- Sellers publish cryptographically signed service offers via Zcash shielded memos on an operator-defined board.
-- An indexer discovers, validates, and exposes offers over a read-only REST API.
-- Humans and agents match public service areas locally; buyer location stays in client memory.
-- AI/LLM processes may **request** payment but must **never** hold or use a Zcash spending key.
-- Settlement (buyer→seller shielded payment) is a **related / planned** capability; the mock demo exercises it locally only.
-
-## Non-goals (current milestone)
-
-A minimal unbranded reference browser is available in `examples/browser/`; its fixed discovery proxy reads only public offers/health. Buyer location remains in runtime memory. Hosted product drafts, maps and pricing UX live outside this repository. Full marketplace purchasing, reputation, escrow, DID, production hosted wallets, tokens, DAO governance, recommendation engines, and blockchain abstraction frameworks remain out of scope.
-
-## Conceptual layers
-
-```mermaid
-flowchart TB
-  subgraph discovery [ZADP Discovery - CURRENT]
-    SellerPub[Seller publishes signed OFFER memo]
-    IndexerScan[Indexer scans / validates / indexes]
-    Api[Read-only multi-board API GET /offers]
-    SellerPub --> IndexerScan --> Api
-  end
-
-  subgraph commerce [ZADP Commerce - MOCK DEMO]
-    Quote[Buyer selects offer]
-    Invoice[Seller issues invoice]
-    Quote --> Invoice
-  end
-
-  subgraph settlement [Shielded Settlement - PLANNED / MOCK]
-    Pay[Buyer payment controller]
-    Adapter[ZcashAdapter]
-    Observe[Seller observes payment]
-    Pay --> Adapter --> Observe
-  end
-
-  discovery -.-> commerce -.-> settlement
-```
-
-Discovery is the production path under active implementation. The Rust commerce demo remains mocked. A separate experimental Python text
-service implements an authenticated seller-observed payment gate, with synthetic
-acceptance tests; live buyer payment and delivery remain unverified.
-
-## Geographic discovery: public offer area, private buyer point
+## Publication, discovery and interaction
 
 ```mermaid
 flowchart LR
-  BrowserGPS[Seller browser GPS - explicit click] --> Round[Local 3-decimal privacy rounding]
-  Round --> Center[Public Offer Area - seller reviews or edits]
-  Manual[Seller-selected approximate center] --> Center
-  Center --> Offer[Signed Offer v2 geo]
-  Offer --> Chain[Shielded Zcash memo]
-  Chain --> Index[Read-only board UIVK indexer]
-  Index --> API[GET /offers - public area data]
-  subgraph client [Buyer browser or agent - private client boundary]
-    GPS[Local location - memory only]
-    Feed[Downloaded public offers]
-    Match[Pure local Haversine intersection]
-    GPS --> Match
-    Feed --> Match
-  end
-  API --> Feed
+  Sign[Local seller identity signs wire-3 Offer] --> Wallet[Local wallet / exact approval]
+  Wallet --> Chain[Zcash shielded memo]
+  Chain --> Scan[Board incoming-only scanner]
+  Scan --> DB[Isolated per-board canonical SQLite]
+  DB --> API[Read-only discovery API]
+  API --> Client[Browser / agent local matching]
+  Client --> Seller[Verified seller HTTPS origin]
+  Client --> Controller[PaymentController / human approval]
+  Controller --> BuyerWallet[Separate buyer wallet]
+  BuyerWallet --> Payment[Shielded seller payment]
+  Payment --> Observer[Seller incoming-only observer]
+  Observer --> Result[Confirmed exactly-once fulfillment]
 ```
 
-Browser-acquired seller latitude/longitude are rounded locally to three decimal
-degrees before becoming visible Offer Area fields. Manual coordinates keep
-seller-selected e5 precision. The seller reviews/edits them before the normal
-publication confirmation; acquiring GPS never publishes or broadcasts. Rounding
-reduces accidental precision without making a center anonymous. Protocol e5,
-signatures, wire and board versions are unchanged.
+The publication CLI and payment wallet are trusted local boundaries. The indexer,
+API and seller fulfillment have no spending key. Agents receive InvoiceView,
+not keys or general signing authority. The controller enforces ALLOW/DENY/
+REQUIRE_APPROVAL; tests or a quote do not authorize a real payment.
 
-**Buyer GPS stops at the client boundary.** No location-bearing discovery request,
-backend search, database field, order extension, telemetry or location persistence
-is introduced. Existing capability/text/board filters remain available. Anywhere
-includes global and geographic offers; Nearby includes only intersecting geo
-areas. An agent reuses the same public API and local matcher.
+## Protocol primitives
 
-Offer v2 signs a compact integer area. Existing board v1 and Offer v1 bytes are
-preserved. Full JSON persistence needs no schema change. Mainnet services are
-not upgraded by source development; deployment and first geo publication require
-separate review. [Precise formats and demo](geographic-discovery.md).
+New Offers use wire 3: `geo?`, `price?`, `commerce.endpoint?`, signed independently.
+No endpoint/price is discovery; endpoint without price is a service announcement;
+endpoint plus fixed price is a purchasable candidate; price without endpoint is
+invalid. Geo is optional throughout. Legacy wire 1/2 are historical readers only.
+BoardDescriptor v1 defines network/address/incoming viewing scope/birthday/policy.
+Signing CBOR maps and the 14-element transport tuple are different shapes.
+The current domain separator is `ZADP3\0offer\0`; memo payload is at most 504 bytes.
+No canonical signed field, format or historical byte is changed by this document.
 
-## Current publication path
+## Independent scanning and canonical storage
 
-```mermaid
-flowchart LR
-  Id[Seller Ed25519 identity]
-  Bind[bind_offer board_id + issued_at]
-  Memo[512-byte ZIP 302 memo]
-  Zallet[Local Zallet PCZT RPC]
-  LwdSend[lightwalletd SendTransaction]
-  Chain[Zcash network]
+`RealZcashScanner` reads compact blocks, trial-decrypts to the board receiver,
+then fetches matching full transactions for memo/value recovery. Transport data
+is not consensus validation. BoardIndexer validates signature, inclusion-time
+policy, expiry, minimum value and replay rules. Cursor/admission are transactional;
+reorg rewind removes orphan state. Independent operators can reconstruct from
+the same descriptor birthday. SQLite pins descriptor fingerprint and refuses
+silent mixing. A descriptor-policy change requires separate reconstruction and
+validation before operator activation; do not overwrite the active database.
 
-  Id --> Bind --> Memo --> Zallet --> LwdSend --> Chain
-```
+Expired Offers stay historical but leave active discovery at `now >= expires_at`.
+Renewal creates a new signed Offer. Update/revoke are not implemented.
+Host visibility can omit valid records without modifying their canonical state.
+See [scanning](zcash-scanning.md), [boards](board-descriptor.md),
+[multi-board operation](multi-board.md) and [HTTP routes](api.md).
 
-Privileged seller boundary (`zadp-seller publish`): protected local identity → canonical signed OFFER → authenticated loopback Zallet PCZT proposal → fee/destination preview → explicit confirmation (or `--dry-run`) → local prove/sign/extract → local final-tx verification → lightwalletd broadcast. Spending keys never leave the wallet process. See [mainnet-publishing.md](./mainnet-publishing.md).
+## Client geography
 
-## Current scanning / indexing / API path
+Public service-area geometry is seller-declared, not verified physical presence.
+Seller browser GPS is requested explicitly and rounded locally before review;
+manual e5 coordinates retain chosen precision. Rounding is not anonymization.
+Buyer GPS and search radius remain transient client state. Nearby computes
+Haversine circle intersection locally; no buyer coordinates are added to requests,
+URLs, logs, storage, orders or Zcash. A compromised browser/OS is outside this
+application guarantee. Ordinary IP/access metadata is still visible to servers.
+Web owns globe/cartography/search/rendering, including separate synthetic demos;
+Core owns interoperable geo primitives and matching. See [privacy](privacy.md).
 
-```mermaid
-flowchart LR
-  Board[Signed board.json]
-  Scan[RealZcashScanner BoardSource]
-  Lwd[CompactTxStreamer / lightwalletd]
-  Idx[BoardIndexer]
-  Sql[SqliteOfferRepository]
-  Api[board_router]
+## Endpoint verification and seller order flow
 
-  Board --> Scan
-  Lwd --> Scan --> Idx --> Sql --> Api
-```
+An offline Ed25519 proof at `/.well-known/zadp` binds identity to HTTPS origin.
+It proves domain control, not KYC, `/orders` support, service quality or delivery.
+The API's bounded asynchronous verifier uses public-unicast pinned DNS,
+normal TLS, no proxy/redirects, strict time/body/concurrency/cache bounds and
+only the well-known path. It is separate from canonical board scanning.
+Endpoint downtime cannot invalidate an otherwise visible signed Offer.
 
-1. Operator supplies a signed `BoardDescriptor` (Orchard-only UA, UIVK, birthday, policy).
-2. `RealZcashScanner` fetches compact blocks, trial-decrypts against the board receiver, fetches full matching transactions, and recovers memos.
-3. `BoardIndexer` validates framing, signature, semantics, and board admission; SQLite admits offers and advances the cursor in the same transaction.
-4. `zadp-api` exposes `GET /healthz` and `GET /offers` only (`board_router`).
+For hosted Buy, combine active signature/admission/visibility, current origin
+proof, signed fixed price, supported capability/transport and live Offer-specific
+`orders_available`. Discovery `purchase_available` is eligibility, not a live
+seller availability promise. No-price verified services expose a link, no invoice.
 
-See [zcash-scanning.md](./zcash-scanning.md).
+Direct seller POST /orders yields exact amount/recipient/memo/ZIP-321 and a
+private recovery capability. Separate wallet approval precedes payment. Seller
+incoming-only observations correlate exact shielded output/value/memo, wait for
+confirmations and execute once. Repeat retrieval rechecks payment evidence;
+previously delivered information cannot be recalled after reorg. No automatic
+refund, escrow or delivery atomicity is guaranteed. See [commerce](commerce.md).
 
-## Component diagram
+## Repository responsibilities
 
-```mermaid
-flowchart LR
-  SellerCli[zadp-seller CLI]
-  Demo[zadp-demo]
-  Api[zadp-api]
-  Indexer[zadp-indexer]
-  Payment[zadp-payment]
-  Protocol[zadp-protocol]
-  Zcash[zadp-zcash]
+- Core: protocol, scanner/indexer/API, local signing/publication CLI, reusable
+  clients, PaymentController and small reference seller/offline demos.
+- Web: zadp.io product, local globe/search/matching, drafts and direct seller UX.
+- Seller: hosted approved multi-Offer catalog, isolated order DBs, incoming-only
+  observation, routing and deterministic fulfillment; no publication HTTP route.
+- Server: instance configuration, exact-SHA deployment, backups, rollback, host
+  policy and detailed sanitized acceptance records. Secrets stay outside Git.
 
-  SellerCli --> Protocol
-  SellerCli --> Zcash
-  Demo --> Api
-  Demo --> Payment
-  Demo --> Protocol
-  Indexer --> Protocol
-  Indexer --> Zcash
-  Api --> Indexer
-  Api --> Protocol
-  Payment --> Protocol
-  Payment --> Zcash
-```
+Seller DB input/result are plaintext protected by permissions, not encrypted
+against its operator. Target retention exists but automated purge/redaction is
+not implemented. Logical separation from discovery is not isolation from a
+shared-host operator. Board viewing capability is intentionally readable to its
+holders and cannot spend. See [threat model](threat-model.md).
 
-| Crate | Responsibility | Must not |
-| --- | --- | --- |
-| `zadp-protocol` | Messages, board descriptor, canonical signing, 512-byte memo encode/decode | HTTP, storage, wallet RPC |
-| `zadp-zcash` | `BoardSource` + `RealZcashScanner`; `ZcashAdapter` + `MockZcashAdapter`; lightwalletd client | Business admission beyond transport |
-| `zadp-indexer` | Validate → SQLite persist → reorg-aware sync | HTTP frameworks, AI models, spending keys |
-| `zadp-api` | Board scanner binary + `board_router`; mock `router()` for demo | Wallet secrets |
-| `zadp-payment` | Spending policy + `request_payment` (mock path) | LLM SDKs; exposing spending keys |
-| `zadp-seller` | Identity, `board-sign`, Zallet `publish`; mock seller service | Buyer wallet internals |
-| `zadp-demo` | One-command mock vertical slice | Real broadcast |
+## Evidence boundaries
 
-Business logic depends on traits at infrastructure boundaries (`OfferRepository`, `BoardSource` / `ZcashAdapter`, `Clock`).
-
-## Trust and key separation
-
-```mermaid
-flowchart TB
-  subgraph may_hold [May hold]
-    SellerSpend[Seller spending key - Zallet only]
-    BuyerSpend[Buyer spending key - payment controller only]
-    UIVK[Board UIVK - indexer / public descriptor]
-    SellerPubkey[Seller Ed25519 identity - public]
-  end
-
-  subgraph must_not [Must NEVER hold]
-    LLM[LLM / agent process]
-  end
-
-  LLM -->|request_payment invoice| BuyerSpend
-  UIVK --> IndexerProc[Indexer process]
-```
-
-**Invariant:** no AI or LLM process may possess a Zcash spending key.
-
-Seller **identity keys** (Ed25519) sign offers independently of Zcash transaction keys. Board **UIVK** makes board-bound values and memos visible to descriptor holders by design; it does not authorize spends.
-
-## CompactTxStreamer boundary
-
-| Role | Interface | Authority |
-| --- | --- | --- |
-| Scan / index | CompactTxStreamer (compact blocks + `GetTransaction`) + board UIVK | View board outputs only |
-| Publish | Local Zallet full-node/wallet PCZT RPC | Spend seller funds |
-| Broadcast | lightwalletd `SendTransaction` after local verify | Relays already-signed tx |
-
-The indexer never needs a spending key. Publication and scanning are deliberately separate processes and credentials.
-
-## Mock commerce data flow (demo only)
-
-1. Seller creates a signed `offer` (Ed25519 over canonical bytes).
-2. Seller publishes via `ZcashAdapter::publish_message` (in-memory mock board).
-3. Indexer scans, verifies, stores the offer.
-4. Buyer queries `GET /offers?capability=...` on the **full** mock `router()`.
-5. Buyer `POST /v1/invoices`; `zadp-payment` returns `ALLOW` / `DENY` / `REQUIRE_APPROVAL`.
-6. On `ALLOW`, mock adapter records payment; seller fulfills via `POST /v1/fulfill`.
-
-This path does **not** prove live-network discovery acceptance.
-
-## Storage
-
-| Path | Store |
-| --- | --- |
-| Real board discovery | SQLite (`SqliteOfferRepository`): metadata (board fingerprint), blocks, offers, rejections; WAL; admit + cursor in one transaction; reorg rewind cascades |
-| Mock demo | In-memory repositories |
-
-## Encoding strategy
-
-| Representation | Use |
-| --- | --- |
-| JSON | REST, board descriptor files, human examples |
-| Canonical CBOR map + `ZADP1\0offer\0` prefix | Ed25519 signing (`zadp1-sign-v1`) |
-| ZIP 302 memo: `0xf5` + `ZADP` + wire v1 + u16 BE length + CBOR **tuple** + zero pad to 512 | On-chain OFFER transport (implemented) |
-
-Signing serialization and memo wire CBOR are **different shapes**; see [protocol.md](./protocol.md).
-
-## Hosted product coexistence
-
-The open protocol and reference crates must remain useful without any hosted service. Optional hosted indexing, search, or managed APIs may be offered commercially while self-hosting remains valid.
-
-## Status boundaries
-
-| Capability | Status |
-| --- | --- |
-| Signed OFFER + memo framing + board binding | Implemented |
-| CompactTxStreamer scanner + SQLite indexer + `board_router` | Implemented (code + offline tests) |
-| Seller CLI publish (Zallet PCZT) | Implemented (developer preview) |
-| Live mainnet acceptance evidence | **Verified 2026-10-05**, two independent indices |
-| Local web UI | Discovery/drafts + optional filtered wallet/QR, authoritative unsigned preview, local invoice/fulfillment bridge |
-| Real shielded purchase settlement | Experimental seller observation/gate implemented; real buyer payment acceptance pending |
-| `offer_update` / `offer_revoke` | Specified only |
-
-Unresolved integration work: [zcash-integration-todos.md](./zcash-integration-todos.md), [roadmap.md](./roadmap.md).
-
-## Experimental local paid text service
-
-`services/text` is separate from the board indexer and the Rust mock demo.
-Invoices bind exact seller account, receiver, amount, memo and mining window;
-only authenticated local Zallet observations can release a result after three
-confirmations. The service rechecks evidence on retrieval and persists private
-inputs/results in owner-only SQLite. It neither signs nor broadcasts.
-
-The optional UI bridge uses a fixed loopback HTTPS target and explicit certificate
-verification, rejects redirects and never follows advertised offer URLs. A
-local unpublished test identifier is deliberately separate from a signed,
-discoverable OFFER. Public endpoint deployment, a new separately approved
-publication, buyer fee/proposal review and a real paid result are still pending.
-
-## Multi-board hosting and external ownership
-
-See [Multi-board indexing](multi-board.md) for the incremental registry, per-board
-SQLite isolation, shared CompactTxStreamer transport, read-only external board
-registration and independent host moderation. External owners retain seed and
-spending authority. The host receives only the signed descriptor/UIVK and does
-not become the board owner. Public UIVKs permit independent reconstruction;
-privately shared UIVKs are excluded from public board metadata endpoints.
-
-## Direct seller commerce reference
-
-`zadp-commerce` is the independently runnable Rust commerce layer. A signed
-OFFER reuses its `endpoint` to direct the buyer to the seller. The new UI calls
-that endpoint directly: orders, input, unique payment memo, payment identifiers
-and results never pass through the discovery host. Persistent anonymous claim
-capabilities authorize status/result retrieval. A trusted read-only seller
-observer gates deterministic `text.uppercase` execution on confirmed payment.
-
-The reference vertical slice is verified locally with mock observations, not a
-new live settlement. The earlier fixed-loopback Python summary bridge remains
-only a legacy local compatibility/demo path; it is not the architecture for
-hosted discovery purchases. See [commerce.md](commerce.md) for exact boundaries,
-API, recovery/confirmation rules, private schema compatibility and the next
-human-approved independent mainnet payment gate.
+Mainnet discovery/geo reconstruction and one **human** buyer→seller purchase
+are verified. Hosted multi-Offer Seller is deployed; original summary orders are
+enabled, Tokyo/Shanghai live-demo orders disabled. Agent payment/fulfillment is
+accepted only offline/synthetic so far; live unpaid preparation proves no payment.
+Core's `zadp-demo` and Python local summary bridge remain test/legacy fixtures,
+not production architecture. Board federation is future design.
+See [mainnet evidence](mainnet-evidence.md) and [roadmap](roadmap.md).

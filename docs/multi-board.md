@@ -173,15 +173,12 @@ hosting fees are not protocol consensus.
 
 ## Signed geographic offers
 
-The reader accepts Offer/wire v1 and v2 under the existing BoardDescriptor v1.
-V2 optional geo is signed public offer-area metadata, exposed as integer e5
-fields in GET /offers. Full OFFER JSON persistence requires no schema migration;
-existing board fingerprints, addresses, UIVKs and policy remain unchanged.
-No buyer coordinates are accepted or stored. Matching occurs in the client.
-Older readers reject v2: upgrade before geo publication; if an old reader already
-passed/rejected geo blocks, reconstruct separately from the signed birthday.
-Never overwrite an active index or silently replay a publication.
-[Geo compatibility and demo](geographic-discovery.md).
+Readers accept canonical wire 3 and unchanged historical wire 1/2 under
+BoardDescriptor v1. New publications use wire 3; optional signed geo uses e5
+integers. No buyer location becomes canonical data. Separate board fingerprint
+and state boundaries remain enforced; never overwrite an active database or
+silently repeat a publication. See [geo](geographic-discovery.md).
+
 
 ## Current zadp.io alpha product policy
 
@@ -193,9 +190,9 @@ This is hosted policy, not a protocol ban on independent boards elsewhere.
 The agreed operator catalog is `ai-services` (AI & Agent Services),
 `digital-services` (Digital Services), `local-services` (Local Services),
 `jobs` (Jobs & Bounties), `games` (Gaming Services), `general` (General Services)
-and `hello` (Hello ZADP). Only the existing `ai-services` is currently provisioned.
-The remaining IDs are plans, not advertised live boards. New descriptors, isolated
-viewing scopes and databases require separate operator provisioning and approval.
+and `hello` (Hello ZADP). All seven are provisioned in the hosted alpha, with
+isolated signed descriptors/viewing scopes/databases and a 90-day maximum TTL.
+Additional provisioning or descriptor replacement requires operator approval.
 Board IDs are unique within this hosted registry, not globally reserved names.
 Capability and presentation category are independent; geographic scope can occur
 on any board. Existing descriptor IDs and signed Offers are never renamed in place.

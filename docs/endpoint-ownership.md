@@ -2,7 +2,7 @@
 
 A seller service Offer does not merely advertise an endpoint. The endpoint cryptographically proves that it is controlled by the same seller identity that signed the Offer.
 
-This is a separate, off-chain proof, not an Offer field or a board admission rule. Offer v1/v2 wire formats, canonical signing, IDs, geo, commerce and BoardDescriptor v1 are unchanged. Discovery-only Offers do not require a proof. Ownership verification does not replace seller approval, confirm service quality, guarantee fulfillment, or authorize payment.
+This is a separate, off-chain proof, not an Offer field or a board admission rule. The separate proof does not change canonical wire-3 signing, frozen historical wire 1/2, IDs, geo or BoardDescriptor v1. Discovery-only Offers do not require a proof. Ownership verification does not replace seller approval, confirm service quality, guarantee fulfillment, or authorize payment.
 
 ## Generate offline
 

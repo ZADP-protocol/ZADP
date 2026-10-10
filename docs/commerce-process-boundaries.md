@@ -1,5 +1,8 @@
 # Independent commerce components — checkpoint c50c1e3
 
+> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+
+
 The automated acceptance uses independently running processes, not in-process
 API calls or a shared Python application. All blockchain/payment observations are
 synthetic offline testnet fixtures. No testnet or mainnet transaction is sent.

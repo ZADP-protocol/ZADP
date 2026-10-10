@@ -6,23 +6,18 @@ discovery is a primary MVP feature. Commerce remains separate and optional; disc
 
 ## Formats and compatibility
 
-- Offer v1 and wire v1 remain byte-compatible, with a captured golden JSON,
-  canonical signing preimage and full 512-byte memo regression fixture.
-- Offer v2 uses `ZADP2\0offer\0` plus the existing canonical map. Optional signed
-  geo is `{"lat_e5":3777493,"lon_e5":-12241942,"radius_m":50000}`.
-- Integer coordinate limits: latitude ±9000000, longitude ±18000000;
-  offer radius 1..500000 m. Geo is either absent or a complete valid triple.
-- Wire v2 is a 13-element discovery tuple with nullable commerce and geo;
-  see [optional commerce](optional-commerce.md). Mainnet v2 has not yet been
-  published in the recorded deployment. Upgrade readers and rebuild old
-  experimental v2 fixtures. Framing stays 512 bytes with 504 payload bytes.
-- BoardDescriptor v1 domain, address, UIVK and fingerprint remain unchanged.
-  One board can accept both offer versions. Full JSON SQLite persistence needs
-  no migration. Old software rejects v2; upgrade before publishing it. Rebuild
-  a previously advanced/rejecting old index separately from the signed birthday.
+New publications use canonical Protocol 1.0 model/wire 3 and `ZADP3\0offer\0`.
+Optional signed geo is `{"lat_e5":3777493,"lon_e5":-12241942,"radius_m":50000}`.
+Latitude is ±9000000, longitude ±18000000, radius 1..500000 m; geo is absent or
+one complete valid triple. The 14-element wire tuple contains price, endpoint
+and geo independently; framing stays 512 bytes with a 504-byte payload budget.
 
-[Normative signing/wire details](protocol.md),
-[compatibility decision](geographic-discovery-compatibility.md).
+Wire 1/2 are pre-release legacy with frozen golden/mainnet byte verification,
+not new-publication options. BoardDescriptor remains v1. Fingerprint-bound
+per-board SQLite state stays isolated; never reinterpret existing signed Offers
+or replace a descriptor silently. Reconstruct separately from birthday if an
+incompatible old reader already passed/rejected affected blocks.
+See [normative specification](protocol.md) and [mainnet evidence](mainnet-evidence.md).
 
 ## Human discovery
 
@@ -72,7 +67,7 @@ Other clients may intentionally publish different precision. A conforming client
 must not assume all offer centers have three decimals or e5 multiples of 100.
 
 A custom radius uses integer meters 1..500000. Unsigned drafts may intentionally save or
-export this public area. Memo budget checks select v2 when geo is present or commerce is absent.
+export this public area. Memo budget checks use wire 3 for every new draft, including discovery-only geo.
 The protected operator preview passes the complete e5 triple to the real CLI;
 there is no browser signing/publication/broadcast route.
 
@@ -161,11 +156,11 @@ include delivery details; discovery never adds them automatically.
 - Existing offer, purchase, commerce, Python boundary and independent-process
   tests plus fmt, clippy, documentation links and mock demo smoke remain required.
 
-Source implementation is ready for manual local review. A first real geo offer
-still requires review/deployment of upgraded readers/writer, a protected backup
-before any future runtime change, a public approximate area, optional valid commerce,
-valid signed-board policy, authoritative fee preview and explicit approval.
-No mainnet geo transaction is prepared or broadcast by this development task.
+Geo publication and independent reconstruction have been verified on mainnet,
+including canonical wire 3; see [mainnet evidence](mainnet-evidence.md). Every new
+publication still requires compatible readers/writer, protected backup, reviewed
+public approximate area, valid signed board policy, exact fee preview and approval.
+This documentation update prepares or broadcasts no transaction.
 
 ## Compact mobile discovery
 

@@ -4,7 +4,7 @@ New Offer signing/publication uses only **ZADP Protocol 1.0, wire/model ID 3**. 
 
 Omit both --endpoint and --price-zec for discovery-only Offer/wire v2. Supply both for commerce; geo remains independent. No fake URL or service price is needed. Board listing value and wallet-derived network fee still apply. See [optional-commerce model](optional-commerce.md).
 
-**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. The Rust commerce demo remains mocked; a separate local text service has an experimental authenticated payment gate. Live buyer settlement and delivery acceptance remain pending.
+**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. Offline commerce demos remain fixtures. Geo/wire-3 discovery and one human buyer settlement/fulfillment have since been verified; see [current evidence summary](mainnet-evidence.md). No agent mainnet purchase is claimed.
 
 ## Wallet version and verification status
 
@@ -73,13 +73,15 @@ All steps succeeded for the first test OFFER; see the linked public evidence. Do
 The seller CLI accepts the complete triple `--geo-lat-e5`, `--geo-lon-e5` and
 `--geo-radius-m`. For example `--geo-lat-e5 3777493 --geo-lon-e5 -12241942
 --geo-radius-m 50000` declares a public approximate San Francisco-area center and 50 km
-service radius. All flags are required together; signed Offer/wire v2 is selected.
-Omit all three to preserve Offer/wire v1. Latitude/longitude ranges are ±9000000
+service radius. All flags are required together; new publication always uses
+canonical Offer/wire 3, with or without geo. Legacy 1/2 publication is rejected.
+Latitude/longitude ranges are ±9000000
 and ±18000000; radius is 1..500000 m. Geo consumes up to 16 extra memo bytes.
 
 This area becomes readable by board UIVK holders and the public discovery API.
 It is not buyer GPS or proof of a seller’s physical location. Review the area,
 actual signed memo budget, existing board policy and current fee preview before
 any separately authorized publication. Upgrade independent readers first.
-No geo offer was broadcast during implementation; source tests are not a live
-geo acceptance claim. Existing mainnet runtime and wallet were not modified.
+Geo mainnet publication/reconstruction is now verified; see [mainnet evidence](mainnet-evidence.md).
+Source tests alone are not live acceptance. This documentation task modifies no
+mainnet runtime or wallet.

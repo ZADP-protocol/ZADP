@@ -1,12 +1,10 @@
 # ZADP HTTP API reference
 
-Snapshot: **2026-10-10**. Implementation baseline: Core
-`ff757e587445a9a04e26abd6085de7ab988cf829`, Web
-`230414a341d77464eff5ab4946aba2d83391e382`.
-
-The endpoint semantics sections describe the updated source implementation; the
-observed deployed baseline above still uses the previous metadata until a paired
-Core/Web deployment. No deployment is performed by this change.
+Snapshot reviewed **2026-10-11**. Deployed implementation baseline: Core
+`00756abb28dfbbc6639835653a60e08bbbfce3df`, Web
+`83e84fd61089e9c6185407013d2316722be3581b`. Current endpoint metadata is deployed.
+This reference describes API behavior, not normative signing/wire semantics;
+see [Protocol 1.0](protocol.md). Deployment history belongs to Server.
 
 This describes implemented behavior and the hosted private-alpha exposure checked
 on that date. It is a human-readable reference, not an OpenAPI schema or a promise
@@ -117,8 +115,8 @@ object without the list envelope.
 
 Protocol 1.0 uses canonical model/wire **3**. New publication uses only 3;
 pre-release legacy 1/2 remain readable without rewriting their signed data.
-The current production feed includes real historical wire 1/2 Offers; this does
-not imply a wire-3 mainnet publication has taken place.
+The production feed includes historical wire 1/2 and canonical wire-3 mainnet
+Offers. [Evidence](mainnet-evidence.md) distinguishes those milestones.
 
 Signed fields include `zadp`, `type` (`offer`), `id`, `seller`, `board_id`,
 `capability`, `title`, optional `description`, `issued_at`, `expires_at`, `nonce`,
@@ -144,7 +142,7 @@ endpoint, with current proof and supported capability/host policy before Buy.
 Money is decimal string/ZEC only. Legacy wire 1 is flat price/endpoint, wire 2
 nests both in commerce; neither legacy encoding is reinterpreted.
 Unsigned API fields `has_endpoint`, `has_fixed_price`, `purchase_available`
-replace `purchase_mode`. Availability is false unless signature, activity, board
+are derived from signed primitives; no marketplace mode field is emitted. Availability is false unless signature, activity, board
 admission, visibility, proof and supported reference order capability all pass.
 See [wire-3 cleanup decision](commercial-modes-v3.md).
 
@@ -307,3 +305,12 @@ No order, payment or broadcast was made for this reference. Related documents:
 [multi-board](multi-board.md), [commerce](commerce.md),
 [commercial modes](commercial-modes-v3.md),
 [process boundaries](commerce-process-boundaries.md).
+
+## Evidence and privacy
+
+One human mainnet summary-service purchase is verified; agent settlement remains
+offline/synthetic acceptance only. A live unpaid preparation is not fulfillment.
+`purchase_available` is host eligibility: Web additionally checks fresh seller
+`orders_available`, supported transport and unchanged signed terms before POST.
+No discovery field authorizes wallet spending. See [privacy](privacy.md) and
+[mainnet evidence](mainnet-evidence.md).

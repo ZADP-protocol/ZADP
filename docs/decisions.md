@@ -1,5 +1,8 @@
 # Architectural decisions
 
+> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+
+
 2026-10-07: discovery is core; commerce is optional. Correct the unbroadcast draft v2 before first recorded mainnet use; preserve v1 JSON/canonical/memo bytes and BoardDescriptor v1. See [optional-commerce model](optional-commerce.md).
 
 Updated 2026-10-05. These decisions distinguish live discovery from the retained

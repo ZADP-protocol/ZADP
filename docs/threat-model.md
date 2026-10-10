@@ -1,8 +1,8 @@
 # ZADP Threat Model
 
-Optional commerce is seller-signed v2 state. Indexers cannot add/remove commerce or alter endpoint/price without invalidating authenticity. Discovery-only offers expose no purchase endpoint; buyer UI cannot create an automated order for them. Legacy v1 bytes remain unchanged. See [optional-commerce model](optional-commerce.md).
+Canonical wire 3 signs optional endpoint and fixed price independently. Price requires endpoint; endpoint without price allows no payment. Geo is optional. Legacy wire 1/2 remain frozen read compatibility. See [protocol](protocol.md) and [privacy/data flow](privacy.md).
 
-This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, the retained mock commerce demo, optional local operator UI and experimental payment-gated text endpoint. First live mainnet discovery acceptance was verified on 2026-10-05; see [public evidence](./mainnet-acceptance.md).
+This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, the retained offline demos, trusted local publication tooling and independently deployed hosted Seller. Mainnet discovery/geo and one human purchase are verified; agent wallet settlement remains unproved. See [public evidence summary](mainnet-evidence.md).
 
 ## Assets
 
@@ -56,27 +56,27 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 ### Malicious seller
 
 - **Risk:** Fake capability, bait pricing, non-delivery after payment, malicious HTTPS endpoint.
-- **Implemented:** Ed25519 offer identity; endpoint bound into signed offer; board admission requires HTTPS with host and without userinfo; indexer does **not** fetch endpoints.
+- **Implemented:** Ed25519 offer identity; endpoint bound into signed offer; board admission requires HTTPS with host and without userinfo; canonical scanner does **not** fetch endpoints. The API separately fetches only the restricted well-known origin proof.
 - **Remaining:** Escrow, reputation, bonds, dispute flows (out of scope).
-- **Residual:** No service-quality guarantee; buyer accepts counterparty risk for real purchases (live buyer acceptance still pending).
+- **Residual:** No service-quality guarantee; buyer accepts counterparty risk for real purchases (one human purchase is verified, not a guarantee for other sellers/orders).
 
 ### Malicious buyer
 
 - **Risk:** Abuse seller endpoints, unpaid load, scrape or DoS seller APIs.
-- **Partial:** Discovery is read-only. Rust commerce remains mocked; the separate local text service authenticates seller observations and gates results on exact confirmed shielded outputs. Synthetic tests do not prove live paid acceptance.
+- **Implemented:** Discovery is read-only. Hosted Seller uses incoming-only observation and gates results on exact confirmed shielded outputs; one human mainnet purchase completed exactly once. Synthetic agent tests do not prove real agent-wallet acceptance.
 - **Implemented local gate:** Exact account/receiver/amount/memo, non-change shielded output, invoice mining window, three confirmations, single-output use and reorg rechecks. TLS verification and fixed loopback routing prevent arbitrary offer-controlled requests.
-- **Remaining:** Public service deployment/auth, stronger rate limits, retention/refund policy and live buyer payment acceptance.
+- **Remaining:** Stronger rate limits, safe retention/redaction implementation, refund policy and real agent-wallet acceptance. Origin proof and claim-token auth do not eliminate endpoint abuse.
 
 ### Forgery / modified offer
 
 - **Risk:** Attacker alters price, endpoint, or capability in transit or in indexer storage.
-- **Implemented:** Ed25519 over canonical CBOR (`ZADP1\0offer\0`); indexer verifies before admit; clients SHOULD re-verify retrieved offers.
+- **Implemented:** Ed25519 over canonical CBOR (`ZADP3\0offer\0` for new Offers; unchanged legacy separators for historical verification); indexer verifies before admit; clients SHOULD re-verify retrieved offers.
 - **Residual:** A compromised indexer can omit valid offers or prefer attacker-favored valid ones.
 
 ### Malformed / oversized payload
 
 - **Risk:** Crash or confuse indexers with junk memos.
-- **Implemented:** ZIP 302 framing checks (magic, wire v1, length ≤504, zero padding); unsupported types rejected; unrelated memos ignored; rejections store reason codes/output ids — not raw private memo content.
+- **Implemented:** ZIP 302 framing checks (magic, supported wire 3 and historical 1/2, length ≤504, zero padding); unsupported types rejected; unrelated memos ignored; rejections store reason codes/output ids — not raw private memo content.
 
 ### Replay / duplicate publication
 
@@ -113,8 +113,8 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 ### Malicious endpoints / SSRF-style abuse
 
 - **Risk:** Offer `endpoint` points at internal resources; buyers fetch unsafely.
-- **Implemented:** Indexer never fetches endpoints; board admission requires HTTPS.
-- **Remaining:** Buyer clients should restrict schemes/hosts and not follow arbitrary redirects with secrets.
+- **Implemented:** Canonical scanner does not fetch endpoints. The separate API proof verifier requires public-unicast DNS, pins its snapshot, rejects credentials/private addresses, proxies and redirects, and bounds time/body/concurrency/cache. Only `/.well-known/zadp` is fetched. See [endpoint proof](endpoint-ownership.md).
+- **Remaining:** Every independent buyer must preserve endpoint/redirect/credential protections; domain control does not prove ordering support. Hosted Buy also checks live `orders_available`.
 
 ### Denial of service (API / DB)
 
@@ -132,7 +132,7 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 
 - No escrow or payment-vs-delivery atomicity.
 - No formal reputation beyond pubkey / board allowlist.
-- Mock commerce provides **no** real privacy or settlement.
+- Offline/mock commerce provides **no** real privacy or settlement. The completed human purchase does not prove autonomous agent acceptance.
 - No consensus-level spam resistance on `open` boards.
 - No production board API authentication or TLS termination in-tree; local text TLS is development-only.
 
@@ -152,7 +152,7 @@ Owner-only configuration and authentication remain in protected local processes.
 The browser gets only filtered seller balance/synchronization/receiver data and
 public unsigned publication previews. There is no sign/spend/broadcast route.
 Cross-origin writes and unexpected Host headers are rejected; invoice tokens
-stay in memory rather than localStorage or URLs. Draft offer strings remain
+are not placed in URLs. Hosted direct commerce deliberately stores a private recovery capability in browser storage, without input/result; access to that storage permits recovery. Local legacy tooling may differ. Draft offer strings remain
 untrusted. A preview can sign an Ed25519 offer but never a Zcash transaction.
 
 The paid service stores inputs privately in SQLite and cannot automatically
@@ -212,5 +212,13 @@ provider, reverse geocoder, tracking or external analytics is added.
 
 Tests execute the actual browser app with synthetic location and intercepted
 network/storage/logging, including denial and seller/buyer separation. See
-[geo guide](geographic-discovery.md). A real device permission review and a
-separately approved first live geo offer remain release checks.
+[geo guide](geographic-discovery.md). Real device permission review remains important; first live geo acceptance is already recorded in [mainnet evidence](mainnet-evidence.md). New Offers still require separate exact approval.
+
+## Seller storage today
+
+Hosted Seller SQLite retains plaintext input/result and private payment/recovery
+metadata. Target retention/redaction is documented but no automatic purge is
+implemented. Preserve replay/idempotency records and executing orders; never
+substitute ad-hoc deletion for reviewed cleanup. Discovery and seller may share
+an operator, so logical routing separation does not prevent that operator reading
+seller state. See [privacy](privacy.md).

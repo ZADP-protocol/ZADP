@@ -22,5 +22,6 @@ It is separate from the verified real mainnet discovery implementation.
   payment-gate tests; no wallet initialization or real payment.
 
 See [development](../docs/development.md), [live proof](../docs/mainnet-acceptance.md)
-and [paid-service design](../docs/commerce.md). Buyer settlement and public
-hosted operations remain incomplete; the example.com mainnet offer is a placeholder.
+and [commerce](../docs/commerce.md). The original example.com publication remains
+a historical placeholder. Current hosted human acceptance is summarized in
+[mainnet evidence](../docs/mainnet-evidence.md); agent settlement remains unproved.
