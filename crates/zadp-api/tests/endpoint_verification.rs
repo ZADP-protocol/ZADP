@@ -84,7 +84,7 @@ async fn matching_proof_verified_but_other_seller_or_modified_offer_cannot_reuse
         &key,
     )
     .unwrap();
-    assert_eq!(v2.zadp, 2);
+    assert_eq!(v2.zadp, 3);
     let before = zadp_protocol::encode_offer_memo(&v2).unwrap();
     assert_eq!(verifier.status(&v2).status, CommerceStatus::Verified);
     assert_eq!(zadp_protocol::encode_offer_memo(&v2).unwrap(), before);

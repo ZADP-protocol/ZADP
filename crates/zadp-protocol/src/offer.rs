@@ -7,9 +7,13 @@ use crate::canonical::signing_bytes;
 use crate::identity::{SellerId, SellerKeyPair, Signature};
 use crate::ProtocolError;
 
-/// Legacy alias retained for downstream v1 callers; never a latest-version switch.
-pub const PROTOCOL_VERSION: u16 = OFFER_VERSION_V1;
+/// Public release version, distinct from signed Offer/wire identifiers.
+pub const PROTOCOL_RELEASE: &str = "1.0";
+/// The sole canonical Offer model for new Protocol 1.0 publications.
+pub const PROTOCOL_VERSION: u16 = OFFER_VERSION_V3;
+/// Pre-release legacy: historical read/verification only.
 pub const OFFER_VERSION_V1: u16 = 1;
+/// Pre-release legacy: historical read/verification only.
 pub const OFFER_VERSION_V2: u16 = 2;
 pub const OFFER_VERSION_V3: u16 = 3;
 pub const BOARD_DESCRIPTOR_VERSION: u16 = 1;
@@ -333,7 +337,7 @@ impl OfferDraft {
         self
     }
 
-    /// Structured manual listing uses v3; legacy defaults remain unchanged.
+    /// Structured price is signed by the Protocol 1.0 canonical wire-3 model.
     pub fn with_price(mut self, price: Price) -> Self {
         self.price = Some(price);
         self.version = Some(OFFER_VERSION_V3);
@@ -355,6 +359,11 @@ impl OfferDraft {
     }
 
     pub fn sign(self, keys: &SellerKeyPair) -> Result<Offer, ProtocolError> {
+        if self.version.unwrap_or(PROTOCOL_VERSION) != OFFER_VERSION_V3 {
+            return Err(ProtocolError::InvalidOffer(
+                "wire 1/2 are pre-release legacy; new Offers require Protocol 1.0 / wire 3".into(),
+            ));
+        }
         if keys.id != self.seller {
             return Err(ProtocolError::InvalidOffer(
                 "signing key does not match seller id".into(),
@@ -370,13 +379,7 @@ impl OfferDraft {
         // Placeholder signature so we can reuse Offer for canonicalization.
         let placeholder = Signature::from_bytes(&ed25519_dalek::Signature::from_bytes(&[0u8; 64]));
         let mut offer = Offer {
-            zadp: self
-                .version
-                .unwrap_or(if self.geo.is_some() || self.commerce.is_none() {
-                    OFFER_VERSION_V2
-                } else {
-                    OFFER_VERSION_V1
-                }),
+            zadp: self.version.unwrap_or(PROTOCOL_VERSION),
             message_type: MESSAGE_TYPE_OFFER.into(),
             id: self.id,
             seller: self.seller,
@@ -442,6 +445,21 @@ impl Offer {
         Ok(())
     }
 }
+/// New publication gate, deliberately separate from historical verification.
+pub fn verify_offer_for_publication(
+    offer: &Offer,
+    now: DateTime<Utc>,
+) -> Result<(), ProtocolError> {
+    if offer.zadp != OFFER_VERSION_V3 {
+        return Err(ProtocolError::InvalidOffer(
+            "pre-release legacy Offer cannot be newly published; Protocol 1.0 requires wire 3"
+                .into(),
+        ));
+    }
+    verify_offer(offer, now)
+}
+
+/// Verify current or pre-release legacy signed data without authorizing publication.
 pub fn verify_offer(offer: &Offer, now: DateTime<Utc>) -> Result<(), ProtocolError> {
     offer.validate_geo_version()?;
     if offer.message_type != MESSAGE_TYPE_OFFER {
@@ -499,7 +517,7 @@ mod tests {
             "llm.inference",
             "Qwen inference",
             Price::zec(Decimal::new(1, 2)),
-            "http://127.0.0.1:8080",
+            "https://seller.example",
             Utc::now() + chrono::Duration::hours(1),
             nonce,
         )
@@ -529,7 +547,7 @@ mod tests {
             "llm.inference",
             "Old",
             Price::zec(Decimal::new(1, 2)),
-            "http://127.0.0.1:8080",
+            "https://seller.example",
             Utc::now() - chrono::Duration::minutes(1),
             nonce,
         )

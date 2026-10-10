@@ -106,8 +106,8 @@ struct Publish {
     endpoint: Option<String>,
     #[arg(long,default_value_t=86400,value_parser=clap::value_parser!(u32).range(1..))]
     ttl_seconds: u32,
-    /// Explicit Offer version; legacy defaults remain unchanged. Manual prices require v3.
-    #[arg(long, value_parser=clap::value_parser!(u16).range(1..=3))]
+    /// Protocol 1.0 uses wire/Offer 3. Pre-release wire 1/2 are read-only.
+    #[arg(long, value_parser=clap::value_parser!(u16).range(3..=3))]
     offer_version: Option<u16>,
     /// Defaults to the operator's minimum listing value. This is not the service price.
     #[arg(long)]
@@ -347,6 +347,7 @@ async fn publish(args: Publish) -> Result<()> {
         candidate
     };
 
+    zadp_protocol::verify_offer_for_publication(&offer, now)?;
     board.validate_offer(&offer, value, now)?;
     let memo = encode_offer_memo(&offer)?;
     let wallet = LocalWallet::connect(&args.wallet_rpc, &args.wallet_auth_file)?;
@@ -559,6 +560,11 @@ mod geo_cli_tests {
             "--dry-run",
         ];
         assert!(Args::try_parse_from(base).is_ok());
+        for version in ["1", "2"] {
+            assert!(
+                Args::try_parse_from(base.into_iter().chain(["--offer-version", version])).is_err()
+            );
+        }
         assert!(Args::try_parse_from(
             base.into_iter()
                 .chain(["--endpoint", "https://fixture.invalid"])

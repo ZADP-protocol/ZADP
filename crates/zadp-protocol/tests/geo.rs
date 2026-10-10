@@ -186,7 +186,7 @@ fn exact_geo_budget_and_oversize_rejection() {
     }
 }
 #[test]
-fn geo_draft_selects_v2_and_absent_geo_keeps_v1() {
+fn protocol_1_drafts_always_select_wire3_with_or_without_geo() {
     let (o, k) = baseline();
     let draft = OfferDraft::new_ulid(
         k.id.clone(),
@@ -197,8 +197,8 @@ fn geo_draft_selects_v2_and_absent_geo_keeps_v1() {
         o.expires_at,
         o.nonce.clone(),
     );
-    assert_eq!(draft.clone().sign(&k).unwrap().zadp, 1);
-    assert_eq!(draft.with_geo(area()).sign(&k).unwrap().zadp, 2);
+    assert_eq!(draft.clone().sign(&k).unwrap().zadp, 3);
+    assert_eq!(draft.with_geo(area()).sign(&k).unwrap().zadp, 3);
 }
 
 #[test]

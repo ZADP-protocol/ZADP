@@ -10,9 +10,9 @@ assert.equal(textBytes('a'.repeat(24)),26);
 assert.equal(cborHeadBytes(23),1);assert.equal(cborHeadBytes(24),2);
 assert.equal(cborHeadBytes(65536),5);
 const result=memoBudget(draft,now);
-// Independently counted CBOR: 1+1+12+28+34+4+5+1+5+26+5+5+17+66.
-assert.equal(result.used,210);
-let atLimit={...draft,description:'x'.repeat(292)};
+// Independently counted CBOR: 1+1+12+28+34+4+5+1+5+26+5+5+17+66+1.
+assert.equal(result.used,211);
+let atLimit={...draft,description:'x'.repeat(291)};
 assert.equal(memoBudget(atLimit,now).used,504);
 assert.equal(memoBudget(atLimit,now).fits,true);
 assert.equal(memoBudget({...atLimit,description:atLimit.description+'x'},now).fits,false);

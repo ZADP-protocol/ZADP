@@ -101,7 +101,7 @@ mod tests {
             "llm.inference",
             "Qwen inference",
             Price::zec(Decimal::new(1, 2)),
-            "http://127.0.0.1:8080",
+            "https://seller.example",
             Utc::now() + Duration::hours(1),
             B64.encode([3u8; 16]),
         )

@@ -1,11 +1,11 @@
-# Offer v3: independent advertised price and automated commerce
+# Protocol 1.0 canonical Offer (wire/model ID 3)
 
 ## Compatibility decision
 
 Published v1 and v2 semantics are frozen. V1 has mandatory top-level price and
 endpoint; v2 has optional nested `commerce: {endpoint, price}`. Neither can sign
-a standalone price without changing its interpretation. Offer v3 / wire v3
-therefore introduces independent signed price and endpoint presence. Existing
+a standalone price without changing its interpretation. Protocol 1.0 keeps the existing Offer v3 / wire v3 identifier and
+therefore uses independent signed price and endpoint presence. Existing
 v1/v2 JSON, signing bytes, wire bytes, IDs, board policy and geographic e5 fields
 remain unchanged. Regression goldens include the actual first mainnet v2 geo
 Offer `01M4H88HGMFHVH2VXA0AFBTM7E`, compared at its original issue time.
@@ -87,9 +87,9 @@ discovery/manual/automated respectively (price 0.02 ZEC, endpoint
 ## CLI and Web
 
 CLI discovery needs neither price nor endpoint. `--price-zec 0.02` alone selects
-v3 manual listing. `--price-zec 0.01 --endpoint https://seller.example` retains
-legacy defaults (v1 without geo, v2 with geo); add `--offer-version 3` for v3.
-New Web drafts explicitly select v3 for all modes. Endpoint without price is
+v3 manual listing. `--price-zec 0.01 --endpoint https://seller.example` also uses model/wire 3.
+`--offer-version 3` is optional; 1/2 are rejected for new signing/publication.
+New Web drafts explicitly select model 3 for all modes. Wire 1/2 are pre-release legacy read-only compatibility. Endpoint without price is
 rejected. Existing dry-run, prepared Offer, exact wallet proposal, expiry and
 human publication approval requirements are unchanged.
 

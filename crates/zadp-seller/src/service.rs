@@ -99,6 +99,7 @@ impl<A: ZcashAdapter> SellerService<A> {
         .with_description(description)
         .sign(&self.keys)?;
 
+        zadp_protocol::verify_offer_for_publication(&offer, Utc::now())?;
         let payload = serde_json::to_vec(&offer).map_err(|e| {
             SellerError::Protocol(zadp_protocol::ProtocolError::Canonical(e.to_string()))
         })?;

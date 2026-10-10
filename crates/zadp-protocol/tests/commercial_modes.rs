@@ -177,3 +177,53 @@ fn all_modes_and_geo_combinations_enforce_exact_504_byte_payload() {
         }
     }
 }
+
+#[test]
+fn protocol_1_defaults_only_to_wire3_and_rejects_legacy_publication() {
+    assert_eq!(PROTOCOL_RELEASE, "1.0");
+    assert_eq!(PROTOCOL_VERSION, 3);
+    let (_, k) = sample(0, false);
+    let now = DateTime::from_timestamp(1893456000, 0).unwrap();
+    for geo in [false, true] {
+        for mode in 0..3 {
+            let mut d = OfferDraft::new_discovery(
+                k.id.clone(),
+                "local.service",
+                "Canonical",
+                now + Duration::days(30),
+                B64.encode([1; 16]),
+            );
+            if mode > 0 {
+                d.price = Some(Price::zec("0.02".parse().unwrap()));
+            }
+            if mode == 2 {
+                d.commerce = Some(Commerce {
+                    endpoint: "https://seller.example".into(),
+                });
+            }
+            if geo {
+                d.geo = Some(GeoArea {
+                    lat_e5: 3777500,
+                    lon_e5: -12241900,
+                    radius_m: 25000,
+                });
+            }
+            assert_eq!(d.clone().sign(&k).unwrap().zadp, 3);
+            for legacy in [1, 2] {
+                assert!(d.clone().with_version(legacy).sign(&k).is_err());
+            }
+            let o = bind_offer(d.sign(&k).unwrap(), "local-services", now, &k).unwrap();
+            verify_offer_for_publication(&o, now).unwrap();
+            assert_eq!(encode_offer_memo(&o).unwrap()[5], 3);
+        }
+    }
+    let fixtures: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("fixtures/offer-legacy-commercial-golden.json")).unwrap();
+    for value in fixtures {
+        let o: Offer = serde_json::from_value(value["offer"].clone()).unwrap();
+        let now = o.issued_at.unwrap();
+        verify_offer(&o, now).unwrap();
+        assert!(verify_offer_for_publication(&o, now).is_err());
+        assert_eq!(hex(encode_offer_memo(&o).unwrap()), value["memo_hex"]);
+    }
+}

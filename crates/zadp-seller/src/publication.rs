@@ -132,6 +132,7 @@ pub fn validate_approval(
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<()> {
     use sha2::{Digest, Sha256};
+    zadp_protocol::verify_offer_for_publication(offer, now)?;
     ensure!(
         p["kind"] == "unsigned-publication-preview"
             && p["broadcast"] == false

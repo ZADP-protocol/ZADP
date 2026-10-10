@@ -1,5 +1,7 @@
 # Optional commerce in Offer v2
 
+**Pre-release legacy record:** wire 1/2 remain read/historical compatibility only. New Offers use [Protocol 1.0 / wire 3](protocol.md).
+
 Historical v2 design record. V2 is now published and frozen; the current independent-price model and Web/CLI behavior are documented in [Offer v3 commercial modes](commercial-modes-v3.md). The pre-publication rationale below does not authorize reinterpreting published v2.
 
 **Discovery is core. Commerce is optional. ZADP discovery does not require a commerce endpoint.**

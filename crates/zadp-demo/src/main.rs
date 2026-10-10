@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
             "Qwen inference",
             "Mock LLM inference for demo",
             Decimal::new(1, 2),
-            &base,
+            "https://seller.example",
             ChronoDuration::hours(1),
         )
         .await?;

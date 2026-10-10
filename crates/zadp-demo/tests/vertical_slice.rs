@@ -41,7 +41,7 @@ async fn offer_to_fulfillment_slice() {
             "Qwen inference",
             "integration",
             Decimal::new(1, 2),
-            &base,
+            "https://seller.example",
             ChronoDuration::hours(1),
         )
         .await

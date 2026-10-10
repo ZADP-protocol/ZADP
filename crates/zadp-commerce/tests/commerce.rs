@@ -29,7 +29,7 @@ fn fixture() -> (tempfile::TempDir, Config, i64) {
         "text.uppercase",
         "Known local offer",
         Price::zec(rust_decimal::Decimal::new(1, 2)),
-        "http://127.0.0.1:8094",
+        "https://seller.example",
         Utc::now() + Duration::hours(24),
         "bG9jYWw=",
     )
@@ -617,7 +617,7 @@ async fn summarize_capability_description_and_idempotent_execution() {
         "text.summarize",
         "Extractive text summary",
         Price::zec(rust_decimal::Decimal::new(1, 2)),
-        "http://127.0.0.1:8094",
+        "https://seller.example",
         Utc::now() + Duration::hours(24),
         "bG9jYWw=",
     )

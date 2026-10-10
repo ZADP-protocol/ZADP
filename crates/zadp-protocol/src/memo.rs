@@ -7,7 +7,9 @@ use serde_bytes::ByteBuf;
 use std::io::Cursor;
 
 const MAGIC: &[u8] = b"\xf5ZADP";
+/// Pre-release legacy; historical roundtrip only, not new publication.
 pub const WIRE_VERSION_V1: u8 = 1;
+/// Pre-release legacy; historical roundtrip only, not new publication.
 pub const WIRE_VERSION_V2: u8 = 2;
 pub const WIRE_VERSION_V3: u8 = 3;
 type WireOffer = (

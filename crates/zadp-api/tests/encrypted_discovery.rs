@@ -251,7 +251,7 @@ async fn encrypted_discovery_fixture(with_geo: bool, discovery_only: bool) {
         assert!(json["offers"][0].get("price").is_none());
     }
 
-    assert_eq!(returned.zadp, if with_geo { 2 } else { 1 });
+    assert_eq!(returned.zadp, 3);
 }
 
 fn isolated_descriptor(id: &str, birthday: u32) -> BoardDescriptor {

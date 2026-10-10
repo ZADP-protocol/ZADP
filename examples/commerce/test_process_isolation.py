@@ -64,7 +64,7 @@ class ProcessIsolation(unittest.TestCase):
                 except Exception:
                     if time.monotonic()>end:raise
                     time.sleep(.05)
-            self.assertEqual(len(offers),1);offer=offers[0];self.assertEqual(offer['endpoint'],endpoint);self.assertTrue(offer['simulation'])
+            self.assertEqual(len(offers),1);offer=offers[0];self.assertEqual(offer['zadp'],3);self.assertEqual(offer['commerce']['endpoint'],endpoint);self.assertTrue(offer['simulation'])
             self.assertEqual(offer['chain']['confirmations'],3)
             with urlopen(origin) as response:self.assertIn(b'Discovery reference client',response.read())
             before=database_state(discovery_dir/'index.sqlite')

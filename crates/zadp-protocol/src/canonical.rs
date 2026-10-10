@@ -182,7 +182,7 @@ mod tests {
             "llm.inference",
             "Qwen inference",
             Price::zec(Decimal::new(1, 2)),
-            "http://127.0.0.1:8080",
+            "https://seller.example",
             Utc::now() + Duration::hours(1),
             B64.encode([1u8; 16]),
         )
@@ -192,7 +192,7 @@ mod tests {
         let a = signing_bytes(&offer).unwrap();
         let b = signing_bytes(&offer).unwrap();
         assert_eq!(a, b);
-        assert!(a.starts_with(SIGN_PREFIX));
+        assert!(a.starts_with(b"ZADP3\0offer\0"));
     }
 
     #[test]

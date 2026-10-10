@@ -1,4 +1,5 @@
-//! Backward-compatible ZADP Offer v1/v2/v3 and BoardDescriptor v1 types.
+//! ZADP Protocol 1.0: canonical Offer/wire 3 and BoardDescriptor 1.
+//! Offer/wire 1/2 are pre-release legacy read/verification compatibility only.
 //!
 //! JSON is the human-readable interchange format.
 //! Domain-separated canonical CBOR signs offers; compact memo wire v1/v2/v3
@@ -13,9 +14,9 @@ pub use canonical::{canonical_offer_cbor, signing_bytes};
 pub use error::ProtocolError;
 pub use identity::{SellerId, SellerKeyPair, Signature};
 pub use offer::{
-    verify_offer, Commerce, GeoArea, Offer, OfferDraft, OfferStatus, Price, PurchaseMode,
-    BOARD_DESCRIPTOR_VERSION, MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER, OFFER_VERSION_V1,
-    OFFER_VERSION_V2, OFFER_VERSION_V3, PROTOCOL_VERSION,
+    verify_offer, verify_offer_for_publication, Commerce, GeoArea, Offer, OfferDraft, OfferStatus,
+    Price, PurchaseMode, BOARD_DESCRIPTOR_VERSION, MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER,
+    OFFER_VERSION_V1, OFFER_VERSION_V2, OFFER_VERSION_V3, PROTOCOL_RELEASE, PROTOCOL_VERSION,
 };
 
 mod board;

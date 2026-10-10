@@ -107,7 +107,7 @@ fn unrelated_malformed_and_unsupported_memos() {
     memo[6] = 255;
     assert!(decode_offer_memo(&memo).is_err());
     let mut o = offer(&SellerKeyPair::generate());
-    o.zadp = 3;
+    o.zadp = 4;
     assert!(verify_offer(&o, Utc::now()).is_err());
 }
 #[test]
@@ -122,7 +122,7 @@ fn oversized_offer_and_fractional_zatoshi_are_rejected() {
 fn memo_padding_truncation_and_trailing_cbor_are_rejected() {
     let original = encode_offer_memo(&offer(&SellerKeyPair::generate())).unwrap();
     let length = usize::from(u16::from_be_bytes([original[6], original[7]]));
-    assert_eq!(original[8], 0x8d); // definite 13-field array
+    assert_eq!(original[8], 0x8e); // canonical wire-3 definite 14-field array
     assert!(original[8 + length..].iter().all(|byte| *byte == 0));
     for end in [5, 6, 7, 8, 64, 511] {
         assert!(decode_offer_memo(&original[..end]).is_err());

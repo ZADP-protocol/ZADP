@@ -34,7 +34,7 @@ flowchart LR
 
 A board is defined by a signed [BoardDescriptor v1](docs/board-descriptor.md): its network, receiving address, incoming viewing capability, scan birthday and admission policy. The owner retains spending authority. An indexer needs only incoming viewing capability, which cannot spend funds or confer board ownership. An intentionally public board capability lets independent operators reconstruct the same offer board.
 
-Sellers use a separate Ed25519 identity to sign canonical Offers. **Offer v1 / wire v1** compatibility is preserved. **Offer v2 / wire v2** supports optional commerce and signed geographic service areas. **Offer v3 / wire v3** adds a signed advertised ZEC price independently of an automated endpoint; [three commercial modes](docs/commercial-modes-v3.md) preserve published v1/v2 bytes. Offer IDs, board binding, issue/expiry times and replay checks are part of validation. Publication is not a verified claim about service quality or a seller's physical position.
+Sellers use a separate Ed25519 identity to sign canonical Offers. **ZADP Protocol 1.0 has one canonical Offer model: wire/model ID 3.** It supports signed geographic areas and independent ZEC price/automated endpoint fields. **Wire 1/2 are pre-release legacy**, retained only for read/historical compatibility; new publication tooling rejects them. Their mainnet test evidence remains byte-for-byte intact. Offer IDs, board binding, issue/expiry times and replay checks remain unchanged. See the [Protocol 1.0 specification](docs/protocol.md) and [commercial modes](docs/commercial-modes-v3.md).
 
 The compact memo has a 512-byte envelope and a 504-byte payload budget. Names, descriptions, identifiers, optional commerce, geographic fields and signatures share that budget. See [protocol and wire format](docs/protocol.md) and [optional commerce](docs/optional-commerce.md).
 
@@ -64,7 +64,7 @@ Use a valid signed descriptor for the same network as your transport. The API of
 
 The reusable [browser modules](client/browser/README.md) provide parsing, memo budgeting and local geo matching. A [minimal browser client](examples/browser/README.md), a [local geo CLI](examples/geo/discover.js), Rust protocol examples and test vectors show how to build another client without the private web product.
 
-Commerce is optional. A v3 priced listing advertises a fixed ZEC price with manual settlement and no automated Buy. A discovery-only v2 Offer has no purchase endpoint or service price. Commerce-enabled Offers may advertise an HTTPS seller endpoint; orders, payment correlation and results belong directly to seller and buyer, not discovery. Reference commerce services and [isolated offline tests](docs/commerce-process-boundaries.md) demonstrate this boundary. They do not authorize a real payment.
+Commerce is optional. A v3 priced listing advertises a fixed ZEC price with manual settlement and no automated Buy. A Protocol 1.0 discovery-only Offer has no purchase endpoint or service price. Commerce-enabled Offers may advertise an HTTPS seller endpoint; orders, payment correlation and results belong directly to seller and buyer, not discovery. Reference commerce services and [isolated offline tests](docs/commerce-process-boundaries.md) demonstrate this boundary. They do not authorize a real payment.
 
 ## Hosted alpha interface
 
@@ -80,7 +80,7 @@ remains separate. The screenshot is not evidence of a completed buyer payment.*
 
 ## Status and validation
 
-Alpha software: protocol/model details can still evolve. The first funded mainnet publication and independent reconstruction were verified, including a real discovery-only geographic Offer v2 on 2026-10-10 (Helsinki date); this is discovery evidence, not evidence of a live geographic business or completed buyer purchase. See [mainnet acceptance](docs/mainnet-acceptance.md).
+Alpha software: protocol/model details can still evolve. The first funded mainnet publication and independent reconstruction were verified, including a real pre-release legacy discovery-only geographic wire 2 Offer on 2026-10-10 (Helsinki date); this is discovery evidence, not evidence of a live geographic business or completed buyer purchase. See [mainnet acceptance](docs/mainnet-acceptance.md).
 
 ```sh
 cargo fmt --all -- --check
