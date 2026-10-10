@@ -33,23 +33,55 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
             .as_ref()
             .ok_or_else(|| ProtocolError::InvalidOffer("v1 requires commerce".into()))?;
         entries.push(entry_text("endpoint", c.endpoint.clone())?);
-        entries.push(entry_map("price", price_map(&c.price)?)?);
+        entries.push(entry_map(
+            "price",
+            price_map(
+                offer
+                    .price
+                    .as_ref()
+                    .ok_or_else(|| ProtocolError::InvalidOffer("missing price".into()))?,
+            )?,
+        )?);
+    } else if offer.zadp == crate::OFFER_VERSION_V3 {
+        let price = offer
+            .price
+            .as_ref()
+            .map(price_map)
+            .transpose()?
+            .map(Value::Map)
+            .unwrap_or(Value::Null);
+        entries.push((encode_text_key("price")?, "price".into(), price));
+        let commerce = offer
+            .commerce
+            .as_ref()
+            .map(|c| entry_text("endpoint", c.endpoint.clone()))
+            .transpose()?
+            .map(|(_, k, v)| Value::Map(vec![(Value::Text(k), v)]))
+            .unwrap_or(Value::Null);
+        entries.push((encode_text_key("commerce")?, "commerce".into(), commerce));
     } else {
-        let value = if let Some(c) = &offer.commerce {
-            let mut inner = vec![
-                entry_text("endpoint", c.endpoint.clone())?,
-                entry_map("price", price_map(&c.price)?)?,
-            ];
-            inner.sort_by(|a, b| a.0.cmp(&b.0));
-            Value::Map(
-                inner
-                    .into_iter()
-                    .map(|(_, k, v)| (Value::Text(k), v))
-                    .collect(),
-            )
-        } else {
-            Value::Null
-        };
+        let value =
+            if let Some(c) = &offer.commerce {
+                let mut inner =
+                    vec![
+                        entry_text("endpoint", c.endpoint.clone())?,
+                        entry_map(
+                            "price",
+                            price_map(offer.price.as_ref().ok_or_else(|| {
+                                ProtocolError::InvalidOffer("missing price".into())
+                            })?)?,
+                        )?,
+                    ];
+                inner.sort_by(|a, b| a.0.cmp(&b.0));
+                Value::Map(
+                    inner
+                        .into_iter()
+                        .map(|(_, k, v)| (Value::Text(k), v))
+                        .collect(),
+                )
+            } else {
+                Value::Null
+            };
         entries.push((encode_text_key("commerce")?, "commerce".into(), value));
     }
     if let Some(description) = &offer.description {
@@ -90,7 +122,9 @@ pub fn canonical_offer_cbor(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
 /// Bytes that are actually signed: prefix || canonical CBOR body.
 pub fn signing_bytes(offer: &Offer) -> Result<Vec<u8>, ProtocolError> {
     let cbor = canonical_offer_cbor(offer)?;
-    let prefix: &[u8] = if offer.zadp == crate::OFFER_VERSION_V2 {
+    let prefix: &[u8] = if offer.zadp == crate::OFFER_VERSION_V3 {
+        b"ZADP3\0offer\0"
+    } else if offer.zadp == crate::OFFER_VERSION_V2 {
         b"ZADP2\0offer\0"
     } else {
         SIGN_PREFIX

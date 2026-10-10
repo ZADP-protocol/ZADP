@@ -14,6 +14,7 @@ use zadp_protocol::{commerce_origin, public_endpoint_ip, verify_offer, EndpointP
 #[serde(rename_all = "snake_case")]
 pub enum CommerceStatus {
     DiscoveryOnly,
+    NotRequired,
     Verified,
     Unverified,
     Unavailable,
@@ -124,7 +125,11 @@ impl EndpointVerifier {
             valid_until: None,
         };
         if offer.commerce.is_none() {
-            view.status = CommerceStatus::DiscoveryOnly;
+            view.status = if offer.price.is_some() {
+                CommerceStatus::NotRequired
+            } else {
+                CommerceStatus::DiscoveryOnly
+            };
             return view;
         }
         if verify_offer(offer, Utc::now()).is_err() {

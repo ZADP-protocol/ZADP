@@ -24,3 +24,5 @@ assert.throws(()=>memoBudget({...draft,title:'😀'.repeat(33)},now));
 assert.throws(()=>memoBudget({...draft,capability:'x'.repeat(65)},now));
 assert.throws(()=>memoBudget({...draft,board_id:'x'.repeat(65)},now));
 console.log('Memo budget: UTF-8, CBOR boundaries, exact 504-byte limit, overflow, price and HTTPS checks passed.');
+
+for(const offer_version of [1,2,4])assert.throws(()=>memoBudget({board_id:'local-services',title:'Bike repair',capability:'local.service',offer_version,commerce:null,price:{amount:'0.02',currency:'ZEC'}},now));

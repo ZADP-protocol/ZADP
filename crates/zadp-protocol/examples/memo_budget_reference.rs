@@ -14,8 +14,9 @@ struct Draft {
     title: String,
     capability: String,
     endpoint: Option<String>,
-    price: Option<String>,
-    commerce: Option<zadp_protocol::Commerce>,
+    price: Option<serde_json::Value>,
+    commerce: Option<serde_json::Value>,
+    offer_version: Option<u16>,
     description: Option<String>,
     issued_at: i64,
     ttl_seconds: Option<u32>,
@@ -25,37 +26,55 @@ struct Draft {
 fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
     let issued = DateTime::from_timestamp(draft.issued_at, 0).ok_or("invalid issue time")?;
     let keys = SellerKeyPair::generate();
-    let commerce = draft.commerce.or_else(|| {
-        draft.endpoint.map(|endpoint| zadp_protocol::Commerce {
-            endpoint,
-            price: Price::zec(
-                draft
-                    .price
-                    .as_deref()
-                    .unwrap_or("0")
-                    .parse::<Decimal>()
-                    .unwrap_or_default(),
-            ),
-        })
-    });
-    let mut offer = match commerce {
-        Some(c) => OfferDraft::new_ulid(
+    let endpoint = draft
+        .commerce
+        .as_ref()
+        .and_then(|c| c["endpoint"].as_str())
+        .map(String::from)
+        .or(draft.endpoint);
+    let amount = draft
+        .commerce
+        .as_ref()
+        .and_then(|c| c["price"]["amount"].as_str())
+        .map(String::from)
+        .or_else(|| {
+            draft
+                .price
+                .as_ref()
+                .and_then(|p| p.as_str().or_else(|| p["amount"].as_str()))
+                .map(String::from)
+        });
+    let expiry = issued + Duration::seconds(i64::from(draft.ttl_seconds.unwrap_or(86_400)));
+    let mut offer = match (amount, endpoint) {
+        (Some(a), Some(e)) => OfferDraft::new_ulid(
             keys.id.clone(),
             draft.capability,
             draft.title,
-            c.price,
-            c.endpoint,
-            issued + Duration::seconds(i64::from(draft.ttl_seconds.unwrap_or(86_400))),
-            B64.encode([0u8; 16]),
+            Price::zec(a.parse::<Decimal>()?),
+            e,
+            expiry,
+            B64.encode([0; 16]),
         ),
-        None => OfferDraft::new_discovery(
+        (Some(a), None) => OfferDraft::new_discovery(
             keys.id.clone(),
             draft.capability,
             draft.title,
-            issued + Duration::seconds(i64::from(draft.ttl_seconds.unwrap_or(86_400))),
-            B64.encode([0u8; 16]),
+            expiry,
+            B64.encode([0; 16]),
+        )
+        .with_price(Price::zec(a.parse::<Decimal>()?)),
+        (None, None) => OfferDraft::new_discovery(
+            keys.id.clone(),
+            draft.capability,
+            draft.title,
+            expiry,
+            B64.encode([0; 16]),
         ),
+        _ => return Err("endpoint requires price".into()),
     };
+    if let Some(v) = draft.offer_version {
+        offer = offer.with_version(v);
+    }
     if let Some(geo) = draft.geo {
         offer = offer.with_geo(geo);
     }

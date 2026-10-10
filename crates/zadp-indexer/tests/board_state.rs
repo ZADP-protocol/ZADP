@@ -484,6 +484,7 @@ async fn signed_geo_on_v1_board_survives_restart_without_schema_migration() {
         radius_m: 50000,
     });
     local.commerce = None;
+    local.price = None;
     local.signature = seller.sign(&signing_bytes(&local).unwrap());
     let mut changed = local.clone();
     changed.geo.as_mut().unwrap().radius_m = 60000;
@@ -571,4 +572,38 @@ async fn policy_revision_requires_separate_database_and_preserves_expired_histor
     assert_eq!(before.board(), &old);
     assert_eq!(rebuilt.board(), &new);
     assert!(SqliteOfferRepository::open(&new_path, old).is_err());
+}
+
+#[tokio::test]
+async fn priced_v3_listing_and_legacy_offers_share_existing_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("priced.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let legacy = offer(&seller, 1);
+    let now = legacy.issued_at.unwrap();
+    let draft = OfferDraft::new_discovery(
+        seller.id.clone(),
+        "local.service",
+        "Bike repair",
+        now + Duration::days(1),
+        B64.encode([3; 16]),
+    )
+    .with_price(Price::zec("0.02".parse().unwrap()));
+    let manual = bind_offer(draft.sign(&seller).unwrap(), "ai-services", now, &seller).unwrap();
+    {
+        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+        assert_eq!(
+            repo.apply_block(block(BIRTHDAY, 1, 0, vec![legacy.clone(), manual.clone()]))
+                .unwrap(),
+            2
+        );
+    }
+    let repo = SqliteOfferRepository::open(&path, board).unwrap();
+    assert_eq!(repo.get(&legacy.id).await.unwrap().unwrap().offer, legacy);
+    let saved = repo.get(&manual.id).await.unwrap().unwrap().offer;
+    assert_eq!(saved, manual);
+    assert_eq!(saved.purchase_mode(), PurchaseMode::Manual);
+    assert!(saved.commerce.is_none());
+    assert_eq!(saved.price.unwrap().amount, Decimal::new(2, 2));
 }

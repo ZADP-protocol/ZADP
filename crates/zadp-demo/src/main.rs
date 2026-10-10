@@ -69,9 +69,9 @@ async fn main() -> Result<()> {
         "  Published offer {} @ {} ZEC",
         offer.title,
         offer
-            .commerce
+            .price
             .as_ref()
-            .map(|c| c.price.amount.to_string())
+            .map(|p| p.amount.to_string())
             .unwrap_or_else(|| "none (discovery only)".into())
     );
     println!("  offer_id={}", offer.id);

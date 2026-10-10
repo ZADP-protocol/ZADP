@@ -60,23 +60,23 @@ fn commerce_presence_endpoint_price_are_signed() {
     let (o, k) = offer(false, true);
     let complete = Commerce {
         endpoint: "https://seller.example".into(),
-        price: Price::zec(Decimal::new(1, 2)),
     };
     let mut changed = o.clone();
+    changed.price = Some(Price::zec(Decimal::new(1, 2)));
     changed.commerce = Some(complete);
     assert!(verify_offer(&changed, Utc::now()).is_err());
     changed.signature = k.sign(&signing_bytes(&changed).unwrap());
     verify_offer(&changed, Utc::now()).unwrap();
     let signed = changed.clone();
     changed.commerce = None;
+    changed.price = None;
     assert!(verify_offer(&changed, Utc::now()).is_err());
     for price in [false, true] {
         let mut changed = signed.clone();
-        let c = changed.commerce.as_mut().unwrap();
         if price {
-            c.price.amount = Decimal::new(2, 2);
+            changed.price.as_mut().unwrap().amount = Decimal::new(2, 2);
         } else {
-            c.endpoint = "https://other.example".into();
+            changed.commerce.as_mut().unwrap().endpoint = "https://other.example".into();
         }
         assert!(verify_offer(&changed, Utc::now()).is_err());
     }
@@ -103,17 +103,17 @@ fn partial_invalid_commerce_rejected_no_price_required_for_discovery() {
         "bad",
     ] {
         let mut x = o.clone();
+        x.price = Some(Price::zec(Decimal::new(1, 2)));
         x.commerce = Some(Commerce {
             endpoint: endpoint.into(),
-            price: Price::zec(Decimal::new(1, 2)),
         });
         x.signature = k.sign(&signing_bytes(&x).unwrap());
         assert!(verify_offer(&x, Utc::now()).is_err());
     }
     let mut x = o.clone();
+    x.price = Some(Price::zec(Decimal::ZERO));
     x.commerce = Some(Commerce {
         endpoint: "https://seller.example".into(),
-        price: Price::zec(Decimal::ZERO),
     });
     x.signature = k.sign(&signing_bytes(&x).unwrap());
     assert!(verify_offer(&x, Utc::now()).is_err());

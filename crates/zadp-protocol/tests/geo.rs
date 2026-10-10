@@ -192,7 +192,7 @@ fn geo_draft_selects_v2_and_absent_geo_keeps_v1() {
         k.id.clone(),
         "cleaning",
         "Cabin cleaning",
-        o.commerce.as_ref().unwrap().price.clone(),
+        o.price.as_ref().unwrap().clone(),
         o.commerce.as_ref().unwrap().endpoint.clone(),
         o.expires_at,
         o.nonce.clone(),

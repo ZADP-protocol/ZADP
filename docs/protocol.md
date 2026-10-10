@@ -389,3 +389,7 @@ compatibility review/version decision rather than a silent overnight change.
 A signature authenticates the reconstructed canonical typed OFFER, not transport
 bytes or service quality. The bytewise encoded-key ordering and timestamp/decimal
 string conventions used by this implementation are normative for both offer versions.
+
+## Independent price in Offer v3
+
+[Offer v3 commercial modes](commercial-modes-v3.md) specify the new signed representation and wire v3 tuple. Existing Offer v1/v2 representations above are frozen, including the published mainnet v2 geographic Offer. BoardDescriptor v1 is unchanged.

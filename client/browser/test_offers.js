@@ -31,3 +31,16 @@ const verification={status:'verified',origin:'https://seller.example',expires_at
 assert.equal(parseOffersResponse({offers:[{...offer,commerce_verification:verification}]}).length,1);
 for(const bad of [{status:'unknown'},{status:123},{status:'verified'}, {...verification,valid_until:'invalid'}])assert.throws(()=>parseOffersResponse({offers:[{...offer,commerce_verification:bad}]}));
 assert.equal(parseOffersResponse({offers:[{...offer,commerce_verification:{status:'unavailable'}}]}).length,1);
+const {offerPrice,offerCommerce,offerPurchaseMode}=require('./offers.js');
+for(const mode of ['discovery','manual','automated']){
+ const v3={...discovery,zadp:3,price:mode==='discovery'?null:{amount:'0.02',currency:'ZEC'},commerce:mode==='automated'?{endpoint:'https://seller.example'}:null,purchase_mode:mode};
+ assert.equal(parseOffersResponse({offers:[v3]}).length,1);assert.equal(offerPurchaseMode(v3),mode);assert.equal(!!offerPrice(v3),mode!=='discovery');assert.equal(!!offerCommerce(v3),mode==='automated');
+ if(mode!=='discovery')assert.equal(offerPrice(v3).amount,'0.02');
+ assert.throws(()=>parseOffersResponse({offers:[{...v3,purchase_mode:mode==='manual'?'automated':'manual'}]}));
+}
+const manual={...discovery,zadp:3,price:{amount:'0.02',currency:'ZEC'}};
+for(const price of [{amount:'0',currency:'ZEC'},{amount:'-1',currency:'ZEC'},{amount:'0.000000001',currency:'ZEC'},{amount:'0.02',currency:'USD'},{amount:'21000000.00000001',currency:'ZEC'}])assert.throws(()=>parseOffersResponse({offers:[{...manual,price}]}));
+assert.throws(()=>parseOffersResponse({offers:[{...discovery,zadp:3,commerce:{endpoint:'https://seller.example'}}]}));
+assert.throws(()=>parseOffersResponse({offers:[{...manual,commerce:{endpoint:'https://seller.example',price:manual.price}}]}));
+assert.throws(()=>parseOffersResponse({offers:[{...manual,zadp:2}]}));
+console.log('v3 discovery/manual/automated semantics and mixed-version rejection passed.');

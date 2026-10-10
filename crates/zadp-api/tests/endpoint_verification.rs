@@ -216,6 +216,10 @@ async fn unavailable_endpoint_keeps_offer_in_read_only_hosted_api_and_repository
             .as_object_mut()
             .unwrap()
             .remove("commerce_verification");
+        data["offers"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("purchase_mode");
         assert_eq!(data["offers"][0], serde_json::to_value(&original).unwrap());
         drain().await;
     }
@@ -233,5 +237,94 @@ async fn unavailable_endpoint_keeps_offer_in_read_only_hosted_api_and_repository
                 .status(),
             404
         );
+    }
+}
+
+#[tokio::test]
+async fn v3_modes_are_explicit_in_api_and_manual_never_fetches_endpoint() {
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
+    use tower::ServiceExt;
+    use zadp_indexer::{InMemoryOfferRepository, OfferRecord, OfferRepository};
+    let k = SellerKeyPair::generate();
+    let repo = Arc::new(InMemoryOfferRepository::new());
+    for mode in 0..3 {
+        let mut draft = OfferDraft::new_discovery(
+            k.id.clone(),
+            "text.uppercase",
+            "Mode",
+            Utc::now() + Duration::hours(1),
+            "nonce",
+        )
+        .with_version(3);
+        if mode > 0 {
+            draft.price = Some(Price::zec("0.02".parse().unwrap()));
+        }
+        if mode == 2 {
+            draft.commerce = Some(zadp_protocol::Commerce {
+                endpoint: "https://seller.example".into(),
+            });
+        }
+        repo.upsert_first_wins(OfferRecord {
+            offer: draft.sign(&k).unwrap(),
+            source_txid: zadp_zcash::TxId("fixture".into()),
+            indexed_at: Utc::now(),
+            chain: None,
+        })
+        .await
+        .unwrap();
+    }
+    let fake = Arc::new(Fake {
+        result: Ok(proof(&k)),
+        calls: AtomicUsize::new(0),
+    });
+    let verifier = EndpointVerifier::new(fake.clone());
+    let records = repo.list(None).await.unwrap();
+    for r in records.iter().filter(|r| r.offer.commerce.is_none()) {
+        verifier.status(&r.offer);
+    }
+    drain().await;
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 0);
+    let app = zadp_api::board_router_with_verifier(
+        repo.clone(),
+        zadp_api::HostPolicy::default(),
+        verifier.clone(),
+    );
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/offers")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let data: serde_json::Value =
+        serde_json::from_slice(&to_bytes(res.into_body(), 65536).await.unwrap()).unwrap();
+    for value in data["offers"].as_array().unwrap() {
+        match value["purchase_mode"].as_str().unwrap() {
+            "discovery" => {
+                assert!(value.get("price").is_none());
+                assert!(value.get("commerce").is_none());
+            }
+            "manual" => {
+                assert_eq!(value["price"]["amount"], "0.02");
+                assert!(value.get("commerce").is_none());
+                assert_eq!(value["commerce_verification"]["status"], "not_required");
+            }
+            "automated" => {
+                assert_eq!(value["price"]["amount"], "0.02");
+                assert_eq!(value["commerce"]["endpoint"], "https://seller.example");
+                assert!(value["commerce"].get("price").is_none());
+            }
+            _ => panic!("unknown mode"),
+        }
+    }
+    drain().await;
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 1);
+    for r in records.iter().filter(|r| r.offer.commerce.is_some()) {
+        assert_eq!(verifier.status(&r.offer).status, CommerceStatus::Verified);
     }
 }

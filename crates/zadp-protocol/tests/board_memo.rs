@@ -214,6 +214,7 @@ fn ninety_day_board_accepts_bounded_v1_v2_lifetimes_without_wire_changes() {
             o.zadp = version;
             if version == OFFER_VERSION_V2 {
                 o.commerce = None;
+                o.price = None;
             }
             let issued = o.issued_at.unwrap();
             o.expires_at = issued + Duration::days(days);

@@ -1,5 +1,7 @@
 # Optional commerce in Offer v2
 
+Historical v2 design record. V2 is now published and frozen; the current independent-price model and Web/CLI behavior are documented in [Offer v3 commercial modes](commercial-modes-v3.md). The pre-publication rationale below does not authorize reinterpreting published v2.
+
 **Discovery is core. Commerce is optional. ZADP discovery does not require a commerce endpoint.**
 
 This is a deliberate correction of the draft v2 model before its first recorded

@@ -121,10 +121,9 @@ impl Config {
         use rust_decimal::prelude::ToPrimitive;
         let zat = self
             .offer
-            .commerce
+            .price
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("offer has no automated commerce"))?
-            .price
             .amount
             * rust_decimal::Decimal::from(100_000_000u64);
         ensure!(zat.fract().is_zero(), "price exceeds ZEC precision");

@@ -72,7 +72,12 @@ const GeoDiscovery = (() => {
 
 'use strict';
 const OfferGeo=GeoDiscovery;
-function offerCommerce(offer) { return offer.zadp===2 ? (offer.commerce ?? null) : {endpoint:offer.endpoint,price:offer.price}; }
+function offerPrice(offer) {return offer.zadp===2 ? (offer.commerce?.price ?? null) : (offer.price ?? null);}
+function offerCommerce(offer) {
+  if(offer.zadp===3)return offer.commerce ? {endpoint:offer.commerce.endpoint,price:offer.price} : null;
+  return offer.zadp===2 ? (offer.commerce ?? null) : {endpoint:offer.endpoint,price:offer.price};
+}
+function offerPurchaseMode(offer) {return offerCommerce(offer)?.endpoint ? 'automated' : offerPrice(offer) ? 'manual' : 'discovery';}
 // Validate untrusted index JSON before rendering nested fields. Never execute URLs.
 function parseOffersResponse(data) {
   if (!data || !Array.isArray(data.offers) || data.offers.length > 1000) throw Error('Invalid index response');
@@ -81,25 +86,33 @@ function parseOffersResponse(data) {
     for (const key of ['id','seller','title','capability','expires_at']) {
       if (typeof offer[key] !== 'string' || !offer[key] || offer[key].length > 4096) throw Error('Invalid offer field');
     }
-    if(offer.zadp!=null && ![1,2].includes(offer.zadp))throw Error('Unsupported offer version');
+    if(offer.zadp!=null && ![1,2,3].includes(offer.zadp))throw Error('Unsupported offer version');
     if(offer.geo != null) {
-      if(offer.zadp!==2)throw Error('Geo requires Offer v2');
+      if(![2,3].includes(offer.zadp))throw Error('Geo requires Offer v2 or v3');
       OfferGeo.validateArea(offer.geo);
     }
     if (offer.board_id != null && (typeof offer.board_id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(offer.board_id))) throw Error('Invalid board');
     if (offer.board_id != null && offer.chain?.board_id != null && offer.board_id !== offer.chain.board_id) throw Error('Board binding mismatch');
     if (!Number.isFinite(Date.parse(offer.expires_at))) throw Error('Invalid expiry');
     if(offer.zadp===2 && ('endpoint' in offer || 'price' in offer))throw Error('V2 requires commerce block');
+    if(offer.zadp===3) {
+      if('endpoint' in offer)throw Error('V3 requires endpoint-only commerce');
+      if(offer.commerce!=null && (typeof offer.commerce!=='object'||Object.keys(offer.commerce).join(',')!=='endpoint'||offer.price==null))throw Error('V3 endpoint requires price');
+    }
+    const advertised=offerPrice(offer);
+    if(advertised!=null && (!advertised || advertised.currency!=='ZEC' || typeof advertised.amount!=='string' || !/^\d+(\.\d{1,8})?$/.test(advertised.amount) || !(Number(advertised.amount)>0 && Number(advertised.amount)<=21000000)))throw Error('Invalid price');
+    if(offer.zadp===3 && advertised!=null){const [whole,fraction='']=advertised.amount.split('.');const zat=BigInt(whole)*100000000n+BigInt(fraction.padEnd(8,'0'));if(zat<=0n||zat>2100000000000000n)throw Error('Invalid price');}
+    if(offer.purchase_mode!=null && offer.purchase_mode!==offerPurchaseMode(offer))throw Error('Purchase mode mismatch');
     const commerce=offerCommerce(offer);
     if(commerce!==null) {
       if(!commerce || typeof commerce.endpoint!=='string' || !commerce.endpoint || commerce.endpoint.length>4096)throw Error('Invalid endpoint');
-      if(offer.zadp===2){const url=new URL(commerce.endpoint);if(url.protocol!=='https:'||!url.hostname||url.username||url.password)throw Error('Invalid HTTPS endpoint');}
+      if(offer.zadp>=2){const url=new URL(commerce.endpoint);if(url.protocol!=='https:'||!url.hostname||url.username||url.password)throw Error('Invalid HTTPS endpoint');}
       const price=commerce.price;
       if(!price || price.currency!=='ZEC' || typeof price.amount!=='string' || !/^\d+(\.\d{1,8})?$/.test(price.amount) || !(Number(price.amount)>0 && Number(price.amount)<=21000000))throw Error('Invalid price');
     }
     if(offer.commerce_verification != null) {
       const proof=offer.commerce_verification;
-      if(!proof || !['discovery_only','verified','unverified','unavailable'].includes(proof.status))throw Error('Invalid commerce verification status');
+      if(!proof || !['not_required','discovery_only','verified','unverified','unavailable'].includes(proof.status))throw Error('Invalid commerce verification status');
       if(proof.status==='verified' && (typeof proof.origin!=='string' || proof.origin.length>2048
         || typeof proof.expires_at!=='string' || !Number.isFinite(Date.parse(proof.expires_at))
         || typeof proof.valid_until!=='string' || !Number.isFinite(Date.parse(proof.valid_until))))throw Error('Invalid commerce verification metadata');
@@ -120,4 +133,4 @@ function offersNetwork(offers) {
 }
 function offerBoard(offer) { return offer.board_id ?? offer.chain?.board_id ?? ''; }
 function offersForBoard(offers, board) { return board ? offers.filter(o => offerBoard(o) === board) : offers; }
-if(typeof module !== 'undefined') module.exports={offerCommerce,GeoDiscovery,parseOffersResponse,offersNetwork,offerBoard,offersForBoard};
+if(typeof module !== 'undefined') module.exports={offerPrice,offerPurchaseMode,offerCommerce,GeoDiscovery,parseOffersResponse,offersNetwork,offerBoard,offersForBoard};

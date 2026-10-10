@@ -72,6 +72,7 @@ pub struct OffersResponse {
 pub struct IndexedOffer {
     #[serde(flatten)]
     pub offer: Offer,
+    pub purchase_mode: zadp_protocol::PurchaseMode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain: Option<ChainObservation>,
     pub commerce_verification: CommerceVerification,
@@ -138,6 +139,7 @@ async fn board_offers<R: OfferRepository + 'static>(
             .into_iter()
             .filter(|r| policy.permits_record(r))
             .map(|r| IndexedOffer {
+                purchase_mode: r.offer.purchase_mode(),
                 commerce_verification: state.endpoints.status(&r.offer),
                 offer: r.offer,
                 chain: r.chain,
@@ -164,9 +166,14 @@ where
         offers: records
             .into_iter()
             .map(|r| IndexedOffer {
+                purchase_mode: r.offer.purchase_mode(),
                 commerce_verification: CommerceVerification {
                     status: if r.offer.commerce.is_none() {
-                        CommerceStatus::DiscoveryOnly
+                        if r.offer.price.is_some() {
+                            CommerceStatus::NotRequired
+                        } else {
+                            CommerceStatus::DiscoveryOnly
+                        }
                     } else {
                         CommerceStatus::Unverified
                     },

@@ -9,6 +9,7 @@ use std::io::Cursor;
 const MAGIC: &[u8] = b"\xf5ZADP";
 pub const WIRE_VERSION_V1: u8 = 1;
 pub const WIRE_VERSION_V2: u8 = 2;
+pub const WIRE_VERSION_V3: u8 = 3;
 type WireOffer = (
     u16,
     String,
@@ -34,6 +35,24 @@ type WireOfferV2 = (
     String,
     Option<String>,
     Option<(String, u64)>,
+    i64,
+    i64,
+    ByteBuf,
+    ByteBuf,
+    Option<(i32, i32, u32)>,
+);
+
+// v3: price and endpoint are independently signed nullable fields.
+type WireOfferV3 = (
+    u16,
+    String,
+    String,
+    ByteBuf,
+    String,
+    String,
+    Option<String>,
+    Option<u64>,
+    Option<String>,
     i64,
     i64,
     ByteBuf,
@@ -69,8 +88,8 @@ pub fn bind_offer(
     }
     offer.board_id = Some(board_id.into());
     offer.issued_at = Some(issued_at);
-    if let Some(c) = &mut offer.commerce {
-        c.price.amount = c.price.amount.normalize();
+    if let Some(p) = &mut offer.price {
+        p.amount = p.amount.normalize();
     }
     offer.signature = keys.sign(&crate::signing_bytes(&offer)?);
     Ok(offer)
@@ -86,8 +105,8 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
     if offer.message_type != "offer" {
         return Err(ProtocolError::UnsupportedType(offer.message_type.clone()));
     }
-    if let Some(c) = &offer.commerce {
-        if c.price.currency != "ZEC" || c.price.amount != c.price.amount.normalize() {
+    if let Some(p) = &offer.price {
+        if p.currency != "ZEC" || p.amount != p.amount.normalize() {
             return Err(invalid("invalid price"));
         }
     }
@@ -115,7 +134,13 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
             offer.capability.clone(),
             offer.title.clone(),
             offer.description.clone(),
-            zec_to_zat(c.price.amount)?,
+            zec_to_zat(
+                offer
+                    .price
+                    .as_ref()
+                    .ok_or_else(|| invalid("missing price"))?
+                    .amount,
+            )?,
             c.endpoint.clone(),
             issued.timestamp(),
             offer.expires_at.timestamp(),
@@ -124,11 +149,45 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
         );
         ciborium::ser::into_writer(&wire, &mut payload)
             .map_err(|e| ProtocolError::Canonical(e.to_string()))?;
+    } else if offer.zadp == crate::OFFER_VERSION_V3 {
+        let wire: WireOfferV3 = (
+            offer.zadp,
+            board,
+            offer.id.clone(),
+            seller,
+            offer.capability.clone(),
+            offer.title.clone(),
+            offer.description.clone(),
+            offer
+                .price
+                .as_ref()
+                .map(|p| zec_to_zat(p.amount))
+                .transpose()?,
+            offer.commerce.as_ref().map(|c| c.endpoint.clone()),
+            issued.timestamp(),
+            offer.expires_at.timestamp(),
+            nonce,
+            signature,
+            offer.geo.map(|g| (g.lat_e5, g.lon_e5, g.radius_m)),
+        );
+        ciborium::ser::into_writer(&wire, &mut payload)
+            .map_err(|e| ProtocolError::Canonical(e.to_string()))?;
     } else {
         let commerce = offer
             .commerce
             .as_ref()
-            .map(|c| Ok((c.endpoint.clone(), zec_to_zat(c.price.amount)?)))
+            .map(|c| {
+                Ok((
+                    c.endpoint.clone(),
+                    zec_to_zat(
+                        offer
+                            .price
+                            .as_ref()
+                            .ok_or_else(|| invalid("missing price"))?
+                            .amount,
+                    )?,
+                ))
+            })
             .transpose()?;
         let geo = offer.geo.map(|g| (g.lat_e5, g.lon_e5, g.radius_m));
         let wire: WireOfferV2 = (
@@ -156,7 +215,9 @@ pub fn encode_offer_memo(offer: &Offer) -> Result<[u8; 512], ProtocolError> {
     }
     let mut memo = [0u8; 512];
     memo[..5].copy_from_slice(MAGIC);
-    memo[5] = if offer.zadp == crate::OFFER_VERSION_V2 {
+    memo[5] = if offer.zadp == crate::OFFER_VERSION_V3 {
+        WIRE_VERSION_V3
+    } else if offer.zadp == crate::OFFER_VERSION_V2 {
         WIRE_VERSION_V2
     } else {
         WIRE_VERSION_V1
@@ -174,7 +235,8 @@ pub fn decode_offer_memo(memo: &[u8]) -> Result<Option<Offer>, ProtocolError> {
     if !memo.starts_with(MAGIC) {
         return Ok(None);
     }
-    if memo.len() != 512 || ![WIRE_VERSION_V1, WIRE_VERSION_V2].contains(&memo[5]) {
+    if memo.len() != 512 || ![WIRE_VERSION_V1, WIRE_VERSION_V2, WIRE_VERSION_V3].contains(&memo[5])
+    {
         return Err(invalid("unsupported or malformed ZADP memo framing"));
     }
     decode_offer_memo_inner(memo).map(Some)
@@ -193,6 +255,7 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
         capability,
         title,
         description,
+        price,
         commerce,
         issued,
         expiry,
@@ -210,24 +273,24 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
             c,
             t,
             d,
-            Some(Commerce {
-                endpoint,
-                price: Price::zec(Decimal::from(amount) / Decimal::from(100_000_000u64)),
-            }),
+            Some(Price::zec(
+                Decimal::from(amount) / Decimal::from(100_000_000u64),
+            )),
+            Some(Commerce { endpoint }),
             issued,
             expiry,
             n,
             sig,
             None,
         )
-    } else {
+    } else if memo[5] == WIRE_VERSION_V2 {
         let (v, b, i, s, c, t, d, commerce, issued, expiry, n, sig, geo): WireOfferV2 =
             ciborium::de::from_reader(&mut reader)
                 .map_err(|_| invalid("malformed wire v2 CBOR"))?;
-        let commerce = commerce.map(|(endpoint, amount)| Commerce {
-            endpoint,
-            price: Price::zec(Decimal::from(amount) / Decimal::from(100_000_000u64)),
-        });
+        let price = commerce
+            .as_ref()
+            .map(|(_, amount)| Price::zec(Decimal::from(*amount) / Decimal::from(100_000_000u64)));
+        let commerce = commerce.map(|(endpoint, _)| Commerce { endpoint });
         let geo = geo.map(|(lat_e5, lon_e5, radius_m)| crate::GeoArea {
             lat_e5,
             lon_e5,
@@ -236,7 +299,33 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
         if let Some(g) = geo {
             g.validate()?;
         }
-        (v, b, i, s, c, t, d, commerce, issued, expiry, n, sig, geo)
+        (
+            v, b, i, s, c, t, d, price, commerce, issued, expiry, n, sig, geo,
+        )
+    } else {
+        let (v, b, i, s, c, t, d, amount, endpoint, issued, expiry, n, sig, geo): WireOfferV3 =
+            ciborium::de::from_reader(&mut reader)
+                .map_err(|_| invalid("malformed wire v3 CBOR"))?;
+        (
+            v,
+            b,
+            i,
+            s,
+            c,
+            t,
+            d,
+            amount.map(|a| Price::zec(Decimal::from(a) / Decimal::from(100_000_000u64))),
+            endpoint.map(|endpoint| Commerce { endpoint }),
+            issued,
+            expiry,
+            n,
+            sig,
+            geo.map(|(lat_e5, lon_e5, radius_m)| crate::GeoArea {
+                lat_e5,
+                lon_e5,
+                radius_m,
+            }),
+        )
     };
     if reader.position() != len as u64
         || seller.len() != 32
@@ -247,6 +336,7 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
     }
     if (memo[5] == WIRE_VERSION_V1 && zadp != crate::OFFER_VERSION_V1)
         || (memo[5] == WIRE_VERSION_V2 && zadp != crate::OFFER_VERSION_V2)
+        || (memo[5] == WIRE_VERSION_V3 && zadp != crate::OFFER_VERSION_V3)
     {
         return Err(invalid("offer/wire version mismatch"));
     }
@@ -273,6 +363,7 @@ fn decode_offer_memo_inner(memo: &[u8]) -> Result<Offer, ProtocolError> {
         capability,
         title,
         description,
+        price,
         commerce,
         expires_at: DateTime::from_timestamp(expiry, 0).ok_or_else(|| invalid("invalid expiry"))?,
         issued_at: Some(

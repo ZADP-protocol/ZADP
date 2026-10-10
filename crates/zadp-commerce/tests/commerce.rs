@@ -670,3 +670,46 @@ async fn summarize_capability_description_and_idempotent_execution() {
         .unwrap();
     assert_eq!(count, 1);
 }
+
+#[test]
+fn v3_automated_order_payment_and_manual_rejection() {
+    let (_dir, mut c, now) = fixture();
+    let keys = SellerKeyPair::generate();
+    let automated = OfferDraft::new_ulid(
+        keys.id.clone(),
+        "text.uppercase",
+        "V3 service",
+        Price::zec("0.02".parse().unwrap()),
+        "https://seller.example",
+        Utc::now() + Duration::days(1),
+        "bm9uY2U=",
+    )
+    .with_version(3)
+    .sign(&keys)
+    .unwrap();
+    c.offer = automated;
+    c.validate().unwrap();
+    let mut store = Store::open(c.clone()).unwrap();
+    let order = store.create(request(&c), &random_hex(32), now).unwrap();
+    assert_eq!(order.amount_zat, 2_000_000);
+    let result = settle(&mut store, &order, &evidence(&c, &order, now), now + 1);
+    assert_eq!(result.status, "completed");
+    assert_eq!(result.result.as_deref(), Some("HELLO WORLD SS"));
+    let mut manual = c.clone();
+    manual.offer = OfferDraft::new_discovery(
+        keys.id.clone(),
+        "text.uppercase",
+        "Manual",
+        Utc::now() + Duration::days(1),
+        "bm9uY2U=",
+    )
+    .with_price(Price::zec("0.02".parse().unwrap()))
+    .sign(&keys)
+    .unwrap();
+    assert!(manual
+        .validate()
+        .unwrap_err()
+        .to_string()
+        .contains("no automated commerce"));
+    assert!(Store::open(manual).is_err());
+}

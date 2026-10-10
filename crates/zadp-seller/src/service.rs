@@ -107,7 +107,7 @@ impl<A: ZcashAdapter> SellerService<A> {
             offer_id = %offer.id,
             txid = %txid.0,
             title = %offer.title,
-            amount = ?offer.commerce.as_ref().map(|c| c.price.amount),
+            amount = ?offer.price.as_ref().map(|p| p.amount),
             "seller published offer"
         );
 
@@ -129,7 +129,7 @@ impl<A: ZcashAdapter> SellerService<A> {
             return Err(SellerError::OfferExpired);
         }
 
-        let commerce = offer
+        let _commerce = offer
             .commerce
             .as_ref()
             .ok_or(SellerError::UnknownOffer(req.offer_id.clone()))?;
@@ -137,8 +137,12 @@ impl<A: ZcashAdapter> SellerService<A> {
         let invoice = Invoice {
             invoice_id: Ulid::new().to_string(),
             offer_id: offer.id.clone(),
-            amount: commerce.price.amount,
-            currency: commerce.price.currency.clone(),
+            amount: offer
+                .price
+                .as_ref()
+                .ok_or_else(|| SellerError::UnknownOffer(req.offer_id.clone()))?
+                .amount,
+            currency: offer.price.as_ref().unwrap().currency.clone(),
             pay_to: self.pay_to.clone(),
             memo_hint: serde_json::json!({
                 "order_id": order_id,
