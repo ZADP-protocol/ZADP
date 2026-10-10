@@ -72,7 +72,7 @@ Seller service endpoints are optional. Protocol 1.0 wire 3 accepts discovery wit
 ## Hosted alpha interface
 
 [Open the ZADP hosted alpha at zadp.io](https://zadp.io/).
-The alpha currently requires access credentials; it is a separate reference
+The alpha is a separate reference
 product, not a requirement for independent protocol implementations.
 
 ![ZADP globe with clearly labelled synthetic demo inventory](docs/images/zadp-globe-demo.png)
