@@ -589,21 +589,20 @@ async fn priced_v3_listing_and_legacy_offers_share_existing_database() {
         now + Duration::days(1),
         B64.encode([3; 16]),
     )
-    .with_price(Price::zec("0.02".parse().unwrap()));
-    let manual = bind_offer(draft.sign(&seller).unwrap(), "ai-services", now, &seller).unwrap();
+    .with_endpoint("https://seller.example");
+    let service = bind_offer(draft.sign(&seller).unwrap(), "ai-services", now, &seller).unwrap();
     {
         let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
         assert_eq!(
-            repo.apply_block(block(BIRTHDAY, 1, 0, vec![legacy.clone(), manual.clone()]))
+            repo.apply_block(block(BIRTHDAY, 1, 0, vec![legacy.clone(), service.clone()]))
                 .unwrap(),
             2
         );
     }
     let repo = SqliteOfferRepository::open(&path, board).unwrap();
     assert_eq!(repo.get(&legacy.id).await.unwrap().unwrap().offer, legacy);
-    let saved = repo.get(&manual.id).await.unwrap().unwrap().offer;
-    assert_eq!(saved, manual);
-    assert_eq!(saved.purchase_mode(), PurchaseMode::Manual);
-    assert!(saved.commerce.is_none());
-    assert_eq!(saved.price.unwrap().amount, Decimal::new(2, 2));
+    let saved = repo.get(&service.id).await.unwrap().unwrap().offer;
+    assert_eq!(saved, service);
+    assert_eq!(saved.commerce.unwrap().endpoint, "https://seller.example");
+    assert!(saved.price.is_none());
 }

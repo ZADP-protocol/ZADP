@@ -37,6 +37,7 @@ or service results. A signature proves identity attribution, not service quality
   "title": "Bike repair — San Francisco area",
   "description": "Illustrative service-area example",
   "price": {"amount": "0.02", "currency": "ZEC"},
+  "commerce": {"endpoint": "https://seller.example"},
   "expires_at": "2030-01-31T00:00:00Z",
   "issued_at": "2030-01-01T00:00:00Z",
   "board_id": "local-services",
@@ -46,19 +47,19 @@ or service results. A signature proves identity attribution, not service quality
 }
 ```
 
-This conceptual example is a manual listing, not a real provider or signed
-publication. The exact typed model and mode examples are specified in
-[commercial modes](commercial-modes-v3.md).
+This conceptual example is a fixed-price service candidate, not a real provider
+or signed publication. See [seller endpoint primitives](commercial-modes-v3.md)
+for the pre-release wire-3 compatibility audit and exact model.
 
 - Discovery: `price` absent and `commerce` absent.
-- Manual settlement: positive fixed ZEC `price`, `commerce` absent.
-- Automated: positive fixed ZEC `price` and `commerce: {endpoint}`.
-- Endpoint without price is invalid. Currency is ZEC only. No contact protocol,
-  static payment address, fiat/unit pricing or negotiation is encoded.
+- Seller service: `commerce: {endpoint}`, with price absent.
+- Fixed-price service: positive fixed ZEC `price` and `commerce: {endpoint}`.
+- Price without endpoint is invalid. Geo remains optional in every case.
 
 JSON may omit absent optional fields or supply null. Canonical CBOR signs price
 and commerce as explicit maps or null. No v1 flat endpoint or v2 nested price is
-accepted in model 3. API `purchase_mode` is derived metadata, not a signed field.
+accepted in model 3. Host-derived endpoint verification and purchase availability
+are not signed protocol fields. An endpoint is not verified merely by being signed.
 
 ## Field and validation rules
 
@@ -73,10 +74,12 @@ zatoshis, at most eight meaningful decimals and at most 21 million ZEC. No
 floating-point money arithmetic is used. This service price is separate from
 board listing value, hosted publication price and Zcash network fee.
 
-Automated endpoint must be credential-free HTTPS. Hosted Buy additionally needs
-a supported seller order capability, host approval and a valid
-[endpoint ownership proof](endpoint-ownership.md). Manual/discovery listings
-require no endpoint proof and create no automated invoice or order.
+Seller service endpoint must be credential-free HTTPS. Its optional fixed price
+requires an endpoint. Hosted Buy additionally needs a supported seller order
+capability, host approval and current [endpoint ownership proof](endpoint-ownership.md).
+A verified no-price endpoint can be visited, but creates no invoice/order/payment.
+Endpoint absence requires no proof. Domain verification proves origin control,
+not KYC or service legitimacy.
 
 Expiry and issue time are RFC 3339 UTC; transport requires whole seconds. Expiry
 must be after issue time and obey the signed board TTL. Active discovery uses
@@ -164,7 +167,7 @@ Automated commerce uses the existing direct seller flow: order, ZIP-321 request,
 separate buyer wallet approval, observed payment, confirmation, execution and
 result. Endpoint proof binds the same seller identity to the HTTPS origin
 without installing seller identity private keys on the public seller server.
-Manual settlement is outside this automated flow. See [commerce](commerce.md)
+No-price service announcements are outside this payment flow. See [commerce](commerce.md)
 and [process boundaries](commerce-process-boundaries.md).
 
 `offer_update` and `offer_revoke` are not implemented message types; Protocol 1.0
@@ -179,6 +182,6 @@ not relabelled as a Protocol 1.0 wire 3 publication. A real wire 3 mainnet
 publication remains a separately approved future action.
 
 Tests cover frozen v1/v2 golden/mainnet bytes, legacy read rejection at the new
-publication boundary, all three model 3 modes, signatures, exact memo budgets,
+publication boundary, all valid model 3 primitive combinations, signatures, exact memo budgets,
 independent encrypted-note reconstruction, persistent DB/API behavior, endpoint
 ownership, expiry and browser-local matching.

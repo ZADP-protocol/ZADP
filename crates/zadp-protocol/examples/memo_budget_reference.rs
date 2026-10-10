@@ -55,14 +55,14 @@ fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
             expiry,
             B64.encode([0; 16]),
         ),
-        (Some(a), None) => OfferDraft::new_discovery(
+        (None, Some(e)) => OfferDraft::new_discovery(
             keys.id.clone(),
             draft.capability,
             draft.title,
             expiry,
             B64.encode([0; 16]),
         )
-        .with_price(Price::zec(a.parse::<Decimal>()?)),
+        .with_endpoint(e),
         (None, None) => OfferDraft::new_discovery(
             keys.id.clone(),
             draft.capability,
@@ -70,7 +70,7 @@ fn encoded_size(draft: Draft) -> Result<usize, Box<dyn std::error::Error>> {
             expiry,
             B64.encode([0; 16]),
         ),
-        _ => return Err("endpoint requires price".into()),
+        _ => return Err("fixed price requires endpoint".into()),
     };
     if let Some(v) = draft.offer_version {
         offer = offer.with_version(v);

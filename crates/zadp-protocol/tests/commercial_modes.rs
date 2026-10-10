@@ -15,10 +15,10 @@ fn sample(mode: usize, geo: bool) -> (Offer, SellerKeyPair) {
         B64.encode([1; 16]),
     )
     .with_version(3);
-    if mode > 0 {
+    if mode == 2 {
         d.price = Some(Price::zec("0.02".parse().unwrap()));
     }
-    if mode == 2 {
+    if mode > 0 {
         d.commerce = Some(Commerce {
             endpoint: "https://seller.example".into(),
         });
@@ -41,17 +41,9 @@ fn all_three_modes_roundtrip_without_protocol_migration() {
         for geo in [false, true] {
             let (o, _) = sample(mode, geo);
             verify_offer(&o, o.issued_at.unwrap()).unwrap();
-            assert_eq!(
-                o.purchase_mode(),
-                [
-                    PurchaseMode::Discovery,
-                    PurchaseMode::Manual,
-                    PurchaseMode::Automated
-                ][mode]
-            );
             let json = serde_json::to_value(&o).unwrap();
-            assert_eq!(json.get("price").is_some(), mode > 0);
-            assert_eq!(json.get("commerce").is_some(), mode == 2);
+            assert_eq!(json.get("price").is_some(), mode == 2);
+            assert_eq!(json.get("commerce").is_some(), mode > 0);
             if mode == 2 {
                 assert!(json["commerce"].get("price").is_none());
             }
@@ -108,7 +100,7 @@ fn price_endpoint_geo_and_absence_are_signed() {
     }
     let (o, _) = sample(1, false);
     let mut p = o.clone();
-    p.price = None;
+    p.commerce = None;
     assert!(verify_offer(&p, o.issued_at.unwrap()).is_err());
 }
 #[test]
@@ -193,10 +185,10 @@ fn protocol_1_defaults_only_to_wire3_and_rejects_legacy_publication() {
                 now + Duration::days(30),
                 B64.encode([1; 16]),
             );
-            if mode > 0 {
+            if mode == 2 {
                 d.price = Some(Price::zec("0.02".parse().unwrap()));
             }
-            if mode == 2 {
+            if mode > 0 {
                 d.commerce = Some(Commerce {
                     endpoint: "https://seller.example".into(),
                 });
@@ -226,4 +218,19 @@ fn protocol_1_defaults_only_to_wire3_and_rejects_legacy_publication() {
         assert!(verify_offer_for_publication(&o, now).is_err());
         assert_eq!(hex(encode_offer_memo(&o).unwrap()), value["memo_hex"]);
     }
+}
+
+#[test]
+fn price_without_endpoint_is_rejected_by_draft_json_memo_and_publication() {
+    let (mut o, keys) = sample(2, false);
+    o.commerce = None;
+    assert!(signing_bytes(&o).is_err());
+    assert!(encode_offer_memo(&o).is_err());
+    assert!(verify_offer(&o, o.issued_at.unwrap()).is_err());
+    assert!(verify_offer_for_publication(&o, o.issued_at.unwrap()).is_err());
+    assert!(serde_json::from_value::<Offer>(serde_json::to_value(&o).unwrap()).is_err());
+    let draft =
+        OfferDraft::new_discovery(keys.id.clone(), "service", "Invalid", o.expires_at, "nonce")
+            .with_price(Price::zec("0.01".parse().unwrap()));
+    assert!(draft.sign(&keys).is_err());
 }

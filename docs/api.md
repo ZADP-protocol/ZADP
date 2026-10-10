@@ -4,6 +4,10 @@ Snapshot: **2026-10-10**. Implementation baseline: Core
 `ff757e587445a9a04e26abd6085de7ab988cf829`, Web
 `230414a341d77464eff5ab4946aba2d83391e382`.
 
+The endpoint semantics sections describe the updated source implementation; the
+observed deployed baseline above still uses the previous metadata until a paired
+Core/Web deployment. No deployment is performed by this change.
+
 This describes implemented behavior and the hosted private-alpha exposure checked
 on that date. It is a human-readable reference, not an OpenAPI schema or a promise
 of future endpoints. Deployment may expose fewer routes than the Core implements.
@@ -122,30 +126,27 @@ Signed fields include `zadp`, `type` (`offer`), `id`, `seller`, `board_id`,
 are UTC RFC 3339 strings. Seller identity uses `ed25519:...`; nonce/signature use
 the protocol encodings. See [Protocol 1.0](protocol.md) for canonical/wire rules.
 
-Wire-3 commercial excerpts (illustrations, not complete signed Offers):
+Wire-3 primitive excerpts (not complete signed Offers):
 
 ```json
-{"zadp":3,"purchase_mode":"discovery"}
+{"zadp":3}
 ```
-
 ```json
-{"zadp":3,"price":{"amount":"0.02000000","currency":"ZEC"},"purchase_mode":"manual"}
+{"zadp":3,"commerce":{"endpoint":"https://seller.example"}}
 ```
-
 ```json
-{"zadp":3,"price":{"amount":"0.01000000","currency":"ZEC"},"commerce":{"endpoint":"https://seller.example"},"purchase_mode":"automated"}
+{"zadp":3,"price":{"amount":"0.01000000","currency":"ZEC"},"commerce":{"endpoint":"https://seller.example"}}
 ```
 
-- Discovery: no price or endpoint; no purchase flow.
-- Manual: signed positive fixed ZEC price, no endpoint; no `/orders`, invoice or
-  endpoint proof. Contact/settlement is outside this API.
-- Automated: signed price and endpoint; verified ownership and applicable host
-  policy are required before hosted Buy is enabled.
-
-Amounts are decimal strings, not JSON floating-point numbers. Service price is
-separate from hosted publication pricing and transaction fees. Legacy wire 1 has
-flat `price`/`endpoint`; wire 2 nests both in `commerce`. Do not reinterpret these
-objects as wire 3. `purchase_mode` is derived, unsigned API metadata.
+No endpoint means discovery only. Endpoint without price enables domain ownership
+verification and, when verified, a service link without payment. Price requires
+endpoint, with current proof and supported capability/host policy before Buy.
+Money is decimal string/ZEC only. Legacy wire 1 is flat price/endpoint, wire 2
+nests both in commerce; neither legacy encoding is reinterpreted.
+Unsigned API fields `has_endpoint`, `has_fixed_price`, `purchase_available`
+replace `purchase_mode`. Availability is false unless signature, activity, board
+admission, visibility, proof and supported reference order capability all pass.
+See [wire-3 cleanup decision](commercial-modes-v3.md).
 
 ### Geo and buyer privacy
 
@@ -172,10 +173,9 @@ publication output value, not the service price.
 
 ### Endpoint ownership status
 
-`commerce_verification.status` is one of:
+`endpoint_verification.status` is one of:
 
-- `discovery_only`: no price/commerce; proof unnecessary.
-- `not_required`: manual priced listing without commerce.
+- `not_applicable`: endpoint absent; no proof fetch or purchase.
 - `unverified`: pending, invalid or mismatched proof; Buy disabled.
 - `unavailable`: fetch/service failure; Buy disabled.
 - `verified`: valid proof from the matching seller and origin.

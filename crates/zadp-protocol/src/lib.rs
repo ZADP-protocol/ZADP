@@ -15,8 +15,8 @@ pub use error::ProtocolError;
 pub use identity::{SellerId, SellerKeyPair, Signature};
 pub use offer::{
     verify_offer, verify_offer_for_publication, Commerce, GeoArea, Offer, OfferDraft, OfferStatus,
-    Price, PurchaseMode, BOARD_DESCRIPTOR_VERSION, MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER,
-    OFFER_VERSION_V1, OFFER_VERSION_V2, OFFER_VERSION_V3, PROTOCOL_RELEASE, PROTOCOL_VERSION,
+    Price, BOARD_DESCRIPTOR_VERSION, MAX_GEO_RADIUS_M, MESSAGE_TYPE_OFFER, OFFER_VERSION_V1,
+    OFFER_VERSION_V2, OFFER_VERSION_V3, PROTOCOL_RELEASE, PROTOCOL_VERSION,
 };
 
 mod board;

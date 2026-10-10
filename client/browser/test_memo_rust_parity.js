@@ -4,7 +4,7 @@ const {spawnSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 const {memoBudget} = require('./memo-budget.js');
 const base = {board_id:'ai-services',title:'Test',capability:'llm',price:'0.01',endpoint:'https://example.com/zadp',issued_at:1791228000};
-const cases = [base,{...base,title:'t',capability:'x',board_id:'x',price:'0.00000001',endpoint:'https://x.example'},...([23,24,255,256,300,400].map(n=>({...base,endpoint:'https://example.com/'+ 'x'.repeat(n)})))];
+const cases = [{...base,endpoint:undefined,price:'0.01'}, {...base,price:undefined}, base,{...base,title:'t',capability:'x',board_id:'x',price:'0.00000001',endpoint:'https://x.example'},...([23,24,255,256,300,400].map(n=>({...base,endpoint:'https://example.com/'+ 'x'.repeat(n)})))];
 for (const n of [1,23,24,25,127,128,129,255,256]) cases.push({...base,title:'x'.repeat(n)});
 for (const title of ['äö你好','😀'.repeat(60),'😀'.repeat(80)]) cases.push({...base,title});
 for (const description of ['', 'a'.repeat(23), 'a'.repeat(24), 'a'.repeat(255), 'a'.repeat(256), 'a'.repeat(292), 'a'.repeat(293), '😀'.repeat(100)]) cases.push({...base,description});
@@ -16,7 +16,7 @@ for(const geo of [{lat_e5:3777493,lon_e5:-12241942,radius_m:50000},{lat_e5:-9000
 }
 for(const geo of [undefined,{lat_e5:3777500,lon_e5:-12241900,radius_m:25000}])for(const description of ['', 'x'.repeat(200),'x'.repeat(320),'x'.repeat(400)])cases.push({board_id:'ai-services',title:'Bike repair',capability:'local.service',commerce:null,geo,description,issued_at:1791228000});
 for(const ttl_seconds of [1,604800,1209600,2592000,4294967295])cases.push({...base,ttl_seconds});
-for(const geo of [undefined,{lat_e5:3777500,lon_e5:-12241900,radius_m:25000}])for(const mode of ['discovery','manual','automated'])for(const description of ['', 'x'.repeat(200),'x'.repeat(320),'x'.repeat(400)])cases.push({board_id:'local-services',title:'Bike repair',capability:'local.service',offer_version:3,commerce:mode==='automated'?{endpoint:'https://seller.example'}:null,price:mode==='discovery'?null:{amount:'0.02',currency:'ZEC'},geo,description,issued_at:1791228000});
+for(const geo of [undefined,{lat_e5:3777500,lon_e5:-12241900,radius_m:25000}])for(const mode of ['discovery','service','purchasable'])for(const description of ['', 'x'.repeat(200),'x'.repeat(320),'x'.repeat(400)])cases.push({board_id:'local-services',title:'Bike repair',capability:'local.service',offer_version:3,commerce:mode!=='discovery'?{endpoint:'https://seller.example'}:null,price:mode!=='purchasable'?null:{amount:'0.02',currency:'ZEC'},geo,description,issued_at:1791228000});
 const result = spawnSync('cargo',['run','--quiet','-p','zadp-protocol','--example','memo_budget_reference'],{cwd:require('node:path').resolve(__dirname,'../..'),input:cases.map(c=>JSON.stringify(c)).join('\n')+'\n',encoding:'utf8',timeout:300000});
 if (result.status !== 0) throw Error(result.stderr || result.error || 'Rust oracle failed');
 const rust = result.stdout.trim().split('\n').map(line=>JSON.parse(line));

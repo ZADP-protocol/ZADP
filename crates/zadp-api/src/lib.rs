@@ -72,10 +72,50 @@ pub struct OffersResponse {
 pub struct IndexedOffer {
     #[serde(flatten)]
     pub offer: Offer,
-    pub purchase_mode: zadp_protocol::PurchaseMode,
+    pub has_endpoint: bool,
+    pub has_fixed_price: bool,
+    pub purchase_available: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain: Option<ChainObservation>,
-    pub commerce_verification: CommerceVerification,
+    pub endpoint_verification: EndpointVerification,
+}
+
+impl IndexedOffer {
+    // Host-derived metadata, never part of the signed Offer. A proof establishes
+    // origin control only; the reference buyer also needs a supported capability.
+    pub(crate) fn new(
+        record: zadp_indexer::OfferRecord,
+        verification: EndpointVerification,
+    ) -> Self {
+        let has_endpoint = record.offer.commerce.is_some();
+        let has_fixed_price = record.offer.price.is_some();
+        let purchase_available = has_endpoint
+            && has_fixed_price
+            && verification.status == EndpointStatus::Verified
+            && verification
+                .expires_at
+                .is_some_and(|t| t > chrono::Utc::now())
+            && verification
+                .valid_until
+                .is_some_and(|t| t > chrono::Utc::now())
+            && record
+                .chain
+                .as_ref()
+                .is_some_and(|c| c.offer_status == "active")
+            && matches!(
+                record.offer.capability.as_str(),
+                "text.uppercase" | "text.summarize"
+            )
+            && zadp_protocol::verify_offer(&record.offer, chrono::Utc::now()).is_ok();
+        Self {
+            offer: record.offer,
+            chain: record.chain,
+            endpoint_verification: verification,
+            has_endpoint,
+            has_fixed_price,
+            purchase_available,
+        }
+    }
 }
 
 /// Read-only API for real board discovery. No invoice, fulfillment or wallet routes.
@@ -138,11 +178,9 @@ async fn board_offers<R: OfferRepository + 'static>(
         offers: records
             .into_iter()
             .filter(|r| policy.permits_record(r))
-            .map(|r| IndexedOffer {
-                purchase_mode: r.offer.purchase_mode(),
-                commerce_verification: state.endpoints.status(&r.offer),
-                offer: r.offer,
-                chain: r.chain,
+            .map(|r| {
+                let verification = state.endpoints.status(&r.offer);
+                IndexedOffer::new(r, verification)
             })
             .collect(),
     }))
@@ -165,24 +203,18 @@ where
     Ok(Json(OffersResponse {
         offers: records
             .into_iter()
-            .map(|r| IndexedOffer {
-                purchase_mode: r.offer.purchase_mode(),
-                commerce_verification: CommerceVerification {
+            .map(|r| {
+                let verification = EndpointVerification {
                     status: if r.offer.commerce.is_none() {
-                        if r.offer.price.is_some() {
-                            CommerceStatus::NotRequired
-                        } else {
-                            CommerceStatus::DiscoveryOnly
-                        }
+                        EndpointStatus::NotApplicable
                     } else {
-                        CommerceStatus::Unverified
+                        EndpointStatus::Unverified
                     },
                     origin: None,
                     expires_at: None,
                     valid_until: None,
-                },
-                offer: r.offer,
-                chain: r.chain,
+                };
+                IndexedOffer::new(r, verification)
             })
             .collect(),
     }))
@@ -296,5 +328,98 @@ pub use host_policy::{
 
 mod endpoint_verification;
 pub use endpoint_verification::{
-    CommerceStatus, CommerceVerification, EndpointVerifier, ProofFetcher,
+    EndpointStatus, EndpointVerification, EndpointVerifier, ProofFetcher,
 };
+
+#[cfg(test)]
+mod endpoint_metadata_tests {
+    use super::*;
+    use chrono::{Duration, Utc};
+    use zadp_protocol::{OfferDraft, Price, SellerKeyPair, ZcashNetwork};
+
+    fn record(price: bool, endpoint: bool) -> zadp_indexer::OfferRecord {
+        let keys = SellerKeyPair::from_secret_bytes(&[42; 32]);
+        let mut draft = OfferDraft::new_discovery(
+            keys.id.clone(),
+            "text.uppercase",
+            "Service",
+            Utc::now() + Duration::hours(1),
+            "nonce",
+        );
+        if endpoint {
+            draft = draft.with_endpoint("https://seller.example");
+        }
+        if price {
+            draft = draft.with_price(Price::zec("0.01".parse().unwrap()));
+        }
+        zadp_indexer::OfferRecord {
+            offer: draft.sign(&keys).unwrap(),
+            source_txid: zadp_zcash::TxId("fixture".into()),
+            indexed_at: Utc::now(),
+            chain: Some(ChainObservation {
+                network: ZcashNetwork::Mainnet,
+                board_id: "hello".into(),
+                block_height: 1,
+                block_hash: "00".repeat(32),
+                transaction_id: "ab".repeat(32),
+                pool: "orchard".into(),
+                output_index: 0,
+                listing_value_zat: 1000,
+                scanned_height: 4,
+                confirmations: 4,
+                confirmation_status: "confirmed".into(),
+                offer_status: "active".into(),
+            }),
+        }
+    }
+    fn proof(status: EndpointStatus) -> EndpointVerification {
+        EndpointVerification {
+            status,
+            origin: Some("https://seller.example".into()),
+            expires_at: Some(Utc::now() + Duration::hours(1)),
+            valid_until: Some(Utc::now() + Duration::seconds(60)),
+        }
+    }
+    #[test]
+    fn origin_proof_alone_does_not_enable_payment_and_all_buy_gates_apply() {
+        let service = IndexedOffer::new(record(false, true), proof(EndpointStatus::Verified));
+        assert!(service.has_endpoint);
+        assert!(!service.has_fixed_price);
+        assert!(!service.purchase_available);
+        assert!(
+            !IndexedOffer::new(record(false, false), proof(EndpointStatus::NotApplicable))
+                .purchase_available
+        );
+        assert!(
+            IndexedOffer::new(record(true, true), proof(EndpointStatus::Verified))
+                .purchase_available
+        );
+        for status in [
+            EndpointStatus::Unverified,
+            EndpointStatus::Unavailable,
+            EndpointStatus::NotApplicable,
+        ] {
+            assert!(!IndexedOffer::new(record(true, true), proof(status)).purchase_available);
+        }
+        for expired_field in 0..2 {
+            let mut stale = proof(EndpointStatus::Verified);
+            if expired_field == 0 {
+                stale.expires_at = Some(Utc::now() - Duration::seconds(1));
+            } else {
+                stale.valid_until = Some(Utc::now() - Duration::seconds(1));
+            }
+            assert!(!IndexedOffer::new(record(true, true), stale).purchase_available);
+        }
+        for change in 0..5 {
+            let mut r = record(true, true);
+            match change {
+                0 => r.chain = None,
+                1 => r.chain.as_mut().unwrap().offer_status = "expired".into(),
+                2 => r.offer.expires_at = Utc::now() - Duration::seconds(1),
+                3 => r.offer.title.push_str("tampered"),
+                _ => r.offer.capability = "unsupported".into(),
+            }
+            assert!(!IndexedOffer::new(r, proof(EndpointStatus::Verified)).purchase_available);
+        }
+    }
+}

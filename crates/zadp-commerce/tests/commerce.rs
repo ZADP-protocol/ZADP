@@ -672,7 +672,7 @@ async fn summarize_capability_description_and_idempotent_execution() {
 }
 
 #[test]
-fn v3_automated_order_payment_and_manual_rejection() {
+fn v3_fixed_price_order_payment_and_no_price_service_rejection() {
     let (_dir, mut c, now) = fixture();
     let keys = SellerKeyPair::generate();
     let automated = OfferDraft::new_ulid(
@@ -695,21 +695,21 @@ fn v3_automated_order_payment_and_manual_rejection() {
     let result = settle(&mut store, &order, &evidence(&c, &order, now), now + 1);
     assert_eq!(result.status, "completed");
     assert_eq!(result.result.as_deref(), Some("HELLO WORLD SS"));
-    let mut manual = c.clone();
-    manual.offer = OfferDraft::new_discovery(
+    let mut service = c.clone();
+    service.offer = OfferDraft::new_discovery(
         keys.id.clone(),
         "text.uppercase",
-        "Manual",
+        "Service without fixed price",
         Utc::now() + Duration::days(1),
         "bm9uY2U=",
     )
-    .with_price(Price::zec("0.02".parse().unwrap()))
+    .with_endpoint("https://seller.example")
     .sign(&keys)
     .unwrap();
-    assert!(manual
+    assert!(service
         .validate()
         .unwrap_err()
         .to_string()
         .contains("no automated commerce"));
-    assert!(Store::open(manual).is_err());
+    assert!(Store::open(service).is_err());
 }

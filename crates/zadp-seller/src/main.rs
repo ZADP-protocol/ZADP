@@ -100,9 +100,9 @@ struct Publish {
     geo_lon_e5: Option<i32>,
     #[arg(long, requires_all = ["geo_lat_e5", "geo_lon_e5"])]
     geo_radius_m: Option<u32>,
-    #[arg(long)]
+    #[arg(long, requires = "endpoint")]
     price_zec: Option<Decimal>,
-    #[arg(long, requires = "price_zec")]
+    #[arg(long)]
     endpoint: Option<String>,
     #[arg(long,default_value_t=86400,value_parser=clap::value_parser!(u32).range(1..))]
     ttl_seconds: u32,
@@ -292,15 +292,15 @@ async fn publish(args: Publish) -> Result<()> {
             now + Duration::seconds(i64::from(args.ttl_seconds)),
             B64.encode(nonce),
         ),
-        (None, Some(price)) => OfferDraft::new_discovery(
+        (Some(endpoint), None) => OfferDraft::new_discovery(
             keys.id.clone(),
             args.capability,
             args.title,
             now + Duration::seconds(i64::from(args.ttl_seconds)),
             B64.encode(nonce),
         )
-        .with_price(Price::zec(price.normalize())),
-        _ => anyhow::bail!("endpoint requires price"),
+        .with_endpoint(endpoint),
+        _ => anyhow::bail!("fixed price requires endpoint"),
     };
     if let Some(v) = args.offer_version {
         draft = draft.with_version(v);
@@ -406,7 +406,7 @@ async fn publish(args: Publish) -> Result<()> {
         "Signed Offer expiry (UTC): {}",
         offer.expires_at.to_rfc3339()
     );
-    println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.price.as_ref().map(|p|p.amount.to_string()).unwrap_or_else(||"none (discovery only)".into()),zec(value),zec(fee),zec(total),network,memo.len());
+    println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.price.as_ref().map(|p|p.amount.to_string()).unwrap_or_else(||"none (no fixed payment)".into()),zec(value),zec(fee),zec(total),network,memo.len());
     if args.dry_run {
         if let Some(path) = &args.proposal_output {
             use std::os::unix::fs::OpenOptionsExt;
@@ -569,11 +569,18 @@ mod geo_cli_tests {
             base.into_iter()
                 .chain(["--endpoint", "https://fixture.invalid"])
         )
-        .is_err());
-        assert!(Args::try_parse_from(base.into_iter().chain(["--price-zec", "0.01"])).is_ok());
+        .is_ok());
+        assert!(Args::try_parse_from(base.into_iter().chain(["--price-zec", "0.01"])).is_err());
         assert!(Args::try_parse_from(base.into_iter().chain([
             "--offer-version",
             "3",
+            "--price-zec",
+            "0.02"
+        ]))
+        .is_err());
+        assert!(Args::try_parse_from(base.into_iter().chain([
+            "--endpoint",
+            "https://fixture.invalid",
             "--price-zec",
             "0.02"
         ]))

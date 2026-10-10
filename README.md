@@ -67,7 +67,7 @@ Use a valid signed descriptor for the same network as your transport. The API of
 
 The reusable [browser modules](client/browser/README.md) provide parsing, memo budgeting and local geo matching. A [minimal browser client](examples/browser/README.md), a [local geo CLI](examples/geo/discover.js), Rust protocol examples and test vectors show how to build another client without the private web product.
 
-Commerce is optional. A v3 priced listing advertises a fixed ZEC price with manual settlement and no automated Buy. A Protocol 1.0 discovery-only Offer has no purchase endpoint or service price. Commerce-enabled Offers may advertise an HTTPS seller endpoint; orders, payment correlation and results belong directly to seller and buyer, not discovery. Reference commerce services and [isolated offline tests](docs/commerce-process-boundaries.md) demonstrate this boundary. They do not authorize a real payment.
+Seller service endpoints are optional. Protocol 1.0 wire 3 accepts discovery without endpoint/price, endpoint without price, or endpoint with a signed fixed ZEC price. A price requires an endpoint. Domain proof establishes origin control; only a verified, active supported fixed-price service enables hosted Buy. A no-price verified service exposes a service link without payment. Commerce-enabled Offers may advertise an HTTPS seller endpoint; orders, payment correlation and results belong directly to seller and buyer, not discovery. Reference commerce services and [isolated offline tests](docs/commerce-process-boundaries.md) demonstrate this boundary. They do not authorize a real payment.
 
 ## Hosted alpha interface
 

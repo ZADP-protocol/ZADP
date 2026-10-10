@@ -1,6 +1,6 @@
-# Commerce endpoint ownership
+# Seller service origin ownership
 
-A commerce Offer does not merely advertise an endpoint. The endpoint cryptographically proves that it is controlled by the same seller identity that signed the Offer.
+A seller service Offer does not merely advertise an endpoint. The endpoint cryptographically proves that it is controlled by the same seller identity that signed the Offer.
 
 This is a separate, off-chain proof, not an Offer field or a board admission rule. Offer v1/v2 wire formats, canonical signing, IDs, geo, commerce and BoardDescriptor v1 are unchanged. Discovery-only Offers do not require a proof. Ownership verification does not replace seller approval, confirm service quality, guarantee fulfillment, or authorize payment.
 
@@ -49,10 +49,10 @@ Accept only version/type 1/`commerce-endpoint`, `issued_at <= now < expires_at`,
 The read-only API adds unsigned presentation metadata alongside the unchanged signed Offer:
 
 ```json
-{"commerce_verification":{"status":"verified","origin":"https://seller.example","expires_at":"2027-01-01T00:00:00Z","valid_until":"2026-12-01T12:00:30Z"}}
+{"endpoint_verification":{"status":"verified","origin":"https://seller.example","expires_at":"2027-01-01T00:00:00Z","valid_until":"2026-12-01T12:00:30Z"}}
 ```
 
-Statuses are `discovery_only`, `unverified`, `unavailable`, or `verified`. Missing proof, invalid proof, expired proof, unsafe endpoint or a pending check is unverified. DNS/HTTP/TLS failure is unavailable. Neither status deletes or changes the canonical Offer. Expired Offers remain excluded by existing active-discovery rules.
+Statuses are `not_applicable`, `unverified`, `unavailable`, or `verified`. Missing proof, invalid proof, expired proof, unsafe endpoint or a pending check is unverified. DNS/HTTP/TLS failure is unavailable. Neither status deletes or changes the canonical Offer. Expired Offers remain excluded by existing active-discovery rules.
 
 The hosted UI enables Buy only with current verified metadata matching the endpoint origin; it also checks proof expiry and the short host attestation lease (`valid_until`) locally. Saved verification metadata cannot enable a new purchase indefinitely. That metadata is an attestation from the connected host, not an independent browser signature verification. Browser orders, claim tokens, payment correlation, input and results still travel directly to the seller, never to the discovery host. Buyer location stays in browser memory and is unrelated to proof fetching. An existing order can still be restored and its receipt/result retrieved using its saved endpoint and claim token after proof expiry; stale metadata cannot authorize creation of a new order.
 
@@ -65,3 +65,8 @@ There is no URL-fetch HTTP route. Only origins extracted from visible, cryptogra
 Checks run asynchronously with four concurrent requests, at most 512 in-memory cached origins, a five-second total deadline including DNS, and a 16 KiB response cap. Cached results are reused for less than 60 seconds, with proof expiry and seller/origin/signature checked again for each Offer. The first discovery response may be unverified while checking; normal feed refresh obtains the result. Stale checks disable buying until revalidated. Downtime can take up to this cache interval to be noticed; an expiry is never extended by caching. The cache is not canonical database state and is empty after restart.
 
 No hosted or seller deployment, payment, publication, wallet route or custody change is required to implement this feature. Deployment must preserve Basic Auth and the existing read-only hosted API.
+
+Canonical wire 3 permits an endpoint without price. Its proof is still required
+for a hosted service link, but no payment is available without a signed fixed
+price. Domain proof does not assert KYC, legitimacy, quality or `/orders` support.
+The proof document/preimage remains unchanged for existing deployments.

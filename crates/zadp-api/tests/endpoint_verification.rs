@@ -4,15 +4,15 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use zadp_api::{CommerceStatus, EndpointVerifier, ProofFetcher};
+use zadp_api::{EndpointStatus, EndpointVerifier, ProofFetcher};
 use zadp_protocol::{EndpointProof, Offer, OfferDraft, Price, SellerKeyPair};
 struct Fake {
-    result: Result<EndpointProof, CommerceStatus>,
+    result: Result<EndpointProof, EndpointStatus>,
     calls: AtomicUsize,
 }
 #[async_trait]
 impl ProofFetcher for Fake {
-    async fn fetch(&self, origin: &str) -> Result<EndpointProof, CommerceStatus> {
+    async fn fetch(&self, origin: &str) -> Result<EndpointProof, EndpointStatus> {
         assert_eq!(origin, "https://seller.example");
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.result.clone()
@@ -49,16 +49,16 @@ async fn matching_proof_verified_but_other_seller_or_modified_offer_cannot_reuse
         calls: AtomicUsize::new(0),
     });
     let verifier = EndpointVerifier::new(fake.clone());
-    assert_eq!(verifier.status(&o).status, CommerceStatus::Unverified);
+    assert_eq!(verifier.status(&o).status, EndpointStatus::Unverified);
     drain().await;
-    assert_eq!(verifier.status(&o).status, CommerceStatus::Verified);
+    assert_eq!(verifier.status(&o).status, EndpointStatus::Verified);
     let other = offer(&SellerKeyPair::generate(), "https://seller.example");
-    assert_eq!(verifier.status(&other).status, CommerceStatus::Unverified);
+    assert_eq!(verifier.status(&other).status, EndpointStatus::Unverified);
     let mut tampered = o.clone();
     tampered.title = "Changed".into();
     assert_eq!(
         verifier.status(&tampered).status,
-        CommerceStatus::Unverified
+        EndpointStatus::Unverified
     );
     assert_eq!(fake.calls.load(Ordering::SeqCst), 1);
     let whole_now = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
@@ -86,7 +86,7 @@ async fn matching_proof_verified_but_other_seller_or_modified_offer_cannot_reuse
     .unwrap();
     assert_eq!(v2.zadp, 3);
     let before = zadp_protocol::encode_offer_memo(&v2).unwrap();
-    assert_eq!(verifier.status(&v2).status, CommerceStatus::Verified);
+    assert_eq!(verifier.status(&v2).status, EndpointStatus::Verified);
     assert_eq!(zadp_protocol::encode_offer_memo(&v2).unwrap(), before);
 }
 #[tokio::test]
@@ -108,16 +108,16 @@ async fn failed_proofs_fail_closed_without_altering_signed_offers() {
     .unwrap();
     for (result, status) in [
         (
-            Err(CommerceStatus::Unavailable),
-            CommerceStatus::Unavailable,
+            Err(EndpointStatus::Unavailable),
+            EndpointStatus::Unavailable,
         ),
-        (Err(CommerceStatus::Unverified), CommerceStatus::Unverified),
-        (Ok(modified), CommerceStatus::Unverified),
-        (Ok(wrong_origin), CommerceStatus::Unverified),
-        (Ok(expired), CommerceStatus::Unverified),
+        (Err(EndpointStatus::Unverified), EndpointStatus::Unverified),
+        (Ok(modified), EndpointStatus::Unverified),
+        (Ok(wrong_origin), EndpointStatus::Unverified),
+        (Ok(expired), EndpointStatus::Unverified),
         (
             Ok(proof(&SellerKeyPair::generate())),
-            CommerceStatus::Unverified,
+            EndpointStatus::Unverified,
         ),
     ] {
         let fake = Arc::new(Fake {
@@ -135,7 +135,7 @@ async fn failed_proofs_fail_closed_without_altering_signed_offers() {
 async fn discovery_only_and_unsafe_endpoints_never_fetch() {
     let key = SellerKeyPair::generate();
     let fake = Arc::new(Fake {
-        result: Err(CommerceStatus::Unavailable),
+        result: Err(EndpointStatus::Unavailable),
         calls: AtomicUsize::new(0),
     });
     let verifier = EndpointVerifier::new(fake.clone());
@@ -148,7 +148,7 @@ async fn discovery_only_and_unsafe_endpoints_never_fetch() {
     )
     .sign(&key)
     .unwrap();
-    assert_eq!(verifier.status(&o).status, CommerceStatus::DiscoveryOnly);
+    assert_eq!(verifier.status(&o).status, EndpointStatus::NotApplicable);
     for url in [
         "http://seller.example",
         "https://user:pass@seller.example",
@@ -159,7 +159,7 @@ async fn discovery_only_and_unsafe_endpoints_never_fetch() {
     ] {
         assert_eq!(
             verifier.status(&offer(&key, url)).status,
-            CommerceStatus::Unverified
+            EndpointStatus::Unverified
         );
     }
     drain().await;
@@ -186,7 +186,7 @@ async fn unavailable_endpoint_keeps_offer_in_read_only_hosted_api_and_repository
     .await
     .unwrap();
     let verifier = EndpointVerifier::new(Arc::new(Fake {
-        result: Err(CommerceStatus::Unavailable),
+        result: Err(EndpointStatus::Unavailable),
         calls: AtomicUsize::new(0),
     }));
     let app = zadp_api::board_router_with_verifier(
@@ -209,17 +209,25 @@ async fn unavailable_endpoint_keeps_offer_in_read_only_hosted_api_and_repository
         let mut data: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
         assert_eq!(
-            data["offers"][0]["commerce_verification"]["status"],
+            data["offers"][0]["endpoint_verification"]["status"],
             expected
         );
         data["offers"][0]
             .as_object_mut()
             .unwrap()
-            .remove("commerce_verification");
+            .remove("endpoint_verification");
         data["offers"][0]
             .as_object_mut()
             .unwrap()
-            .remove("purchase_mode");
+            .remove("has_endpoint");
+        data["offers"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("has_fixed_price");
+        data["offers"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("purchase_available");
         assert_eq!(data["offers"][0], serde_json::to_value(&original).unwrap());
         drain().await;
     }
@@ -241,7 +249,7 @@ async fn unavailable_endpoint_keeps_offer_in_read_only_hosted_api_and_repository
 }
 
 #[tokio::test]
-async fn v3_modes_are_explicit_in_api_and_manual_never_fetches_endpoint() {
+async fn v3_primitives_are_explicit_and_discovery_never_fetches_endpoint() {
     use axum::{
         body::{to_bytes, Body},
         http::Request,
@@ -259,10 +267,10 @@ async fn v3_modes_are_explicit_in_api_and_manual_never_fetches_endpoint() {
             "nonce",
         )
         .with_version(3);
-        if mode > 0 {
+        if mode == 2 {
             draft.price = Some(Price::zec("0.02".parse().unwrap()));
         }
-        if mode == 2 {
+        if mode > 0 {
             draft.commerce = Some(zadp_protocol::Commerce {
                 endpoint: "https://seller.example".into(),
             });
@@ -304,27 +312,17 @@ async fn v3_modes_are_explicit_in_api_and_manual_never_fetches_endpoint() {
     let data: serde_json::Value =
         serde_json::from_slice(&to_bytes(res.into_body(), 65536).await.unwrap()).unwrap();
     for value in data["offers"].as_array().unwrap() {
-        match value["purchase_mode"].as_str().unwrap() {
-            "discovery" => {
-                assert!(value.get("price").is_none());
-                assert!(value.get("commerce").is_none());
-            }
-            "manual" => {
-                assert_eq!(value["price"]["amount"], "0.02");
-                assert!(value.get("commerce").is_none());
-                assert_eq!(value["commerce_verification"]["status"], "not_required");
-            }
-            "automated" => {
-                assert_eq!(value["price"]["amount"], "0.02");
-                assert_eq!(value["commerce"]["endpoint"], "https://seller.example");
-                assert!(value["commerce"].get("price").is_none());
-            }
-            _ => panic!("unknown mode"),
+        assert!(value.get("purchase_mode").is_none());
+        assert_eq!(value["has_endpoint"], value.get("commerce").is_some());
+        assert_eq!(value["has_fixed_price"], value.get("price").is_some());
+        assert_eq!(value["purchase_available"], false); // no chain admission in this fixture
+        if !value["has_endpoint"].as_bool().unwrap() {
+            assert_eq!(value["endpoint_verification"]["status"], "not_applicable");
         }
     }
     drain().await;
     assert_eq!(fake.calls.load(Ordering::SeqCst), 1);
     for r in records.iter().filter(|r| r.offer.commerce.is_some()) {
-        assert_eq!(verifier.status(&r.offer).status, CommerceStatus::Verified);
+        assert_eq!(verifier.status(&r.offer).status, EndpointStatus::Verified);
     }
 }

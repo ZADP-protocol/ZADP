@@ -12,16 +12,15 @@ use zadp_protocol::{commerce_origin, public_endpoint_ip, verify_offer, EndpointP
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CommerceStatus {
-    DiscoveryOnly,
-    NotRequired,
+pub enum EndpointStatus {
+    NotApplicable,
     Verified,
     Unverified,
     Unavailable,
 }
 #[derive(Debug, Clone, Serialize)]
-pub struct CommerceVerification {
-    pub status: CommerceStatus,
+pub struct EndpointVerification {
+    pub status: EndpointStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,28 +32,28 @@ pub struct CommerceVerification {
 #[async_trait]
 pub trait ProofFetcher: Send + Sync {
     /// Only called with a validated normalized origin from a signed visible Offer.
-    async fn fetch(&self, origin: &str) -> Result<EndpointProof, CommerceStatus>;
+    async fn fetch(&self, origin: &str) -> Result<EndpointProof, EndpointStatus>;
 }
 struct HttpsFetcher;
 #[async_trait]
 impl ProofFetcher for HttpsFetcher {
-    async fn fetch(&self, origin: &str) -> Result<EndpointProof, CommerceStatus> {
-        let url = url::Url::parse(origin).map_err(|_| CommerceStatus::Unverified)?;
-        let host = url.host_str().ok_or(CommerceStatus::Unverified)?;
+    async fn fetch(&self, origin: &str) -> Result<EndpointProof, EndpointStatus> {
+        let url = url::Url::parse(origin).map_err(|_| EndpointStatus::Unverified)?;
+        let host = url.host_str().ok_or(EndpointStatus::Unverified)?;
         let port = url
             .port_or_known_default()
-            .ok_or(CommerceStatus::Unverified)?;
-        let addresses: Vec<_> = match url.host().ok_or(CommerceStatus::Unverified)? {
+            .ok_or(EndpointStatus::Unverified)?;
+        let addresses: Vec<_> = match url.host().ok_or(EndpointStatus::Unverified)? {
             url::Host::Ipv4(ip) => vec![std::net::SocketAddr::new(ip.into(), port)],
             url::Host::Ipv6(ip) => vec![std::net::SocketAddr::new(ip.into(), port)],
             url::Host::Domain(_) => tokio::net::lookup_host((host, port))
                 .await
-                .map_err(|_| CommerceStatus::Unavailable)?
+                .map_err(|_| EndpointStatus::Unavailable)?
                 .take(33)
                 .collect(),
         };
         if !addresses_are_public(&addresses) {
-            return Err(CommerceStatus::Unverified);
+            return Err(EndpointStatus::Unverified);
         }
         // Pin the validated DNS snapshot. Never resolve again at connect time; no ambient proxy.
         let client = reqwest::Client::builder()
@@ -65,36 +64,36 @@ impl ProofFetcher for HttpsFetcher {
             .connect_timeout(Duration::from_secs(2))
             .resolve_to_addrs(host, &addresses)
             .build()
-            .map_err(|_| CommerceStatus::Unavailable)?;
+            .map_err(|_| EndpointStatus::Unavailable)?;
         let mut response = client
             .get(format!("{origin}/.well-known/zadp"))
             .header(reqwest::header::ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|_| CommerceStatus::Unavailable)?;
+            .map_err(|_| EndpointStatus::Unavailable)?;
         if response.status() != reqwest::StatusCode::OK {
-            return Err(CommerceStatus::Unavailable);
+            return Err(EndpointStatus::Unavailable);
         }
         if response.content_length().is_some_and(|n| n > 16384) {
-            return Err(CommerceStatus::Unverified);
+            return Err(EndpointStatus::Unverified);
         }
         let mut bytes = Vec::new();
         while let Some(chunk) = response
             .chunk()
             .await
-            .map_err(|_| CommerceStatus::Unavailable)?
+            .map_err(|_| EndpointStatus::Unavailable)?
         {
             if bytes.len() + chunk.len() > 16384 {
-                return Err(CommerceStatus::Unverified);
+                return Err(EndpointStatus::Unverified);
             }
             bytes.extend_from_slice(&chunk);
         }
-        serde_json::from_slice(&bytes).map_err(|_| CommerceStatus::Unverified)
+        serde_json::from_slice(&bytes).map_err(|_| EndpointStatus::Unverified)
     }
 }
 struct Entry {
     checked: Instant,
-    result: Option<Result<EndpointProof, CommerceStatus>>,
+    result: Option<Result<EndpointProof, EndpointStatus>>,
 }
 /// In-memory, maximum 512 origins and four in-flight requests. Revalidate at most once per minute.
 /// First lookup is unverified while the bounded background check runs; no discovery request waits on sellers.
@@ -117,19 +116,15 @@ impl EndpointVerifier {
             fetcher,
         }
     }
-    pub fn status(&self, offer: &Offer) -> CommerceVerification {
-        let mut view = CommerceVerification {
-            status: CommerceStatus::Unverified,
+    pub fn status(&self, offer: &Offer) -> EndpointVerification {
+        let mut view = EndpointVerification {
+            status: EndpointStatus::Unverified,
             origin: None,
             expires_at: None,
             valid_until: None,
         };
         if offer.commerce.is_none() {
-            view.status = if offer.price.is_some() {
-                CommerceStatus::NotRequired
-            } else {
-                CommerceStatus::DiscoveryOnly
-            };
+            view.status = EndpointStatus::NotApplicable;
             return view;
         }
         if verify_offer(offer, Utc::now()).is_err() {
@@ -145,7 +140,7 @@ impl EndpointVerifier {
                 match &entry.result {
                     Some(Ok(proof)) => {
                         if proof.verify(&offer.seller, &origin, Utc::now()).is_ok() {
-                            view.status = CommerceStatus::Verified;
+                            view.status = EndpointStatus::Verified;
                             view.expires_at = Some(proof.expires_at);
                             view.valid_until = Some(
                                 proof.expires_at.min(
@@ -185,7 +180,7 @@ impl EndpointVerifier {
             // Includes DNS lookup and body reads in the deadline.
             let result = tokio::time::timeout(Duration::from_secs(5), this.fetcher.fetch(&origin))
                 .await
-                .unwrap_or(Err(CommerceStatus::Unavailable));
+                .unwrap_or(Err(EndpointStatus::Unavailable));
             this.cache.lock().unwrap().insert(
                 origin,
                 Entry {
@@ -227,7 +222,7 @@ mod transport_tests {
     async fn private_dns_target_is_rejected_before_http() {
         assert_eq!(
             HttpsFetcher.fetch("https://127.0.0.1").await.unwrap_err(),
-            CommerceStatus::Unverified
+            EndpointStatus::Unverified
         );
     }
 }

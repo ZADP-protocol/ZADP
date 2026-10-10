@@ -19,7 +19,7 @@ pub const OFFER_VERSION_V3: u16 = 3;
 pub const BOARD_DESCRIPTOR_VERSION: u16 = 1;
 pub const MAX_GEO_RADIUS_M: u32 = 500_000;
 
-/// Automated order API endpoint. Advertised price is independent in the typed model.
+/// Seller-operated HTTPS service endpoint; a fixed service price is optional.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Commerce {
@@ -39,14 +39,6 @@ impl Commerce {
 struct LegacyCommerce {
     endpoint: String,
     price: Price,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PurchaseMode {
-    Discovery,
-    Manual,
-    Automated,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -118,8 +110,8 @@ impl TryFrom<OfferJson> for Offer {
                     .map(serde_json::from_value::<Commerce>)
                     .transpose()
                     .map_err(|e| e.to_string())?;
-                if commerce.is_some() && o.price.is_none() {
-                    return Err("endpoint requires price".into());
+                if o.price.is_some() && commerce.is_none() {
+                    return Err("fixed price requires endpoint".into());
                 }
                 (o.price, commerce)
             }
@@ -337,6 +329,14 @@ impl OfferDraft {
         self
     }
 
+    /// Add a signed seller service endpoint without requiring a fixed price.
+    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.commerce = Some(Commerce {
+            endpoint: endpoint.into(),
+        });
+        self
+    }
+
     /// Structured price is signed by the Protocol 1.0 canonical wire-3 model.
     pub fn with_price(mut self, price: Price) -> Self {
         self.price = Some(price);
@@ -402,27 +402,23 @@ impl OfferDraft {
 }
 
 impl Offer {
-    pub fn purchase_mode(&self) -> PurchaseMode {
-        if self.commerce.is_some() {
-            PurchaseMode::Automated
-        } else if self.price.is_some() {
-            PurchaseMode::Manual
-        } else {
-            PurchaseMode::Discovery
-        }
-    }
     pub fn validate_geo_version(&self) -> Result<(), ProtocolError> {
         if ![OFFER_VERSION_V1, OFFER_VERSION_V2, OFFER_VERSION_V3].contains(&self.zadp) {
             return Err(ProtocolError::UnsupportedVersion(self.zadp));
         }
-        if self.commerce.is_some() && self.price.is_none() {
+        if self.zadp == OFFER_VERSION_V3 && self.price.is_some() && self.commerce.is_none() {
             return Err(ProtocolError::InvalidOffer(
-                "endpoint requires price".into(),
+                "fixed price requires endpoint".into(),
+            ));
+        }
+        if self.zadp < OFFER_VERSION_V3 && self.commerce.is_some() && self.price.is_none() {
+            return Err(ProtocolError::InvalidOffer(
+                "legacy endpoint requires price".into(),
             ));
         }
         if self.zadp < OFFER_VERSION_V3 && self.price.is_some() && self.commerce.is_none() {
             return Err(ProtocolError::InvalidOffer(
-                "manual pricing requires v3".into(),
+                "legacy fixed price requires endpoint".into(),
             ));
         }
         if self.zadp == OFFER_VERSION_V3 {

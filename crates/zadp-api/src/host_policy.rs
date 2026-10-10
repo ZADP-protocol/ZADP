@@ -372,7 +372,7 @@ mod manual_tests {
         let mut p = policy(&key, &r);
         assert!(p.permits(&r)); // Visible discovery; unsafe commerce stays disabled separately.
         let v = crate::EndpointVerifier::default().status(&r.offer);
-        assert_eq!(v.status, crate::CommerceStatus::Unverified);
+        assert_eq!(v.status, crate::EndpointStatus::Unverified);
         p.sellers[0].status = SellerStatus::Blocked;
         assert!(!p.permits(&r));
     }

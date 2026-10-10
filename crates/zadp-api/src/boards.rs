@@ -201,12 +201,8 @@ async fn list(
             }) {
                 continue;
             }
-            offers.push(IndexedOffer {
-                purchase_mode: r.offer.purchase_mode(),
-                commerce_verification: endpoints.status(&r.offer),
-                offer: r.offer,
-                chain: r.chain,
-            });
+            let verification = endpoints.status(&r.offer);
+            offers.push(IndexedOffer::new(r, verification));
             if offers.len() >= if only_id.is_some() { 2 } else { 1000 } {
                 return Ok(Json(OffersResponse { offers }));
             }

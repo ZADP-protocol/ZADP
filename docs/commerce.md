@@ -4,10 +4,14 @@ See the [API reference](api.md) for current routes, request/response fields,
 authentication and the distinction between discovery and seller HTTP services.
 
 ZADP discovery does not require a commerce endpoint. Protocol 1.0 wire-3 Offers
-enter automated commerce only with a signed price and endpoint; priced listings
-without an endpoint use manual settlement. Historical wire 1 flat price/endpoint
-and wire 2 nested commerce remain readable. Discovery-only and manual listings
-are not purchasable through this API. See [commercial modes](commercial-modes-v3.md).
+enter the order/payment flow only with a signed fixed price and endpoint. An
+endpoint without price is a service announcement; proof verifies origin control
+without authorizing payment or requiring `/orders`. Price without endpoint is
+invalid canonical wire 3. Historical wire 1 flat price/endpoint and wire 2 nested
+commerce remain readable. See [seller endpoint primitives](commercial-modes-v3.md). The reference commerce
+server intentionally requires price because it implements paid orders. A general
+no-price service can serve its offline-generated static origin proof and optional
+`/capabilities` without running that commerce server or exposing `/orders`.
 
 Discovery answers **what is for sale**. A seller commerce endpoint answers **how
 to buy one offer and retrieve its result**. Zcash carries payment directly from

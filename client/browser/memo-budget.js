@@ -31,7 +31,7 @@ function memoBudget(draft, issuedAt = Math.floor(Date.now() / 1000)) {
   zat = BigInt(whole) * 100000000n + BigInt(fraction.padEnd(8, '0'));
   if (zat <= 0n || zat > 2100000000000000n) throw Error('Price must be greater than zero and no more than 21 million ZEC.');
   }
-  if(commerce!==null && price==null)throw Error('Endpoint requires price');
+  if(price!=null && commerce===null)throw Error('Fixed price requires endpoint');
   if(price?.currency!=null && price.currency!=='ZEC')throw Error('Invalid currency');
   for (const key of ['board_id', 'title', 'capability']) {
     if (typeof draft[key] !== 'string' || !draft[key].trim()) throw Error('Complete the board, name and capability fields.');
