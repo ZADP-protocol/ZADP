@@ -360,7 +360,7 @@ async fn publish(args: Publish) -> Result<()> {
     );
     let amount: Value = serde_json::from_str(&zec(value).to_string())?;
     let created = if let Some(path) = &args.approved_proposal {
-        serde_json::from_slice(&zadp_seller::local::read_protected(path)?)?
+        serde_json::from_slice(&zadp_seller::local::read_protected_proposal(path)?)?
     } else {
         wallet.rpc("pczt_create",json!([args.wallet_account,[{"address":board.board.address,"amount":amount,"memo":hex::encode(memo)}],null,"FullPrivacy","orchard"])).await?
     };

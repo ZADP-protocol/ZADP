@@ -9,6 +9,16 @@ use zadp_protocol::SellerKeyPair;
 use zeroize::Zeroizing;
 
 pub fn read_protected(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
+    read_protected_bounded(path, 4096)
+}
+
+/// Unsigned transaction proposals are larger than identity/authentication files.
+/// Keep the same ownership, permissions and symlink checks with a bounded size.
+pub fn read_protected_proposal(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
+    read_protected_bounded(path, 1_048_576)
+}
+
+fn read_protected_bounded(path: &Path, limit: u64) -> Result<Zeroizing<Vec<u8>>> {
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -21,7 +31,7 @@ pub fn read_protected(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
         .map_err(|_| anyhow::anyhow!("cannot open protected local file"))?;
     let metadata = file.metadata()?;
     ensure!(
-        metadata.is_file() && metadata.len() <= 4096,
+        metadata.is_file() && metadata.len() <= limit,
         "protected file is invalid or too large"
     );
     #[cfg(unix)]
@@ -39,9 +49,9 @@ pub fn read_protected(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
     #[cfg(not(unix))]
     anyhow::bail!("protected file loading requires a Unix permission check in this MVP");
     let mut bytes = Zeroizing::new(Vec::new());
-    file.take(4097).read_to_end(&mut bytes)?;
+    file.take(limit + 1).read_to_end(&mut bytes)?;
     ensure!(
-        bytes.len() <= 4096,
+        bytes.len() as u64 <= limit,
         "protected file grew beyond allowed size"
     );
     Ok(bytes)
@@ -83,6 +93,24 @@ pub fn write_identity(path: &Path, keys: &SellerKeyPair) -> Result<()> {
 mod tests {
     use super::*;
     use std::os::unix::{fs::symlink, fs::PermissionsExt};
+
+    #[test]
+    fn proposal_reader_preserves_protected_file_checks_and_size_bounds() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("proposal.json");
+        std::fs::write(&path, vec![b' '; 6806]).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(read_protected(&path).is_err());
+        assert_eq!(read_protected_proposal(&path).unwrap().len(), 6806);
+        let link = directory.path().join("link.json");
+        symlink(&path, &link).unwrap();
+        assert!(read_protected_proposal(&link).is_err());
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(read_protected_proposal(&path).is_err());
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        std::fs::write(&path, vec![b' '; 1_048_577]).unwrap();
+        assert!(read_protected_proposal(&path).is_err());
+    }
 
     #[test]
     fn protected_identity_rejects_shared_files_symlinks_and_overwrite() {
