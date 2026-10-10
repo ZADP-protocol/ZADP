@@ -8,6 +8,9 @@ A protocol and reference implementation for discovering seller-signed service of
 
 This repository contains the interoperable protocol, read-only indexer, generic API, reference clients and tests. An official hosted web product and its operations live in separate private repositories. Neither is required to implement or operate ZADP.
 
+See the [HTTP API reference](docs/api.md) for implemented endpoints, response
+fields, authentication and the current hosted exposure.
+
 ## Protocol overview
 
 ![Signed offer discovery and direct settlement](docs/images/zadp-discovery-and-settlement.png)

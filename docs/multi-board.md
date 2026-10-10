@@ -118,6 +118,9 @@ duplicate board IDs and reused UIVKs. No seed or spending key field is accepted.
 External owners provision and sign their own descriptors outside the indexer.
 The host does not create accounts or manage keys in this milestone.
 
+See the [API reference](api.md) for the complete HTTP contract and current hosted
+proxy restrictions.
+
 Read-only routes:
 
 - `GET /boards`: metadata and each board's cursor/status, without addresses/UIVKs.

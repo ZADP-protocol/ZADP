@@ -1,6 +1,13 @@
 # Direct seller commerce
 
-ZADP discovery does not require a commerce endpoint. Only offers with a complete signed commerce block (legacy v1 flat fields or v2 nested endpoint/price) enter the automated order flow. Discovery-only offers are not purchasable through this API. See [optional-commerce model](optional-commerce.md).
+See the [API reference](api.md) for current routes, request/response fields,
+authentication and the distinction between discovery and seller HTTP services.
+
+ZADP discovery does not require a commerce endpoint. Protocol 1.0 wire-3 Offers
+enter automated commerce only with a signed price and endpoint; priced listings
+without an endpoint use manual settlement. Historical wire 1 flat price/endpoint
+and wire 2 nested commerce remain readable. Discovery-only and manual listings
+are not purchasable through this API. See [commercial modes](commercial-modes-v3.md).
 
 Discovery answers **what is for sale**. A seller commerce endpoint answers **how
 to buy one offer and retrieve its result**. Zcash carries payment directly from
