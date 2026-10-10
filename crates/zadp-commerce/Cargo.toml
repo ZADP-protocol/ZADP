@@ -21,6 +21,7 @@ tokio.workspace = true
 tower-http = { version = "0.6", features = ["cors", "set-header"] }
 zadp-protocol.workspace = true
 zadp-seller.workspace = true
+zadp-zcash.workspace = true
 zcash_keys.workspace = true
 zcash_protocol.workspace = true
 zip321 = "0.9"
@@ -28,10 +29,10 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 url.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 base64.workspace = true
 zadp-api.workspace = true
 zadp-indexer.workspace = true
-zadp-zcash.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 zip32.workspace = true

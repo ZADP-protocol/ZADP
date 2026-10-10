@@ -18,6 +18,7 @@ use zcash_protocol::{memo::MemoBytes, value::Zatoshis};
 
 pub mod http;
 pub mod observer;
+mod viewing_observer;
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -35,8 +36,19 @@ pub struct Config {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ObserverConfig {
-    Mock { snapshot_file: PathBuf },
-    Zallet { rpc_url: String, auth_file: PathBuf },
+    Mock {
+        snapshot_file: PathBuf,
+    },
+    Zallet {
+        rpc_url: String,
+        auth_file: PathBuf,
+    },
+    /// Private incoming-only scope. No wallet RPC or spending authority.
+    Lightwalletd {
+        url: String,
+        viewing_descriptor: PathBuf,
+        cache_file: PathBuf,
+    },
 }
 impl Config {
     pub fn validate(&self) -> Result<()> {

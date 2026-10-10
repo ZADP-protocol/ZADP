@@ -14,7 +14,7 @@ impl Observer {
             ObserverConfig::Zallet { rpc_url, auth_file } => {
                 Some(LocalWallet::connect(rpc_url, auth_file)?)
             }
-            ObserverConfig::Mock { .. } => None,
+            ObserverConfig::Mock { .. } | ObserverConfig::Lightwalletd { .. } => None,
         };
         Ok(Self { config, wallet })
     }
@@ -37,6 +37,20 @@ impl Observer {
             .await
     }
     async fn load(&self) -> Result<Snapshot> {
+        if let ObserverConfig::Lightwalletd {
+            url,
+            viewing_descriptor,
+            cache_file,
+        } = &self.config.observer
+        {
+            return crate::viewing_observer::load(
+                &self.config,
+                url,
+                viewing_descriptor,
+                cache_file,
+            )
+            .await;
+        }
         if let ObserverConfig::Mock { snapshot_file } = &self.config.observer {
             // Protected local operator input; deliberately never an HTTP route.
             return Ok(serde_json::from_slice(&read_protected(snapshot_file)?)?);

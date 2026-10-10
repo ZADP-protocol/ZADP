@@ -232,3 +232,26 @@ do not use the demo auto-approve helper in production. Order discovery, endpoint
 verification, InvoiceView construction and result polling must be composed by the
 buyer application. Use the actual ZIP-321 memo as the string `memo_hint`. Human
 review covers the exact wallet fee separately from service-price policy ceilings.
+
+### Hosted seller incoming-only observer
+
+A seller may use `observer.mode = "lightwalletd"` with a protected signed
+`viewing_descriptor`, a protected `cache_file`, and an operator-configured local
+lightwalletd `url`. The descriptor supplies only the existing seller recipient's
+incoming viewing authority; it is not registered as a discovery board. Its
+signature, mainnet network and exact receiving scope are validated by the normal
+Core scanner. No Zallet RPC credentials, spending key or seller identity key are
+needed on the commerce host.
+
+The private observer scans bounded batches of 128 blocks, retains 4096 recent headers and warms its cache every
+five seconds. It cannot mark a snapshot synchronized until its scanned block and
+tip hashes agree. A reorg removes stale cached headers and payment evidence before
+rescanning. A reorg deeper than the retained header window requires a manual rebuild and fails closed. Invoice evidence is retained for order verification. Only invoice memo outputs are retained. An interrupted cache write or
+observation error fails closed; an operator must inspect any leftover `.pending`
+file rather than bypassing it. Cache files and directories must be owned and
+private. Run only one seller process for a given cache.
+
+The incoming-only observer cannot identify the sender or infer ownership of change
+outputs. The real purchase acceptance therefore requires a separate human buyer
+wallet. Settlement still requires the exact invoice recipient, amount, memo,
+mined time and confirmation count. Observation never signs or broadcasts.
