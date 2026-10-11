@@ -36,6 +36,7 @@ fn fixture() -> (tempfile::TempDir, Config, i64) {
     .sign(&keys)
     .unwrap();
     let config = Config {
+        canonical_index: None,
         offer,
         network: ZcashNetwork::Testnet,
         recipient: address,
@@ -471,7 +472,7 @@ async fn http_full_slice_persists_only_in_seller_database() {
     };
     fs::write(
         snapshot_file,
-        serde_json::to_vec(&evidence(&c, &order, now)).unwrap(),
+        serde_json::to_vec(&evidence(&c, &order, Utc::now().timestamp().max(now))).unwrap(),
     )
     .unwrap();
     fs::set_permissions(snapshot_file, fs::Permissions::from_mode(0o600)).unwrap();
@@ -712,4 +713,150 @@ fn v3_fixed_price_order_payment_and_no_price_service_rejection() {
         .to_string()
         .contains("no automated commerce"));
     assert!(Store::open(service).is_err());
+}
+
+#[tokio::test]
+async fn canonical_revocation_blocks_new_orders_but_preserves_existing_and_reorg() {
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
+    use tower::ServiceExt;
+    use zadp_indexer::SqliteOfferRepository;
+    use zadp_protocol::{
+        bind_offer, encode_offer_memo, encode_revoke_memo, BoardBody, BoardPolicy, OfferRevoke,
+    };
+    use zadp_zcash::{BlockHeader, BoardBlock, BoardOutput, TxId};
+    let (dir, mut c, now) = fixture();
+    let key = SellerKeyPair::generate();
+    let at = chrono::DateTime::from_timestamp(now, 0).unwrap();
+    let params = c.network.parameters();
+    let ivk = UnifiedSpendingKey::from_seed(&params, &[8; 64], AccountId::ZERO)
+        .unwrap()
+        .to_unified_full_viewing_key()
+        .to_unified_incoming_viewing_key();
+    let board = BoardBody {
+        zadp: 1,
+        board_id: "test".into(),
+        name: "test".into(),
+        network: c.network,
+        address: ivk
+            .address(DiversifierIndex::from(0u32), UnifiedAddressRequest::ORCHARD)
+            .unwrap()
+            .encode(&params),
+        incoming_viewing_key: ivk.encode(&params),
+        birthday_height: 3_000_000,
+        policy: BoardPolicy::default(),
+        operator_key: key.id.clone(),
+    }
+    .sign(&key)
+    .unwrap();
+    c.offer = bind_offer(
+        OfferDraft::new_ulid(
+            key.id.clone(),
+            "text.uppercase",
+            "Test",
+            Price::zec(rust_decimal::Decimal::new(1, 2)),
+            "https://seller.example",
+            at + Duration::days(1),
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [1; 16]),
+        )
+        .sign(&key)
+        .unwrap(),
+        "test",
+        at,
+        &key,
+    )
+    .unwrap();
+    let index_path = dir.path().join("canonical.sqlite");
+    let index = SqliteOfferRepository::open(&index_path, board.clone()).unwrap();
+    c.canonical_index = Some(zadp_commerce::CanonicalIndex {
+        database: index_path.clone(),
+        board_fingerprint: board.fingerprint().unwrap(),
+    });
+    let block = |height: u32, memo: [u8; 512]| BoardBlock {
+        header: BlockHeader {
+            height: height + 2_999_999,
+            hash: format!("{height:064x}"),
+            prev_hash: format!("{:064x}", height - 1),
+            time: at + Duration::seconds(i64::from(height)),
+        },
+        outputs: vec![BoardOutput {
+            txid: TxId(format!("{height:064x}")),
+            transaction_index: 0,
+            output_index: 0,
+            pool: "orchard".into(),
+            value_zat: 1000,
+            memo: memo.to_vec(),
+        }],
+    };
+    index
+        .apply_block(block(1, encode_offer_memo(&c.offer).unwrap()))
+        .unwrap();
+    let mut store = Store::open(c.clone()).unwrap();
+    let first_key = random_hex(32);
+    let existing = store.create(request(&c), &first_key, now).unwrap();
+    let revoke = OfferRevoke::sign(
+        "test".into(),
+        c.offer.id.clone(),
+        at + Duration::seconds(2),
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [2; 16]),
+        &key,
+    )
+    .unwrap();
+    let b = block(2, encode_revoke_memo(&revoke).unwrap());
+    index.apply_block(b.clone()).unwrap();
+    assert_eq!(
+        store
+            .create(request(&c), &random_hex(32), now)
+            .unwrap_err()
+            .to_string(),
+        "offer_closed"
+    );
+    assert_eq!(
+        store.create(request(&c), &first_key, now).unwrap().order_id,
+        existing.order_id
+    );
+    let response = settle(
+        &mut store,
+        &existing,
+        &evidence(&c, &existing, now),
+        now + 3,
+    );
+    assert_eq!(response.status, "completed");
+    let router = zadp_commerce::http::router(c.clone()).unwrap();
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/orders")
+                .header("content-type", "application/json")
+                .header("idempotency-key", random_hex(32))
+                .body(Body::from(serde_json::to_vec(&request(&c)).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 410);
+    assert!(
+        String::from_utf8(to_bytes(response.into_body(), 4096).await.unwrap().to_vec())
+            .unwrap()
+            .contains("offer_closed")
+    );
+    index.rewind(Some(3_000_000)).unwrap();
+    assert!(store.create(request(&c), &random_hex(32), now).is_ok());
+    index.apply_block(b).unwrap();
+    assert!(c.ensure_offer_open(now).is_err());
+    let mut wrong = c.clone();
+    wrong.canonical_index.as_mut().unwrap().board_fingerprint = "wrong".into();
+    assert_eq!(
+        wrong.ensure_offer_open(now).unwrap_err().to_string(),
+        "offer_lifecycle_unavailable"
+    );
+    wrong.canonical_index.as_mut().unwrap().database = dir.path().join("missing.sqlite");
+    assert!(wrong.ensure_offer_open(now).is_err());
+    assert!(
+        !wrong.canonical_index.as_ref().unwrap().database.exists(),
+        "read-only check never creates a database"
+    );
 }

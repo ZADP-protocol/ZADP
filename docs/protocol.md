@@ -175,8 +175,8 @@ No-price service announcements are outside this payment flow. See [commerce](com
 and [current architecture](architecture.md). Historical isolated-process tests
 remain in [process boundaries](commerce-process-boundaries.md).
 
-`offer_update` and `offer_revoke` are not implemented message types; Protocol 1.0
-currently supports `offer` only. Renewal creates a new signed Offer. Do not
+`offer_revoke` is an additive signed control message ([specification](offer-revoke.md)). `offer_update` remains unimplemented; Protocol 1.0
+supports unchanged `offer` and additive `offer_revoke`. Renewal creates a new signed Offer. Do not
 infer escrow, refund, reputation, messaging or generic pricing extensions.
 
 ## Evidence and compatibility

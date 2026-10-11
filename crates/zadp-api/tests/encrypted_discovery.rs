@@ -223,7 +223,7 @@ async fn encrypted_discovery_fixture(with_geo: bool, discovery_only: bool) {
         repo.list(None).await.unwrap()[0].offer,
         other.list(None).await.unwrap()[0].offer
     );
-    let response = zadp_api::board_router(repo)
+    let response = zadp_api::board_router(repo.clone())
         .oneshot(
             Request::builder()
                 .uri("/offers?capability=llm.inference")
@@ -252,6 +252,57 @@ async fn encrypted_discovery_fixture(with_geo: bool, discovery_only: bool) {
     }
 
     assert_eq!(returned.zadp, 3);
+    // Control messages use the same decrypted output/index/API path; no Offer mutation.
+    let r = OfferRevoke::sign(
+        "ai-services".into(),
+        offer.id.clone(),
+        now + Duration::seconds(1),
+        B64.encode([8; 16]),
+        &seller,
+    )
+    .unwrap();
+    repo.apply_block(BoardBlock {
+        header: BlockHeader {
+            height: 3_000_001,
+            hash: "2".repeat(64),
+            prev_hash: "1".repeat(64),
+            time: now + Duration::seconds(1),
+        },
+        outputs: vec![zadp_zcash::BoardOutput {
+            txid: zadp_zcash::TxId("3".repeat(64)),
+            transaction_index: 0,
+            output_index: 0,
+            pool: "orchard".into(),
+            value_zat: 1000,
+            memo: encode_revoke_memo(&r).unwrap().to_vec(),
+        }],
+    })
+    .unwrap();
+    let response = zadp_api::board_router(repo.clone())
+        .oneshot(
+            Request::builder()
+                .uri("/offers")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 1_048_576).await.unwrap()).unwrap();
+    assert!(json["offers"].as_array().unwrap().is_empty());
+    assert_eq!(
+        repo.historical_offer(offer.seller.as_str(), &offer.id)
+            .unwrap()
+            .unwrap(),
+        offer
+    );
+    assert_eq!(
+        repo.lifecycle(offer.seller.as_str(), &offer.id, Utc::now())
+            .unwrap()
+            .unwrap()
+            .status,
+        "revoked"
+    );
 }
 
 fn isolated_descriptor(id: &str, birthday: u32) -> BoardDescriptor {

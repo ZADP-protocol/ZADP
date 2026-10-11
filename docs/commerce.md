@@ -104,7 +104,7 @@ automatically pay, sign, broadcast or publish.
 
 Payment is private buyer–seller state, never a public PAID message. Recurring
 offers may remain available; host hiding and ordinary expiry are current options.
-`offer_update` / `offer_revoke` are not implemented. Renewal creates a new signed
+`offer_revoke` is an additive signed control message ([design](offer-revoke.md)); `offer_update` remains unimplemented. Renewal creates a new signed
 Offer; do not infer a publishable UPDATE/CLOSE message. A future private
 signed receipt can bind order, paid amount/time and seller identity; it must not
 be written to a public board. Receipt signing is deferred.

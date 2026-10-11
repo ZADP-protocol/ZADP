@@ -50,7 +50,7 @@ silent mixing. A descriptor-policy change requires separate reconstruction and
 validation before operator activation; do not overwrite the active database.
 
 Expired Offers stay historical but leave active discovery at `now >= expires_at`.
-Renewal creates a new signed Offer. Update/revoke are not implemented.
+Renewal creates a new signed Offer. Revocation is a separate append-only signed control message; [revocation architecture](offer-revoke.md). Update remains unimplemented.
 Host visibility can omit valid records without modifying their canonical state.
 See [scanning](zcash-scanning.md), [boards](board-descriptor.md),
 [multi-board operation](multi-board.md) and [HTTP routes](api.md).

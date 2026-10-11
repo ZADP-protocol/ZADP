@@ -32,6 +32,61 @@ pub struct Config {
     pub order_lifetime_seconds: i64,
     pub browser_origin: String,
     pub observer: ObserverConfig,
+    /// Read-only canonical board index; required for hosted chain revocation enforcement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_index: Option<CanonicalIndex>,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CanonicalIndex {
+    pub database: PathBuf,
+    pub board_fingerprint: String,
+}
+impl Config {
+    /// Re-evaluated for every NEW order. Existing orders keep their own state machine.
+    /// Does not write to the chain index or invent local lifecycle state.
+    pub fn ensure_offer_open(&self, now: i64) -> Result<()> {
+        ensure!(self.offer.expires_at.timestamp() > now, "offer_closed");
+        ensure!(
+            self.network != ZcashNetwork::Mainnet || self.canonical_index.is_some(),
+            "offer_lifecycle_unavailable"
+        );
+        if let Some(index) = &self.canonical_index {
+            let check = || -> Result<bool> {
+                let db = Connection::open_with_flags(
+                    &index.database,
+                    rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+                        | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                )?;
+                db.busy_timeout(std::time::Duration::from_secs(2))?;
+                let fingerprint: String = db.query_row(
+                    "SELECT value FROM metadata WHERE key='board_fingerprint'",
+                    [],
+                    |r| r.get(0),
+                )?;
+                ensure!(
+                    fingerprint == index.board_fingerprint,
+                    "index binding mismatch"
+                );
+                let json: String = db.query_row(
+                    "SELECT json FROM offers WHERE seller=?1 AND id=?2",
+                    params![self.offer.seller.as_str(), self.offer.id],
+                    |r| r.get(0),
+                )?;
+                let indexed: Offer = serde_json::from_str(&json)?;
+                ensure!(indexed == self.offer, "indexed offer mismatch");
+                let count: i64 = db.query_row(
+                    "SELECT count(*) FROM offer_revocations WHERE seller=?1 AND offer_id=?2",
+                    params![self.offer.seller.as_str(), self.offer.id],
+                    |r| r.get(0),
+                )?;
+                Ok(count == 0)
+            };
+            let open = check().map_err(|_| anyhow::anyhow!("offer_lifecycle_unavailable"))?;
+            ensure!(open, "offer_closed");
+        }
+        Ok(())
+    }
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
@@ -296,7 +351,11 @@ impl Store {
             "INSERT OR IGNORE INTO commerce_meta VALUES('schema_version','1')",
             [],
         )?;
-        let fingerprint = hash(&serde_json::to_string(&config)?);
+        // Lifecycle source is a read-only admission policy, not existing invoice authority.
+        // Preserve the pre-revoke config fingerprint so enabling it never loses old orders.
+        let mut invoice_config = config.clone();
+        invoice_config.canonical_index = None;
+        let fingerprint = hash(&serde_json::to_string(&invoice_config)?);
         let old: Option<String> = db
             .query_row(
                 "SELECT value FROM commerce_meta WHERE key='config'",
@@ -344,10 +403,7 @@ impl Store {
             ensure!(row.request_hash == digest, "idempotency conflict");
             return self.response(&row, Some(token(key)), "not_checked", 0, false);
         }
-        ensure!(
-            self.config.offer.expires_at.timestamp() > now,
-            "offer expired"
-        );
+        self.config.ensure_offer_open(now)?;
         let count: i64 = self
             .db
             .query_row("SELECT count(*) FROM orders", [], |r| r.get(0))?;

@@ -606,3 +606,273 @@ async fn priced_v3_listing_and_legacy_offers_share_existing_database() {
     assert_eq!(saved.commerce.unwrap().endpoint, "https://seller.example");
     assert!(saved.price.is_none());
 }
+
+fn revoke_block(height: u32, hash: u32, prev: u32, r: &OfferRevoke) -> BoardBlock {
+    let mut b = block(height, hash, prev, vec![]);
+    b.outputs.push(BoardOutput {
+        txid: TxId(format!("{hash:064x}")),
+        transaction_index: 0,
+        output_index: 0,
+        pool: "orchard".into(),
+        value_zat: 1000,
+        memo: encode_revoke_memo(r).unwrap().to_vec(),
+    });
+    b
+}
+fn revoke(o: &Offer, k: &SellerKeyPair, nonce: u8) -> OfferRevoke {
+    OfferRevoke::sign(
+        o.board_id.clone().unwrap(),
+        o.id.clone(),
+        DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap(),
+        B64.encode([nonce; 16]),
+        k,
+    )
+    .unwrap()
+}
+#[tokio::test]
+async fn revoke_append_only_reorg_history_and_moderation() {
+    let tmp = tempfile::tempdir().unwrap();
+    let board = descriptor(BoardPolicy::default());
+    let k = SellerKeyPair::generate();
+    let o = offer(&k, 1);
+    let repo = SqliteOfferRepository::open(tmp.path().join("board.sqlite"), board).unwrap();
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![o.clone()]))
+        .unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    let r = revoke(&o, &k, 2);
+    repo.apply_block(revoke_block(BIRTHDAY + 1, 2, 1, &r))
+        .unwrap();
+    assert!(repo.list(None).await.unwrap().is_empty());
+    assert!(repo.get(&o.id).await.unwrap().is_none());
+    assert_eq!(
+        repo.lifecycle(k.id.as_str(), &o.id, Utc::now())
+            .unwrap()
+            .unwrap()
+            .status,
+        "revoked"
+    );
+    assert_eq!(
+        repo.historical_offer(k.id.as_str(), &o.id).unwrap(),
+        Some(o.clone())
+    );
+    assert_eq!(
+        repo.lifecycle(k.id.as_str(), &o.id, o.expires_at + Duration::days(1))
+            .unwrap()
+            .unwrap()
+            .status,
+        "revoked"
+    );
+    assert_eq!(
+        repo.publication_audit(100).unwrap()[1].offer_revoke,
+        Some(r.clone())
+    );
+    let duplicate = revoke(&o, &k, 3);
+    repo.apply_block(revoke_block(BIRTHDAY + 2, 3, 2, &duplicate))
+        .unwrap();
+    assert_eq!(repo.rejection_count().unwrap(), 1);
+    repo.rewind(Some(BIRTHDAY)).unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    assert_eq!(
+        repo.lifecycle(k.id.as_str(), &o.id, Utc::now())
+            .unwrap()
+            .unwrap()
+            .status,
+        "active"
+    );
+    repo.moderate(k.id.as_str(), &o.id, Visibility::Hidden, "local moderation")
+        .unwrap();
+    repo.apply_block(revoke_block(BIRTHDAY + 1, 2, 1, &r))
+        .unwrap();
+    repo.rewind(Some(BIRTHDAY)).unwrap();
+    assert!(repo.list(None).await.unwrap().is_empty());
+    assert_eq!(repo.canonical_records(None).unwrap().len(), 1);
+    repo.moderate(k.id.as_str(), &o.id, Visibility::Visible, "")
+        .unwrap();
+    repo.apply_block(revoke_block(BIRTHDAY + 1, 2, 1, &r))
+        .unwrap();
+    assert!(repo.list(None).await.unwrap().is_empty());
+}
+#[tokio::test]
+async fn revoke_rejects_wrong_seller_board_unknown_nonce_future_and_before_offer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let board = descriptor(BoardPolicy::default());
+    let k = SellerKeyPair::generate();
+    let o = offer(&k, 1);
+    let repo = SqliteOfferRepository::open(tmp.path().join("board.sqlite"), board).unwrap();
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![o.clone()]))
+        .unwrap();
+    let other = SellerKeyPair::generate();
+    let wrong_seller = revoke(&o, &other, 2);
+    let wrong_board = OfferRevoke::sign(
+        "wrong".into(),
+        o.id.clone(),
+        DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap(),
+        B64.encode([3; 16]),
+        &k,
+    )
+    .unwrap();
+    let unknown = OfferRevoke::sign(
+        "ai-services".into(),
+        "unknown".into(),
+        o.issued_at.unwrap(),
+        B64.encode([4; 16]),
+        &k,
+    )
+    .unwrap();
+    let nonce_replay = revoke(&o, &k, 1);
+    let future = OfferRevoke::sign(
+        "ai-services".into(),
+        o.id.clone(),
+        o.expires_at + Duration::days(1),
+        B64.encode([5; 16]),
+        &k,
+    )
+    .unwrap();
+    for (i, r) in [wrong_seller, wrong_board, unknown, nonce_replay, future]
+        .iter()
+        .enumerate()
+    {
+        repo.apply_block(revoke_block(
+            BIRTHDAY + 1 + i as u32,
+            2 + i as u32,
+            1 + i as u32,
+            r,
+        ))
+        .unwrap();
+    }
+    assert_eq!(repo.rejection_count().unwrap(), 5);
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    // Revoke appearing before its target in the very same block must be audited/rejected.
+    repo.rewind(None).unwrap();
+    let mut b = block(BIRTHDAY, 9, 0, vec![o.clone()]);
+    b.outputs[0].transaction_index = 1;
+    b.outputs
+        .extend(revoke_block(BIRTHDAY, 8, 0, &revoke(&o, &k, 9)).outputs);
+    repo.apply_block(b).unwrap();
+    assert_eq!(repo.rejection_count().unwrap(), 1);
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+}
+#[tokio::test]
+async fn revokes_consume_rate_budget_and_release_active_slots() {
+    let tmp = tempfile::tempdir().unwrap();
+    let policy = BoardPolicy {
+        max_active_offers_per_seller: 1,
+        max_publications_per_seller_per_window: 2,
+        ..BoardPolicy::default()
+    };
+    let board = descriptor(policy);
+    let k = SellerKeyPair::generate();
+    let o = offer(&k, 1);
+    let repo = SqliteOfferRepository::open(tmp.path().join("board.sqlite"), board).unwrap();
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![o.clone()]))
+        .unwrap();
+    repo.apply_block(revoke_block(BIRTHDAY + 1, 2, 1, &revoke(&o, &k, 2)))
+        .unwrap();
+    repo.apply_block(block(BIRTHDAY + 2, 3, 2, vec![offer(&k, 3)]))
+        .unwrap();
+    assert_eq!(repo.rejections(10).unwrap()[0].1, "seller_rate_limit");
+}
+
+#[tokio::test]
+async fn revoke_same_block_order_release_slot_and_old_schema_upgrade() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("old.sqlite");
+    let board = descriptor(BoardPolicy {
+        max_active_offers_per_seller: 1,
+        max_publications_per_seller_per_window: 10,
+        ..BoardPolicy::default()
+    });
+    let key = SellerKeyPair::generate();
+    let first = offer(&key, 1);
+    let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![first.clone()]))
+        .unwrap();
+    drop(repo);
+    // Simulate an actual pre-revoke schema. Offer bytes are retained across additive upgrade.
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute("DROP TABLE offer_revocations", []).unwrap();
+    drop(db);
+    let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+    assert_eq!(
+        repo.historical_offer(key.id.as_str(), &first.id).unwrap(),
+        Some(first.clone())
+    );
+    let r = revoke(&first, &key, 2);
+    let mut b = revoke_block(BIRTHDAY + 1, 2, 1, &r);
+    let next = offer(&key, 3);
+    let mut output = block(BIRTHDAY + 1, 3, 1, vec![next.clone()])
+        .outputs
+        .remove(0);
+    output.transaction_index = 1;
+    b.outputs.push(output);
+    repo.apply_block(b).unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    assert_eq!(repo.list(None).await.unwrap()[0].offer, next);
+    drop(repo);
+    let repo = SqliteOfferRepository::open(&path, board).unwrap();
+    assert_eq!(
+        repo.lifecycle(key.id.as_str(), &first.id, Utc::now())
+            .unwrap()
+            .unwrap()
+            .status,
+        "revoked"
+    );
+    // Same-block Offer -> revoke is accepted, while revoke -> Offer is rejected elsewhere.
+    repo.rewind(None).unwrap();
+    let mut b = block(BIRTHDAY, 5, 0, vec![first.clone()]);
+    let mut output = revoke_block(BIRTHDAY, 6, 0, &r).outputs.remove(0);
+    output.transaction_index = 1;
+    b.outputs.push(output);
+    repo.apply_block(b).unwrap();
+    assert!(repo.list(None).await.unwrap().is_empty());
+    assert_eq!(repo.rejection_count().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn expired_offer_can_be_closed_without_rewriting_history_and_low_value_fails() {
+    let board = descriptor(BoardPolicy::default());
+    let key = SellerKeyPair::generate();
+    let original = offer(&key, 1);
+    let repo = SqliteOfferRepository::open(":memory:", board).unwrap();
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![original.clone()]))
+        .unwrap();
+    let mut low = revoke_block(BIRTHDAY + 1, 2, 1, &revoke(&original, &key, 2));
+    low.outputs[0].value_zat = 0;
+    repo.apply_block(low).unwrap();
+    let before = OfferRevoke::sign(
+        "ai-services".into(),
+        original.id.clone(),
+        original.issued_at.unwrap() - Duration::seconds(1),
+        B64.encode([3; 16]),
+        &key,
+    )
+    .unwrap();
+    repo.apply_block(revoke_block(BIRTHDAY + 2, 3, 2, &before))
+        .unwrap();
+    assert_eq!(repo.rejection_count().unwrap(), 2);
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    let after = original.expires_at + Duration::seconds(1);
+    let r = OfferRevoke::sign(
+        "ai-services".into(),
+        original.id.clone(),
+        after,
+        B64.encode([4; 16]),
+        &key,
+    )
+    .unwrap();
+    let mut expired = revoke_block(BIRTHDAY + 3, 4, 3, &r);
+    expired.header.time = after;
+    repo.apply_block(expired).unwrap();
+    assert_eq!(
+        repo.lifecycle(key.id.as_str(), &original.id, after)
+            .unwrap()
+            .unwrap()
+            .status,
+        "revoked"
+    );
+    assert_eq!(
+        repo.historical_offer(key.id.as_str(), &original.id)
+            .unwrap(),
+        Some(original)
+    );
+}

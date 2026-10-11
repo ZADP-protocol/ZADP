@@ -49,7 +49,7 @@ Optional primitives are `geo`, fixed ZEC `price`, and `commerce.endpoint`:
 
 Geo is optional in all valid combinations. The memo envelope is 512 bytes with
 an exact 504-byte payload budget. Expired Offers leave active discovery; renewal
-creates a new signed Offer. `offer_update`/`offer_revoke` are not implemented.
+creates a new signed Offer. `offer_revoke` is an additive signed control message ([design](docs/offer-revoke.md)); `offer_update` remains unimplemented.
 See the [normative specification](docs/protocol.md).
 
 ## Discovery and privacy

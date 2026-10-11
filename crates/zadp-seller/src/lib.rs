@@ -12,3 +12,5 @@ pub mod publication;
 pub mod purchase;
 
 pub mod transfer;
+
+pub mod revoke;

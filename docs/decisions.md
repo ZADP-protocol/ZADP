@@ -154,7 +154,7 @@ buyer fee preview and live payment require separate human review.
 - Live buyer payment acceptance and public deployment of the experimental service.
 - Actual service endpoint/protocol and integration with a real service provider.
 - Buyer wallet proposal preparation and approval UX; refund and retention policy.
-- Update/revoke transport and conflict handling beyond current OFFER replay rules.
+- Offer update/replacement remains deferred. Revoke is an additive 0x81 control message with first-accepted-wins and reorg-derived state ([decision](offer-revoke.md)).
 - Public API authentication, TLS, resource limits and operational readiness.
 
 Current priorities: [roadmap](./roadmap.md). Security limits:

@@ -83,6 +83,7 @@ fn main() -> Result<()> {
         &identity,
     )?;
     let config = Config {
+        canonical_index: None,
         offer: offer.clone(),
         network: ZcashNetwork::Testnet,
         recipient: address,

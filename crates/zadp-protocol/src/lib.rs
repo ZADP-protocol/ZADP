@@ -31,3 +31,9 @@ mod endpoint_proof;
 pub use endpoint_proof::{
     commerce_origin, public_endpoint_ip, EndpointProof, ENDPOINT_PROOF_PREFIX,
 };
+
+mod revoke;
+pub use revoke::{
+    decode_zadp_memo, encode_revoke_memo, OfferRevoke, ZadpMessage, OFFER_REVOKE_VERSION,
+    REVOKE_SIGNING_DOMAIN, WIRE_OFFER_REVOKE_V1,
+};

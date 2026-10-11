@@ -74,10 +74,159 @@ enum Command {
         output: PathBuf,
     },
     Publish(Box<Publish>),
+    /// Append-only seller-signed close; exact preview approval required before broadcast.
+    OfferRevoke(Box<RevokeArgs>),
     /// Pay a local self-payment test invoice using an existing protected wallet.
     PayTest(Box<zadp_seller::purchase::Purchase>),
     /// Explicit reviewed local shielded transfer; never called by discovery.
     Transfer(Box<zadp_seller::transfer::Transfer>),
+}
+#[derive(clap::Args)]
+struct RevokeArgs {
+    #[arg(long, default_value = "mainnet")]
+    network: String,
+    #[arg(long)]
+    board: PathBuf,
+    #[arg(long)]
+    index: PathBuf,
+    #[arg(long)]
+    offer_id: String,
+    #[arg(long, env = "ZADP_IDENTITY_FILE")]
+    identity: PathBuf,
+    #[arg(long)]
+    listing_value_zat: Option<u64>,
+    #[arg(long, default_value = "http://127.0.0.1:8232")]
+    wallet_rpc: String,
+    #[arg(long, env = "ZADP_WALLET_AUTH_FILE")]
+    wallet_auth_file: PathBuf,
+    #[arg(long)]
+    wallet_account: String,
+    #[arg(long)]
+    lightwalletd: String,
+    #[arg(long)]
+    dry_run: bool,
+    #[arg(long, requires = "dry_run")]
+    preview_output: Option<PathBuf>,
+    #[arg(long, requires = "dry_run")]
+    proposal_output: Option<PathBuf>,
+    #[arg(long, requires_all = ["approved_preview", "prepared_revoke", "yes"])]
+    approved_proposal: Option<PathBuf>,
+    #[arg(long, requires = "approved_proposal")]
+    approved_preview: Option<PathBuf>,
+    #[arg(long, requires = "approved_proposal")]
+    prepared_revoke: Option<PathBuf>,
+    #[arg(long, requires = "approved_proposal")]
+    yes: bool,
+    #[arg(long)]
+    receipt: Option<PathBuf>,
+}
+struct RevokeContext {
+    message: zadp_protocol::OfferRevoke,
+    index: PathBuf,
+    original: zadp_protocol::Offer,
+}
+async fn revoke(args: RevokeArgs) -> Result<()> {
+    ensure!(
+        args.dry_run
+            || (args.yes
+                && args.approved_proposal.is_some()
+                && args.approved_preview.is_some()
+                && args.prepared_revoke.is_some()),
+        "revoke requires --dry-run or explicit approval of the exact saved preview/proposal"
+    );
+    ensure!(
+        !(args.dry_run && args.approved_proposal.is_some()),
+        "dry run cannot consume a broadcast approval"
+    );
+    let board: BoardDescriptor = read_json(&args.board)?;
+    let network = match args.network.as_str() {
+        "mainnet" => ZcashNetwork::Mainnet,
+        "testnet" => ZcashNetwork::Testnet,
+        _ => anyhow::bail!("invalid network"),
+    };
+    board.validate(network)?;
+    let keys = load_identity(&args.identity)?;
+    let original =
+        zadp_seller::revoke::resolve_target(&args.index, &board, &keys.id, &args.offer_id)?;
+    let message = if let Some(path) = &args.prepared_revoke {
+        let r: zadp_protocol::OfferRevoke = read_json(path)?;
+        ensure!(
+            r.seller == keys.id && r.board_id == board.board.board_id && r.offer_id == original.id,
+            "prepared revoke target/identity mismatch"
+        );
+        r.verify()?;
+        r
+    } else {
+        let mut nonce = [0; 16];
+        rand::rngs::OsRng.fill_bytes(&mut nonce);
+        zadp_protocol::OfferRevoke::sign(
+            board.board.board_id.clone(),
+            original.id.clone(),
+            DateTime::from_timestamp(Utc::now().timestamp(), 0).context("invalid clock")?,
+            B64.encode(nonce),
+            &keys,
+        )?
+    };
+    ensure!(
+        original.issued_at.is_some_and(|t| message.issued_at >= t),
+        "revoke predates original offer"
+    );
+    let context = RevokeContext {
+        message,
+        index: args.index,
+        original,
+    };
+    let publish_args = Publish {
+        network: args.network,
+        board: args.board,
+        identity: args.identity,
+        capability: String::new(),
+        title: String::new(),
+        description: None,
+        geo_lat_e5: None,
+        geo_lon_e5: None,
+        geo_radius_m: None,
+        price_zec: None,
+        endpoint: None,
+        ttl_seconds: 1,
+        offer_version: None,
+        listing_value_zat: args.listing_value_zat,
+        wallet_rpc: args.wallet_rpc,
+        wallet_auth_file: args.wallet_auth_file,
+        wallet_account: args.wallet_account,
+        lightwalletd: args.lightwalletd,
+        yes: args.yes,
+        dry_run: args.dry_run,
+        preview_output: args.preview_output,
+        proposal_output: args.proposal_output,
+        approved_proposal: args.approved_proposal,
+        approved_preview: args.approved_preview,
+        prepared_offer: None,
+        receipt: args.receipt,
+    };
+    publish(publish_args, Some(context)).await
+}
+fn validate_message(
+    offer: &zadp_protocol::Offer,
+    revoke: Option<&RevokeContext>,
+    board: &BoardDescriptor,
+    value: u64,
+    now: DateTime<Utc>,
+) -> Result<()> {
+    if let Some(c) = revoke {
+        c.message.validate_board(board, value, now)?;
+        let current = zadp_seller::revoke::resolve_target(
+            &c.index,
+            board,
+            &c.message.seller,
+            &c.message.offer_id,
+        )?;
+        ensure!(current == c.original, "target changed since preview");
+    } else {
+        zadp_protocol::verify_offer_for_publication(offer, now)?;
+        board.validate_offer(offer, value, now)?;
+    }
+    Ok(())
 }
 #[derive(clap::Args)]
 struct Publish {
@@ -231,7 +380,8 @@ async fn main() -> Result<()> {
                 proof.origin, proof.expires_at
             );
         }
-        Command::Publish(args) => publish(*args).await?,
+        Command::Publish(args) => publish(*args, None).await?,
+        Command::OfferRevoke(args) => revoke(*args).await?,
         Command::PayTest(args) => zadp_seller::purchase::purchase(*args).await?,
         Command::Transfer(args) => zadp_seller::transfer::transfer(*args).await?,
     }
@@ -245,7 +395,7 @@ fn pczt(result: &Value) -> Result<&str> {
 fn zec(zat: u64) -> Decimal {
     Decimal::from(zat) / Decimal::from(100_000_000u64)
 }
-async fn publish(args: Publish) -> Result<()> {
+async fn publish(args: Publish, revoke: Option<RevokeContext>) -> Result<()> {
     let network = match args.network.as_str() {
         "mainnet" => ZcashNetwork::Mainnet,
         "testnet" => ZcashNetwork::Testnet,
@@ -271,85 +421,93 @@ async fn publish(args: Publish) -> Result<()> {
         value > 0 && value <= 2_100_000_000_000_000,
         "listing value is outside the Zcash money range"
     );
-    let keys = load_identity(&args.identity)?;
-    let now = DateTime::from_timestamp(Utc::now().timestamp(), 0).context("invalid clock")?;
-    let mut nonce = [0u8; 16];
-    rand::rngs::OsRng.fill_bytes(&mut nonce);
-    let mut draft = match (args.endpoint, args.price_zec) {
-        (Some(endpoint), Some(price)) => OfferDraft::new_ulid(
-            keys.id.clone(),
-            args.capability,
-            args.title,
-            Price::zec(price.normalize()),
-            endpoint,
-            now + Duration::seconds(i64::from(args.ttl_seconds)),
-            B64.encode(nonce),
-        ),
-        (None, None) => OfferDraft::new_discovery(
-            keys.id.clone(),
-            args.capability,
-            args.title,
-            now + Duration::seconds(i64::from(args.ttl_seconds)),
-            B64.encode(nonce),
-        ),
-        (Some(endpoint), None) => OfferDraft::new_discovery(
-            keys.id.clone(),
-            args.capability,
-            args.title,
-            now + Duration::seconds(i64::from(args.ttl_seconds)),
-            B64.encode(nonce),
-        )
-        .with_endpoint(endpoint),
-        _ => anyhow::bail!("fixed price requires endpoint"),
-    };
-    if let Some(v) = args.offer_version {
-        draft = draft.with_version(v);
-    }
-    draft.description = args.description.filter(|s| !s.is_empty());
-    match (args.geo_lat_e5, args.geo_lon_e5, args.geo_radius_m) {
-        (Some(lat_e5), Some(lon_e5), Some(radius_m)) => {
-            let area = GeoArea {
-                lat_e5,
-                lon_e5,
-                radius_m,
-            };
-            area.validate()?;
-            draft = draft.with_geo(area);
-        }
-        (None, None, None) => {}
-        _ => anyhow::bail!("offer area requires latitude, longitude and radius"),
-    }
-    let candidate = bind_offer(draft.sign(&keys)?, &board.board.board_id, now, &keys)?;
-    let offer = if let Some(path) = &args.prepared_offer {
-        let prepared: zadp_protocol::Offer = read_json(path)?;
-        ensure!(
-            prepared.zadp == candidate.zadp
-                && prepared.seller == candidate.seller
-                && prepared.title == candidate.title
-                && prepared.capability == candidate.capability
-                && prepared.description == candidate.description
-                && prepared.geo == candidate.geo
-                && prepared.price == candidate.price
-                && prepared.commerce == candidate.commerce
-                && prepared.board_id == candidate.board_id,
-            "prepared offer differs from requested content"
-        );
-        ensure!(
-            prepared.issued_at.is_some_and(|issued| prepared
-                .expires_at
-                .signed_duration_since(issued)
-                .num_seconds()
-                == i64::from(args.ttl_seconds)),
-            "prepared offer TTL differs"
-        );
-        prepared
+    let offer = if let Some(c) = &revoke {
+        c.original.clone()
     } else {
-        candidate
-    };
+        let keys = load_identity(&args.identity)?;
+        let now = DateTime::from_timestamp(Utc::now().timestamp(), 0).context("invalid clock")?;
+        let mut nonce = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut nonce);
+        let mut draft = match (args.endpoint, args.price_zec) {
+            (Some(endpoint), Some(price)) => OfferDraft::new_ulid(
+                keys.id.clone(),
+                args.capability,
+                args.title,
+                Price::zec(price.normalize()),
+                endpoint,
+                now + Duration::seconds(i64::from(args.ttl_seconds)),
+                B64.encode(nonce),
+            ),
+            (None, None) => OfferDraft::new_discovery(
+                keys.id.clone(),
+                args.capability,
+                args.title,
+                now + Duration::seconds(i64::from(args.ttl_seconds)),
+                B64.encode(nonce),
+            ),
+            (Some(endpoint), None) => OfferDraft::new_discovery(
+                keys.id.clone(),
+                args.capability,
+                args.title,
+                now + Duration::seconds(i64::from(args.ttl_seconds)),
+                B64.encode(nonce),
+            )
+            .with_endpoint(endpoint),
+            _ => anyhow::bail!("fixed price requires endpoint"),
+        };
+        if let Some(v) = args.offer_version {
+            draft = draft.with_version(v);
+        }
+        draft.description = args.description.filter(|s| !s.is_empty());
+        match (args.geo_lat_e5, args.geo_lon_e5, args.geo_radius_m) {
+            (Some(lat_e5), Some(lon_e5), Some(radius_m)) => {
+                let area = GeoArea {
+                    lat_e5,
+                    lon_e5,
+                    radius_m,
+                };
+                area.validate()?;
+                draft = draft.with_geo(area);
+            }
+            (None, None, None) => {}
+            _ => anyhow::bail!("offer area requires latitude, longitude and radius"),
+        }
+        let candidate = bind_offer(draft.sign(&keys)?, &board.board.board_id, now, &keys)?;
+        let offer = if let Some(path) = &args.prepared_offer {
+            let prepared: zadp_protocol::Offer = read_json(path)?;
+            ensure!(
+                prepared.zadp == candidate.zadp
+                    && prepared.seller == candidate.seller
+                    && prepared.title == candidate.title
+                    && prepared.capability == candidate.capability
+                    && prepared.description == candidate.description
+                    && prepared.geo == candidate.geo
+                    && prepared.price == candidate.price
+                    && prepared.commerce == candidate.commerce
+                    && prepared.board_id == candidate.board_id,
+                "prepared offer differs from requested content"
+            );
+            ensure!(
+                prepared.issued_at.is_some_and(|issued| prepared
+                    .expires_at
+                    .signed_duration_since(issued)
+                    .num_seconds()
+                    == i64::from(args.ttl_seconds)),
+                "prepared offer TTL differs"
+            );
+            prepared
+        } else {
+            candidate
+        };
 
-    zadp_protocol::verify_offer_for_publication(&offer, now)?;
-    board.validate_offer(&offer, value, now)?;
-    let memo = encode_offer_memo(&offer)?;
+        offer
+    };
+    validate_message(&offer, revoke.as_ref(), &board, value, Utc::now())?;
+    let memo = if let Some(c) = &revoke {
+        zadp_protocol::encode_revoke_memo(&c.message)?
+    } else {
+        encode_offer_memo(&offer)?
+    };
     let wallet = LocalWallet::connect(&args.wallet_rpc, &args.wallet_auth_file)?;
     let mut client = connect_lightwalletd(&args.lightwalletd, network).await?;
     // Tie the local wallet to the same actual chain before asking it to create a proposal.
@@ -392,18 +550,38 @@ async fn publish(args: Publish) -> Result<()> {
         .context("spend exceeds Zcash money range")?;
     if let Some(path) = &args.approved_preview {
         let approved: Value = read_json(path)?;
-        zadp_seller::publication::validate_approval(
-            &approved,
-            &offer,
-            &board,
-            value,
-            fee,
-            pczt(&created)?,
-            Utc::now(),
-        )?;
+        if let Some(c) = &revoke {
+            zadp_seller::revoke::validate_approval(
+                &approved,
+                &c.message,
+                &board,
+                value,
+                fee,
+                pczt(&created)?,
+                Utc::now(),
+            )?;
+        } else {
+            zadp_seller::publication::validate_approval(
+                &approved,
+                &offer,
+                &board,
+                value,
+                fee,
+                pczt(&created)?,
+                Utc::now(),
+            )?;
+        }
+    }
+    if let Some(c) = &revoke {
+        println!("APPEND-ONLY OFFER REVOCATION\nSeller: {}\nTarget Offer: {}\nIssued: {}\nOriginal remains in history; active discovery closes after acceptance.\nProposal SHA256: {}", c.message.seller, c.message.offer_id, c.message.issued_at, hex::encode(sha2::Sha256::digest(pczt(&created)?.as_bytes())));
     }
     println!(
-        "Signed Offer expiry (UTC): {}",
+        "{} expiry (UTC): {}",
+        if revoke.is_some() {
+            "Original Offer (not extended)"
+        } else {
+            "Signed Offer"
+        },
         offer.expires_at.to_rfc3339()
     );
     println!("ZADP {} PUBLICATION\n\nBoard: {}\nDestination: {}\nDescriptor: {}\nOffer: {}\nService price: {} ZEC\nListing value: {} ZEC ({value} zat)\nExpected network fee (wallet ZIP 317): {} ZEC ({fee} zat)\nTotal wallet spend: {} ZEC ({total} zat)\nNetwork: {:?}\nMemo: {} bytes",args.network.to_uppercase(),board.board.name,board.board.address,board.fingerprint()?,offer.title,offer.price.as_ref().map(|p|p.amount.to_string()).unwrap_or_else(||"none (no fixed payment)".into()),zec(value),zec(fee),zec(total),network,memo.len());
@@ -426,7 +604,7 @@ async fn publish(args: Publish) -> Result<()> {
                 .open(path)?;
             file.write_all(
                 serde_json::to_string_pretty(&json!({
-                    "kind":"unsigned-publication-preview", "network": network, "preview_expires_at":Utc::now().timestamp()+900,
+                    "kind":if revoke.is_some() {"unsigned-revocation-preview"} else {"unsigned-publication-preview"}, "offer_revoke":revoke.as_ref().map(|c| &c.message), "network": network, "preview_expires_at":Utc::now().timestamp()+900,
                     "board_fingerprint":board.fingerprint()?, "board_id":board.board.board_id,
                     "offer":offer, "payload_bytes":u16::from_be_bytes([memo[6],memo[7]]),
                     "listing_value_zat":value, "network_fee_zat":fee, "total_cost_zat":total,
@@ -452,7 +630,7 @@ async fn publish(args: Publish) -> Result<()> {
             return Ok(());
         }
     }
-    board.validate_offer(&offer, value, Utc::now())?;
+    validate_message(&offer, revoke.as_ref(), &board, value, Utc::now())?;
     let proved = wallet.rpc("pczt_prove", json!([pczt(&created)?])).await?;
     let signed = wallet
         .rpc("pczt_sign", json!([pczt(&proved)?, "FullPrivacy", true]))
@@ -524,10 +702,10 @@ async fn publish(args: Publish) -> Result<()> {
             .write(true)
             .create_new(true)
             .open(path)?;
-        file.write_all(serde_json::to_string_pretty(&json!({"network":network,"board_fingerprint":board.fingerprint()?,"txid":txid,"offer":offer,"listing_value_zat":value,"fee_zat":fee,"broadcast_status":"prepared; verify on chain"}))?.as_bytes())?;
+        file.write_all(serde_json::to_string_pretty(&json!({"network":network,"board_fingerprint":board.fingerprint()?,"txid":txid,"offer":offer,"offer_revoke":revoke.as_ref().map(|c| &c.message),"listing_value_zat":value,"fee_zat":fee,"broadcast_status":"prepared; verify on chain"}))?.as_bytes())?;
         file.sync_all()?;
     }
-    board.validate_offer(&offer, value, Utc::now())?;
+    validate_message(&offer, revoke.as_ref(), &board, value, Utc::now())?;
     broadcast_transaction(&mut client, bytes).await?;
     println!(
         "Broadcast accepted: {txid}\nWait for mining, then query the independent board indexer."
@@ -641,5 +819,47 @@ mod geo_cli_tests {
         assert_eq!(p.geo_lon_e5, Some(-18000000));
         assert_eq!(p.geo_radius_m, Some(500000));
         // Parsing only: no file or wallet process is accessed.
+    }
+}
+
+#[cfg(test)]
+mod revoke_cli_tests {
+    use super::*;
+    #[test]
+    fn revoke_requires_review_before_wallet_access() {
+        let base = [
+            "zadp-seller",
+            "offer-revoke",
+            "--board",
+            "unused",
+            "--index",
+            "unused",
+            "--offer-id",
+            "target",
+            "--identity",
+            "unused",
+            "--wallet-auth-file",
+            "unused",
+            "--wallet-account",
+            "unused",
+            "--lightwalletd",
+            "https://fixture.invalid",
+        ];
+        assert!(Args::try_parse_from(base.into_iter().chain(["--dry-run"])).is_ok());
+        assert!(Args::try_parse_from(base.into_iter().chain(["--yes"])).is_err());
+        assert!(
+            Args::try_parse_from(base.into_iter().chain(["--approved-proposal", "unused"]))
+                .is_err()
+        );
+        assert!(Args::try_parse_from(base.into_iter().chain([
+            "--yes",
+            "--approved-proposal",
+            "unused",
+            "--approved-preview",
+            "unused",
+            "--prepared-revoke",
+            "unused"
+        ]))
+        .is_ok());
     }
 }

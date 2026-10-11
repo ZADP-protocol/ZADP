@@ -95,6 +95,15 @@ async fn create(
     match state.store.lock().unwrap().create(request, key, now()) {
         Ok(response) => Json(response).into_response(),
         Err(e) => {
+            if e.to_string() == "offer_closed" {
+                return error(StatusCode::GONE, "offer_closed");
+            }
+            if e.to_string() == "offer_lifecycle_unavailable" {
+                return error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "offer_lifecycle_unavailable",
+                );
+            }
             let code = if e.to_string() == "idempotency conflict" {
                 StatusCode::CONFLICT
             } else {
@@ -168,5 +177,14 @@ async fn endpoint_proof_document(State(state): State<Service>) -> Response {
 }
 
 async fn service_capability(State(state): State<Service>) -> Json<serde_json::Value> {
-    Json(state.capability)
+    let mut descriptor = state.capability;
+    descriptor["orders_available"] = state
+        .store
+        .lock()
+        .unwrap()
+        .config
+        .ensure_offer_open(now())
+        .is_ok()
+        .into();
+    Json(descriptor)
 }

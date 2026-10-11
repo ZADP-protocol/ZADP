@@ -314,3 +314,10 @@ offline/synthetic acceptance only. A live unpaid preparation is not fulfillment.
 `orders_available`, supported transport and unchanged signed terms before POST.
 No discovery field authorizes wallet spending. See [privacy](privacy.md) and
 [mainnet evidence](mainnet-evidence.md).
+
+## Additive close control
+
+See [offer_revoke](offer-revoke.md) for signed control framing, exact preview/approval,
+read-only seller lifecycle binding, HTTP 410 and reorg behavior. Active discovery
+excludes accepted revocations; original Offer bytes remain in canonical history.
+No production activation or mainnet revocation has been performed.

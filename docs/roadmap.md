@@ -27,7 +27,7 @@ approval. See [Protocol 1.0](protocol.md) and [mainnet evidence](mainnet-evidenc
 
 ## NEXT
 
-- Seller-signed `offer_revoke`; `offer_update` is also not implemented today.
+- `offer_update` remains unimplemented. Additive seller-signed `offer_revoke` is implemented and offline-tested; production activation/mainnet acceptance remain pending ([design](offer-revoke.md)).
 - Broader seller capabilities and request/response interoperability.
 - Board federation / descriptor-sharing design; no automatic sharing protocol today.
 - Stronger host moderation, abuse limits and spam controls.

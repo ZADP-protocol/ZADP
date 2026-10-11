@@ -21,6 +21,7 @@ tracing = { workspace = true }
 ulid = { workspace = true }
 
 anyhow.workspace = true
+rusqlite.workspace = true
 clap.workspace = true
 reqwest.workspace = true
 zcash_keys.workspace = true
