@@ -113,7 +113,8 @@ Seller config adds optional `canonical_index`:
 
 ```json
 {"canonical_index":{"database":"/private/read-only/board.sqlite",
- "board_fingerprint":"EXACT_SIGNED_DESCRIPTOR_FINGERPRINT"}}
+ "board_fingerprint":"EXACT_SIGNED_DESCRIPTOR_FINGERPRINT",
+ "max_index_age_seconds":600}}
 ```
 
 This source is read-only, must contain the exact signed configured Offer, and
@@ -138,3 +139,15 @@ transaction is authorized by this document. Before upgrading production, provide
 a fingerprint-bound read-only canonical index to seller entries and validate
 access/reorg behavior in staging. Keep spending/signing keys off the server.
 `offer_update`, replacement, supersede and edit-in-place remain unimplemented.
+
+## Canonical read snapshot and freshness
+
+Lifecycle reads use one SQLite read-only transaction: fingerprint, latest block
+time, exact signed Offer and accepted revocation come from the same snapshot.
+The path must be absolute and the descriptor fingerprint 64 lowercase hex digits.
+`max_index_age_seconds` defaults to 600 (allowed 1–3600). Missing/empty/stale
+index cursors, or cursors more than 300 seconds in the future, fail closed with
+503. This bounds stale replicas; it does not independently establish the public
+network tip. Operators must maintain and monitor the canonical index at tip.
+A coherent SQLite/WAL source is required; never copy only a live database file.
+Existing invoices remain recoverable even if the index is temporarily unavailable.

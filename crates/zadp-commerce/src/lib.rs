@@ -41,6 +41,11 @@ pub struct Config {
 pub struct CanonicalIndex {
     pub database: PathBuf,
     pub board_fingerprint: String,
+    #[serde(default = "default_index_age")]
+    pub max_index_age_seconds: u32,
+}
+fn default_index_age() -> u32 {
+    600
 }
 impl Config {
     /// Re-evaluated for every NEW order. Existing orders keep their own state machine.
@@ -53,13 +58,29 @@ impl Config {
         );
         if let Some(index) = &self.canonical_index {
             let check = || -> Result<bool> {
-                let db = Connection::open_with_flags(
+                ensure!(index.database.is_absolute(), "absolute index path required");
+                ensure!(
+                    index.board_fingerprint.len() == 64
+                        && index
+                            .board_fingerprint
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                    "invalid fingerprint"
+                );
+                ensure!(
+                    (1..=3600).contains(&index.max_index_age_seconds),
+                    "invalid index freshness bound"
+                );
+                let mut db = Connection::open_with_flags(
                     &index.database,
                     rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
                         | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
                 )?;
                 db.busy_timeout(std::time::Duration::from_secs(2))?;
-                let fingerprint: String = db.query_row(
+                // One coherent snapshot across fingerprint, cursor, Offer and revoke,
+                // including concurrent indexer commits/rewinds. No index writes.
+                let tx = db.transaction()?;
+                let fingerprint: String = tx.query_row(
                     "SELECT value FROM metadata WHERE key='board_fingerprint'",
                     [],
                     |r| r.get(0),
@@ -68,18 +89,29 @@ impl Config {
                     fingerprint == index.board_fingerprint,
                     "index binding mismatch"
                 );
-                let json: String = db.query_row(
+                let tip_time: i64 = tx.query_row(
+                    "SELECT time FROM blocks ORDER BY height DESC LIMIT 1",
+                    [],
+                    |r| r.get(0),
+                )?;
+                ensure!(
+                    tip_time >= now.saturating_sub(i64::from(index.max_index_age_seconds))
+                        && tip_time <= now.saturating_add(300),
+                    "index cursor stale or future"
+                );
+                let json: String = tx.query_row(
                     "SELECT json FROM offers WHERE seller=?1 AND id=?2",
                     params![self.offer.seller.as_str(), self.offer.id],
                     |r| r.get(0),
                 )?;
                 let indexed: Offer = serde_json::from_str(&json)?;
                 ensure!(indexed == self.offer, "indexed offer mismatch");
-                let count: i64 = db.query_row(
+                let count: i64 = tx.query_row(
                     "SELECT count(*) FROM offer_revocations WHERE seller=?1 AND offer_id=?2",
                     params![self.offer.seller.as_str(), self.offer.id],
                     |r| r.get(0),
                 )?;
+                tx.commit()?;
                 Ok(count == 0)
             };
             let open = check().map_err(|_| anyhow::anyhow!("offer_lifecycle_unavailable"))?;

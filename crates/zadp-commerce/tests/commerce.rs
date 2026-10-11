@@ -773,6 +773,7 @@ async fn canonical_revocation_blocks_new_orders_but_preserves_existing_and_reorg
     c.canonical_index = Some(zadp_commerce::CanonicalIndex {
         database: index_path.clone(),
         board_fingerprint: board.fingerprint().unwrap(),
+        max_index_age_seconds: 600,
     });
     let block = |height: u32, memo: [u8; 512]| BoardBlock {
         header: BlockHeader {
@@ -845,6 +846,14 @@ async fn canonical_revocation_blocks_new_orders_but_preserves_existing_and_reorg
     );
     index.rewind(Some(3_000_000)).unwrap();
     assert!(store.create(request(&c), &random_hex(32), now).is_ok());
+    assert_eq!(
+        c.ensure_offer_open(now + 602).unwrap_err().to_string(),
+        "offer_lifecycle_unavailable"
+    );
+    assert_eq!(
+        c.ensure_offer_open(now - 301).unwrap_err().to_string(),
+        "offer_lifecycle_unavailable"
+    );
     index.apply_block(b).unwrap();
     assert!(c.ensure_offer_open(now).is_err());
     let mut wrong = c.clone();
