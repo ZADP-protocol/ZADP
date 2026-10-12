@@ -262,6 +262,9 @@ async fn main() -> Result<()> {
             }
         });
     }
+    let app = zadp_api::throttle::DiscoveryThrottle::from_env()
+        .map_err(anyhow::Error::msg)?
+        .apply(app);
     axum::serve(listener, app).await?;
     Ok(())
 }

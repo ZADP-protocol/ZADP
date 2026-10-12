@@ -1,8 +1,8 @@
 # ZADP HTTP API reference
 
-Snapshot reviewed **2026-10-11**. Deployed implementation baseline: Core
-`00756abb28dfbbc6639835653a60e08bbbfce3df`, Web
-`83e84fd61089e9c6185407013d2316722be3581b`. Current endpoint metadata is deployed.
+Snapshot reviewed **2026-10-12**. Production baseline before the prepared throttle rollout: Core
+`a60069362ff48af003218fa0f88909514c51dbde`, Web
+`ccf1d0518916883ca59cbbfabb50c9b6bf84e1ee`.
 This reference describes API behavior, not normative signing/wire semantics;
 see [Protocol 1.0](protocol.md). Deployment history belongs to Server.
 
@@ -321,3 +321,20 @@ See [offer_revoke](offer-revoke.md) for signed control framing, exact preview/ap
 read-only seller lifecycle binding, HTTP 410 and reorg behavior. Active discovery
 excludes accepted revocations; original Offer bytes remain in canonical history.
 No production activation or mainnet revocation has been performed.
+
+
+## Prepared discovery throttle (not a protocol rule)
+
+The `zadp-api` executable now wraps the complete read-only HTTP router in an
+aggregate process token bucket. Defaults: `ZADP_API_RATE_PER_SECOND=10` and
+`ZADP_API_RATE_BURST=30`. Bounds are 1–1000/sec and 1–10000 burst. Invalid/zero
+configuration refuses startup. Exhaustion returns 429 JSON `{"error":"rate_limited"}`,
+Retry-After:1 and Cache-Control:no-store. `/healthz` is exempt.
+
+This is a shared CPU/request budget, not per-client fairness or network DDoS
+protection. No IP identifiers are stored and forwarding headers cannot choose a
+fresh bucket. One client can exhaust shared capacity; a future trusted-edge
+per-client limit may complement it. Each replica has its own budget. Operators
+must configure appropriate headroom. It is not active on an old deployed binary;
+activation requires a separately reviewed deployment. No seller order/payment
+endpoint is proxied or modified by this discovery middleware.

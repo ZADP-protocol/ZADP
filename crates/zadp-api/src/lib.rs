@@ -1,5 +1,7 @@
 //! Thin HTTP adapters over indexer and seller domain services.
 
+pub mod throttle;
+
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
