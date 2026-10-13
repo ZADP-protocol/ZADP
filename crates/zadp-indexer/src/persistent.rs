@@ -483,7 +483,8 @@ impl SqliteOfferRepository {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
     /// Generic local storage extension: filters active canonical records before pagination.
-    /// The callback cannot change canonical data and executes under the repository lock.
+    /// The callback executes under the repository lock. Trusted application extensions
+    /// must not rewrite canonical data; this in-process interface is not a sandbox.
     pub fn filtered_records(
         &self,
         capability: Option<&str>,
