@@ -1,0 +1,12 @@
+[
+ {"text":"Acme Smith Ltd: 0.002 ZEC / $3.00, product AB123-45-6789","outcome":"approved"},
+ {"text":"u1hemn7jcy8p9eaxzg33unyrjt23syamhhwvmrvg8d962937ga7wwvemujarxqetkt8a3jjy3p8k8mkwp3n60su58v3ejz7un6lu9f9r6e","outcome":"approved"},
+ {"text":"ae8e8e566b3f926f053a964c13fc606eee8426ffd147dfc6867db416f1d7bb0d","outcome":"approved"},
+ {"text":"Passport translation services by Smith Consulting","outcome":"approved"},
+ {"text":"Email jane@example.org","outcome":"rejected"},
+ {"text":"CALL +358 40 123 4567","outcome":"rejected"},
+ {"text":"SSN: 123-45-6789","outcome":"rejected"},
+ {"text":"phone: 040 123 4567","outcome":"pending_review"},
+ {"text":"email: jane [at] example.org","outcome":"pending_review"},
+ {"text":"BUY STOLEN PASSWORDS","outcome":"rejected"}
+]

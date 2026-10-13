@@ -113,3 +113,8 @@ accepted only offline/synthetic so far; live unpaid preparation proves no paymen
 Core's `zadp-demo` and Python local summary bridge remain test/legacy fixtures,
 not production architecture. Board federation is future design.
 See [mainnet evidence](mainnet-evidence.md) and [roadmap](roadmap.md).
+
+Hosted presentation now derives automatic approved/pending_review/rejected state
+alongside canonical chain storage. Public reads combine it with existing host
+visibility and board/seller policy. Durable reports and append-only operator audit
+are local metadata, not chain messages. See [hosted moderation](hosted-moderation.md).

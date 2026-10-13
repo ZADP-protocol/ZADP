@@ -16,3 +16,5 @@ pub use board::BoardIndexer;
 pub use persistent::{PublicationAudit, SqliteOfferRepository, Visibility};
 mod registry;
 pub use registry::*;
+
+pub mod moderation;

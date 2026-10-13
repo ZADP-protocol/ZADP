@@ -66,7 +66,11 @@ impl DiscoveryThrottle {
         router.layer(middleware::from_fn_with_state(self, limit))
     }
 }
-async fn limit(State(budget): State<DiscoveryThrottle>, request: Request, next: Next) -> Response {
+pub(crate) async fn limit(
+    State(budget): State<DiscoveryThrottle>,
+    request: Request,
+    next: Next,
+) -> Response {
     if request.uri().path() == "/healthz" || budget.acquire(Instant::now()) {
         return next.run(request).await;
     }

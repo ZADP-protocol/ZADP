@@ -876,3 +876,136 @@ async fn expired_offer_can_be_closed_without_rewriting_history_and_low_value_fai
         Some(original)
     );
 }
+
+#[tokio::test]
+async fn hosted_moderation_reports_and_reorg_preserve_canonical_history() {
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let mut bad = offer(&seller, 61);
+    bad.title = "Email private.person@example.org".into();
+    let bad = bind_offer(
+        bad,
+        "ai-services",
+        DateTime::from_timestamp(Utc::now().timestamp() - 100, 0).unwrap(),
+        &seller,
+    )
+    .unwrap();
+    let repo = SqliteOfferRepository::open(":memory:", board).unwrap();
+    assert_eq!(
+        repo.apply_block(block(BIRTHDAY, 1, 0, vec![bad.clone()]))
+            .unwrap(),
+        1
+    );
+    assert_eq!(repo.canonical_records(None).unwrap().len(), 1);
+    assert!(repo.list(None).await.unwrap().is_empty());
+    assert!(repo.get(&bad.id).await.unwrap().is_none());
+    assert_eq!(
+        repo.moderation_queue().unwrap()[0]["automatic_outcome"],
+        "rejected"
+    );
+    repo.moderate(
+        seller.id.as_str(),
+        &bad.id,
+        Visibility::Visible,
+        "Reviewed false positive",
+    )
+    .unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 1);
+    let r = repo
+        .submit_report(
+            seller.id.as_str(),
+            &bad.id,
+            "abcdefghijklmnop",
+            "personal_information",
+            "Contains contact information",
+        )
+        .unwrap();
+    assert_eq!(
+        repo.submit_report(
+            seller.id.as_str(),
+            &bad.id,
+            "abcdefghijklmnop",
+            "personal_information",
+            "Contains contact information"
+        )
+        .unwrap()
+        .created_at,
+        r.created_at
+    );
+    assert!(repo
+        .submit_report(seller.id.as_str(), &bad.id, "abcdefghijklmnop", "spam", "")
+        .is_err());
+    repo.moderate(
+        seller.id.as_str(),
+        &bad.id,
+        Visibility::Hidden,
+        "Temporary review",
+    )
+    .unwrap();
+    assert!(repo.get(&bad.id).await.unwrap().is_none());
+    assert!(repo
+        .historical_offer(seller.id.as_str(), &bad.id)
+        .unwrap()
+        .is_some());
+    repo.process_report(&r.report_id, "resolved", "Hidden pending review")
+        .unwrap();
+    assert_eq!(repo.reports().unwrap()[0].status, "resolved");
+    repo.rewind(None).unwrap();
+    assert_eq!(repo.reports().unwrap().len(), 1);
+    repo.apply_block(block(BIRTHDAY, 2, 0, vec![bad.clone()]))
+        .unwrap();
+    assert!(repo.list(None).await.unwrap().is_empty());
+    repo.moderate(
+        seller.id.as_str(),
+        &bad.id,
+        Visibility::Visible,
+        "Restore after review",
+    )
+    .unwrap();
+    assert_eq!(repo.get(&bad.id).await.unwrap().unwrap().offer, bad);
+}
+#[tokio::test]
+async fn duplicate_signal_only_third_listing_and_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("moderation.db");
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    {
+        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+        for i in 1..=3 {
+            repo.apply_block(block(
+                BIRTHDAY + u32::from(i) - 1,
+                u32::from(i),
+                u32::from(i) - 1,
+                vec![offer(&seller, i)],
+            ))
+            .unwrap();
+        }
+        assert_eq!(repo.canonical_records(None).unwrap().len(), 3);
+        assert_eq!(repo.list(None).await.unwrap().len(), 2);
+    }
+    // Simulate an older database: automatic rows absent, canonical bytes retained.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute("DELETE FROM automatic_moderation", [])
+        .unwrap();
+    let repo = SqliteOfferRepository::open(&path, board).unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 2);
+    repo.rewind(Some(BIRTHDAY + 1)).unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 2);
+}
+#[tokio::test]
+async fn same_block_duplicate_outcomes_are_restart_stable() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("same-block.db");
+    let board = descriptor(BoardPolicy::default());
+    let seller = SellerKeyPair::generate();
+    let originals = vec![offer(&seller, 11), offer(&seller, 12), offer(&seller, 13)];
+    {
+        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
+        repo.apply_block(block(BIRTHDAY, 1, 0, originals)).unwrap();
+        assert_eq!(repo.list(None).await.unwrap().len(), 2);
+    }
+    let repo = SqliteOfferRepository::open(&path, board).unwrap();
+    assert_eq!(repo.list(None).await.unwrap().len(), 2);
+}

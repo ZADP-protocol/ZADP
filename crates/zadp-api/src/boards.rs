@@ -2,16 +2,16 @@
 use crate::{ApiError, EndpointVerifier, HostPolicy, IndexedOffer, OffersQuery, OffersResponse};
 use axum::{
     extract::{Path, Query, State},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use std::sync::Arc;
 use zadp_indexer::{BoardRegistry, BoardStatus, BoardSummary, OfferRepository};
 
 #[derive(Clone)]
-struct HostedState {
-    registry: Arc<BoardRegistry>,
-    policy: HostPolicy,
+pub(crate) struct HostedState {
+    pub(crate) registry: Arc<BoardRegistry>,
+    pub(crate) policy: HostPolicy,
     endpoints: EndpointVerifier,
     versions: Option<(String, String)>,
     metadata: std::collections::BTreeMap<String, BoardPresentation>,
@@ -44,12 +44,22 @@ pub fn multi_board_router_with_metadata(
     metadata: std::collections::BTreeMap<String, BoardPresentation>,
 ) -> Router {
     Router::new()
+        .route(
+            "/reports",
+            post(crate::reports::submit)
+                .layer(axum::extract::DefaultBodyLimit::max(4096))
+                .layer(axum::middleware::from_fn_with_state(
+                    crate::throttle::DiscoveryThrottle::new(1, 5).expect("static report budget"),
+                    crate::throttle::limit,
+                )),
+        )
         .route("/healthz", get(health))
         .route("/boards", get(boards))
         .route("/boards/{board_id}", get(board))
         .route("/boards/{board_id}/offers", get(board_offers))
         .route("/offers", get(offers))
         .route("/offers/{id}", get(offer))
+        .layer(axum::middleware::from_fn(no_store))
         .with_state(HostedState {
             registry,
             endpoints: EndpointVerifier::default(),
@@ -209,4 +219,16 @@ async fn list(
         }
     }
     Ok(Json(OffersResponse { offers }))
+}
+
+async fn no_store(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("no-store"),
+    );
+    response
 }

@@ -285,7 +285,8 @@ impl ApiError {
     }
 
     fn internal(message: impl Into<String>) -> Self {
-        tracing::warn!(error = %message.into(), "repository request failed");
+        let _ = message.into();
+        tracing::warn!("repository request failed");
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: "Internal server error".into(),
@@ -425,3 +426,6 @@ mod endpoint_metadata_tests {
         }
     }
 }
+
+mod reports;
+pub use reports::moderation_admin_router;

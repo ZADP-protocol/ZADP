@@ -37,6 +37,9 @@ struct Args {
     database: PathBuf,
     #[arg(long, default_value = "127.0.0.1:8080")]
     listen: std::net::SocketAddr,
+    /// Optional private moderation listener. Loopback only; requires ZADP_MODERATION_ADMIN_TOKEN.
+    #[arg(long)]
+    moderation_admin_listen: Option<std::net::SocketAddr>,
     #[arg(long,default_value_t=100,value_parser=clap::value_parser!(u32).range(1..=10000))]
     batch_size: u32,
     #[arg(long,default_value_t=15,value_parser=clap::value_parser!(u64).range(1..=3600))]
@@ -235,6 +238,22 @@ async fn main() -> Result<()> {
                 && m.description.len() <= 512,
             "invalid board presentation metadata"
         );
+    }
+    if let Some(address) = args.moderation_admin_listen {
+        ensure!(
+            address.ip().is_loopback(),
+            "moderation listener must be loopback"
+        );
+        let token = std::env::var("ZADP_MODERATION_ADMIN_TOKEN")
+            .context("moderation token not configured")?;
+        let admin = zadp_api::moderation_admin_router(registry.clone(), token)
+            .map_err(anyhow::Error::msg)?;
+        let listener = tokio::net::TcpListener::bind(address).await?;
+        tokio::spawn(async move {
+            if axum::serve(listener, admin).await.is_err() {
+                tracing::error!("private moderation listener stopped");
+            }
+        });
     }
     let app = zadp_api::multi_board_router_with_metadata(registry, host_policy, versions, metadata);
     // Independent workers: one board's failure or older birthday cannot block others.
