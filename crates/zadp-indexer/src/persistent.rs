@@ -3,18 +3,10 @@ use crate::{ChainObservation, IndexerError, OfferRecord, OfferRepository};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{path::Path, sync::Mutex};
 use zadp_protocol::{decode_zadp_memo, BoardDescriptor, Offer, OfferRevoke, ZadpMessage};
 use zadp_zcash::{BlockHeader, BoardBlock, TxId};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Visibility {
-    Visible,
-    Hidden,
-    Quarantined,
-}
 
 #[derive(Debug, Serialize)]
 pub struct PublicationAudit {
@@ -80,38 +72,13 @@ impl SqliteOfferRepository {
             block_time INTEGER NOT NULL,value_zat INTEGER NOT NULL,
             PRIMARY KEY(seller,offer_id),UNIQUE(seller,nonce),UNIQUE(txid,pool,output_index),
             FOREIGN KEY(seller,offer_id) REFERENCES offers(seller,id) ON DELETE CASCADE);
-            CREATE TABLE IF NOT EXISTS host_moderation (
-            seller TEXT NOT NULL,id TEXT NOT NULL,status TEXT NOT NULL,
-            reason TEXT NOT NULL,PRIMARY KEY(seller,id));
-            CREATE TABLE IF NOT EXISTS automatic_moderation (
-            seller TEXT NOT NULL,id TEXT NOT NULL,outcome TEXT NOT NULL,signals TEXT NOT NULL,rule_version INTEGER NOT NULL,
-            PRIMARY KEY(seller,id),FOREIGN KEY(seller,id) REFERENCES offers(seller,id) ON DELETE CASCADE);
-            CREATE TABLE IF NOT EXISTS offer_reports (
-            report_id TEXT PRIMARY KEY,seller TEXT NOT NULL,offer_id TEXT NOT NULL,board_id TEXT NOT NULL,
-            reason TEXT NOT NULL,explanation TEXT NOT NULL,created_at INTEGER NOT NULL,status TEXT NOT NULL,
-            UNIQUE(seller,offer_id,report_id));
-            CREATE INDEX IF NOT EXISTS reports_status ON offer_reports(status,created_at);
-            CREATE TABLE IF NOT EXISTS moderation_audit (
-            sequence INTEGER PRIMARY KEY,created_at INTEGER NOT NULL,seller TEXT NOT NULL,offer_id TEXT NOT NULL,
-            action TEXT NOT NULL,reason TEXT NOT NULL);",
+            ",
         )?;
         tx.execute(
             "INSERT OR IGNORE INTO metadata VALUES ('board_fingerprint',?1)",
             [fingerprint],
         )?;
         tx.execute("INSERT OR IGNORE INTO publications SELECT height,txid,pool,output_index,1,1,NULL,json FROM offers", [])?;
-        // Existing databases get the same rules before any public query can run.
-        let mut statement =
-            tx.prepare("SELECT json FROM offers o WHERE NOT EXISTS (SELECT 1 FROM automatic_moderation a WHERE a.seller=o.seller AND a.id=o.id) ORDER BY height,txid,pool,output_index")?;
-        let originals = statement
-            .query_map([], |r| r.get::<_, String>(0))?
-            .collect::<Result<Vec<_>, _>>()?;
-        drop(statement);
-        for json in originals {
-            let offer: Offer =
-                serde_json::from_str(&json).map_err(|_| state("corrupt stored offer"))?;
-            Self::assess_offer(&tx, &offer)?;
-        }
         tx.commit()?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -122,6 +89,15 @@ impl SqliteOfferRepository {
         self.connection
             .lock()
             .map_err(|_| state("database lock poisoned"))
+    }
+    /// Execute an application-owned SQLite extension under the canonical repository lock.
+    /// Extensions own their tables; Core does not depend on or invoke an extension.
+    pub fn with_connection<T>(
+        &self,
+        operation: impl FnOnce(&mut Connection) -> Result<T, IndexerError>,
+    ) -> Result<T, IndexerError> {
+        let mut connection = self.lock()?;
+        operation(&mut connection)
     }
     pub fn board(&self) -> &BoardDescriptor {
         &self.board
@@ -369,19 +345,6 @@ impl SqliteOfferRepository {
                 )?;
             }
         }
-        // Evaluate after the full block is present, in deterministic host ordering.
-        // This also makes a same-block spam burst identical on restart/backfill.
-        let mut stmt =
-            tx.prepare("SELECT json FROM offers WHERE height=?1 ORDER BY txid,pool,output_index")?;
-        let jsons = stmt
-            .query_map([h.height], |r| r.get::<_, String>(0))?
-            .collect::<Result<Vec<_>, _>>()?;
-        drop(stmt);
-        for json in jsons {
-            let offer: Offer =
-                serde_json::from_str(&json).map_err(|_| state("corrupt stored offer"))?;
-            Self::assess_offer(&tx, &offer)?;
-        }
         tx.commit()?;
         Ok(inserted)
     }
@@ -445,17 +408,6 @@ impl SqliteOfferRepository {
         )?;
         Ok(None)
     }
-    /// Exact hosted tuple lookup; an unrelated seller can reuse an Offer ID.
-    pub fn hosted_offer(
-        &self,
-        seller: &str,
-        id: &str,
-    ) -> Result<Option<OfferRecord>, IndexerError> {
-        Ok(self
-            .records(None, Some(id), true)?
-            .into_iter()
-            .find(|r| r.offer.seller.as_str() == seller))
-    }
     /// Historical lookup: original signed Offer JSON is never changed by a control event.
     pub fn historical_offer(&self, seller: &str, id: &str) -> Result<Option<Offer>, IndexerError> {
         let json: Option<String> = self
@@ -490,189 +442,11 @@ impl SqliteOfferRepository {
             revocation_txid: txid,
         }))
     }
-    /// Local operator override. Never changes canonical admission or protocol validity.
-    pub fn moderate(
-        &self,
-        seller: &str,
-        id: &str,
-        visibility: Visibility,
-        reason: &str,
-    ) -> Result<(), IndexerError> {
-        if reason.len() > 512 || reason.chars().any(char::is_control) {
-            return Err(state("invalid moderation reason"));
-        }
-        let mut c = self.lock()?;
-        let c = c.transaction()?;
-        let exists: bool = c.query_row(
-            "SELECT EXISTS(SELECT 1 FROM offers WHERE seller=?1 AND id=?2)",
-            params![seller, id],
-            |r| r.get(0),
-        )?;
-        if !exists {
-            return Err(state("unknown board offer"));
-        }
-        let status = match visibility {
-            Visibility::Visible => "visible",
-            Visibility::Hidden => "hidden",
-            Visibility::Quarantined => "quarantined",
-        };
-        c.execute("INSERT INTO host_moderation VALUES (?1,?2,?3,?4) ON CONFLICT(seller,id) DO UPDATE SET status=excluded.status,reason=excluded.reason", params![seller,id,status,reason])?;
-        c.execute("INSERT INTO moderation_audit(created_at,seller,offer_id,action,reason) VALUES (?1,?2,?3,?4,?5)",params![Utc::now().timestamp(),seller,id,status,reason])?;
-        c.commit()?;
-        Ok(())
-    }
-    fn assess_offer(c: &Connection, offer: &Offer) -> Result<(), IndexerError> {
-        use crate::moderation::{assess, fingerprint, offer_text, Outcome};
-        let mut decision = assess(&offer_text(offer));
-        if decision.outcome == Outcome::Approved {
-            // Third and later equivalent listings from the same seller, in one day.
-            // JSON remains untouched; IDs, price, endpoint and geo are not fingerprinted.
-            let mut stmt = c.prepare("SELECT json FROM offers WHERE seller=?1 AND (height,txid,pool,output_index) < (SELECT height,txid,pool,output_index FROM offers WHERE seller=?1 AND id=?2) AND block_time BETWEEN (SELECT block_time-86400 FROM offers WHERE seller=?1 AND id=?2) AND (SELECT block_time FROM offers WHERE seller=?1 AND id=?2)")?;
-            let texts = stmt.query_map(params![offer.seller.as_str(), offer.id,], |r| {
-                r.get::<_, String>(0)
-            })?;
-            let target_fingerprint = fingerprint(offer);
-            let mut count = 0;
-            for text in texts {
-                let o: Offer =
-                    serde_json::from_str(&text?).map_err(|_| state("corrupt stored offer"))?;
-                if fingerprint(&o) == target_fingerprint {
-                    count += 1;
-                }
-            }
-            if count >= 2 {
-                decision.outcome = Outcome::PendingReview;
-                decision.signals.push("same_seller_duplicate_24h".into());
-            }
-        }
-        let outcome = match decision.outcome {
-            Outcome::Approved => "approved",
-            Outcome::PendingReview => "pending_review",
-            Outcome::Rejected => "rejected",
-        };
-        c.execute(
-            "INSERT OR IGNORE INTO automatic_moderation VALUES (?1,?2,?3,?4,1)",
-            params![
-                offer.seller.as_str(),
-                offer.id,
-                outcome,
-                serde_json::to_string(&decision.signals)
-                    .map_err(|_| state("moderation serialization"))?
-            ],
-        )?;
-        Ok(())
-    }
-    pub fn submit_report(
-        &self,
-        seller: &str,
-        id: &str,
-        key: &str,
-        reason: &str,
-        explanation: &str,
-    ) -> Result<crate::moderation::Report, IndexerError> {
-        if !crate::moderation::validate_report(key, reason, explanation) {
-            return Err(state("invalid report"));
-        }
-        let mut c = self.lock()?;
-        let tx = c.transaction()?;
-        let exists: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM offers WHERE seller=?1 AND id=?2)",
-            params![seller, id],
-            |r| r.get(0),
-        )?;
-        if !exists {
-            return Err(state("unknown report target"));
-        }
-        let existing: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM offer_reports WHERE report_id=?1)",
-            [key],
-            |r| r.get(0),
-        )?;
-        let full:bool=tx.query_row("SELECT (SELECT COUNT(*) FROM offer_reports)>=50000 OR (SELECT COUNT(*) FROM offer_reports WHERE seller=?1 AND offer_id=?2 AND status='open')>=100",params![seller,id],|r|r.get(0))?;
-        if !existing && full {
-            return Err(state("report queue capacity reached"));
-        }
-        tx.execute(
-            "INSERT OR IGNORE INTO offer_reports VALUES (?1,?2,?3,?4,?5,?6,?7,'open')",
-            params![
-                key,
-                seller,
-                id,
-                self.board.board.board_id,
-                reason,
-                explanation,
-                Utc::now().timestamp()
-            ],
-        )?;
-        let report=tx.query_row("SELECT report_id,offer_id,board_id,seller,reason,explanation,created_at,status FROM offer_reports WHERE report_id=?1",[key],Self::read_report)?;
-        if report.seller != seller
-            || report.offer_id != id
-            || report.reason != reason
-            || report.explanation != explanation
-        {
-            return Err(state("report idempotency conflict"));
-        }
-        tx.commit()?;
-        Ok(report)
-    }
-    fn read_report(r: &rusqlite::Row<'_>) -> rusqlite::Result<crate::moderation::Report> {
-        Ok(crate::moderation::Report {
-            report_id: r.get(0)?,
-            offer_id: r.get(1)?,
-            board_id: r.get(2)?,
-            seller: r.get(3)?,
-            reason: r.get(4)?,
-            explanation: r.get(5)?,
-            created_at: r.get(6)?,
-            status: r.get(7)?,
-        })
-    }
-    pub fn reports(&self) -> Result<Vec<crate::moderation::Report>, IndexerError> {
-        let c = self.lock()?;
-        let mut s=c.prepare("SELECT report_id,offer_id,board_id,seller,reason,explanation,created_at,status FROM offer_reports ORDER BY (status='open') DESC,created_at DESC LIMIT 200")?;
-        let rows = s
-            .query_map([], Self::read_report)?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
-    }
-    pub fn process_report(
-        &self,
-        key: &str,
-        status: &str,
-        reason: &str,
-    ) -> Result<(), IndexerError> {
-        if !["resolved", "dismissed"].contains(&status)
-            || reason.trim().is_empty()
-            || reason.len() > 512
-            || reason.chars().any(char::is_control)
-        {
-            return Err(state("invalid report decision"));
-        }
-        let mut c = self.lock()?;
-        let tx = c.transaction()?;
-        if tx.execute(
-            "UPDATE offer_reports SET status=?1 WHERE report_id=?2",
-            params![status, key],
-        )? != 1
-        {
-            return Err(state("unknown report"));
-        }
-        tx.execute("INSERT INTO moderation_audit(created_at,seller,offer_id,action,reason) SELECT ?1,seller,offer_id,?2,?3 FROM offer_reports WHERE report_id=?4",params![Utc::now().timestamp(),status,reason,key])?;
-        tx.commit()?;
-        Ok(())
-    }
-    /// Private admin view. Canonical and host states are deliberately returned separately.
-    pub fn moderation_queue(&self) -> Result<serde_json::Value, IndexerError> {
-        let c = self.lock()?;
-        let mut s=c.prepare("SELECT o.json,a.outcome,a.signals,m.status,m.reason FROM offers o LEFT JOIN automatic_moderation a ON a.seller=o.seller AND a.id=o.id LEFT JOIN host_moderation m ON m.seller=o.seller AND m.id=o.id ORDER BY (a.outcome!='approved') DESC,(m.status!='visible') DESC,o.height DESC LIMIT 200")?;
-        let values=s.query_map([],|r| Ok(serde_json::json!({"offer":serde_json::from_str::<serde_json::Value>(&r.get::<_,String>(0)?).map_err(|_|rusqlite::Error::InvalidQuery)?,"automatic_outcome":r.get::<_,Option<String>>(1)?,"signals":r.get::<_,Option<String>>(2)?,"host_status":r.get::<_,Option<String>>(3)?,"host_reason":r.get::<_,Option<String>>(4)?})))?.collect::<Result<Vec<_>,_>>()?;
-        Ok(serde_json::json!(values))
-    }
     pub fn canonical_records(
         &self,
         capability: Option<&str>,
     ) -> Result<Vec<OfferRecord>, IndexerError> {
-        self.records(capability, None, false)
+        self.filtered_records(capability, None, |_, _| Ok(true))
     }
     pub fn publication_audit(&self, limit: u32) -> Result<Vec<PublicationAudit>, IndexerError> {
         let c = self.lock()?;
@@ -708,31 +482,30 @@ impl SqliteOfferRepository {
         })?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
-    fn records(
+    /// Generic local storage extension: filters active canonical records before pagination.
+    /// The callback cannot change canonical data and executes under the repository lock.
+    pub fn filtered_records(
         &self,
         capability: Option<&str>,
         id: Option<&str>,
-        hosted: bool,
+        accepts: impl Fn(&Connection, &Offer) -> Result<bool, IndexerError>,
     ) -> Result<Vec<OfferRecord>, IndexerError> {
         let c = self.lock()?;
         let scanned_height: Option<u32> =
             c.query_row("SELECT MAX(height) FROM blocks", [], |r| r.get(0))?;
-        let mut stmt=c.prepare("SELECT json,txid,pool,output_index,value_zat,o.height,block_time,b.hash FROM offers o JOIN blocks b ON b.height=o.height WHERE expires>?1 AND NOT EXISTS (SELECT 1 FROM offer_revocations r WHERE r.seller=o.seller AND r.offer_id=o.id) AND (?2 IS NULL OR json_extract(json, '$.capability')=?2) AND (?3 IS NULL OR o.id=?3) AND (?4=0 OR (NOT EXISTS (SELECT 1 FROM host_moderation m WHERE m.seller=o.seller AND m.id=o.id AND m.status != 'visible') AND (EXISTS(SELECT 1 FROM host_moderation m WHERE m.seller=o.seller AND m.id=o.id AND m.status='visible') OR EXISTS(SELECT 1 FROM automatic_moderation a WHERE a.seller=o.seller AND a.id=o.id AND a.outcome='approved')))) ORDER BY o.height,o.txid,o.pool,o.output_index LIMIT 1000")?;
-        let rows = stmt.query_map(
-            params![Utc::now().timestamp(), capability, id, hosted],
-            |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, u32>(3)?,
-                    r.get::<_, u64>(4)?,
-                    r.get::<_, u32>(5)?,
-                    r.get::<_, i64>(6)?,
-                    r.get::<_, String>(7)?,
-                ))
-            },
-        )?;
+        let mut stmt=c.prepare("SELECT json,txid,pool,output_index,value_zat,o.height,block_time,b.hash FROM offers o JOIN blocks b ON b.height=o.height WHERE expires>?1 AND NOT EXISTS (SELECT 1 FROM offer_revocations r WHERE r.seller=o.seller AND r.offer_id=o.id) AND (?2 IS NULL OR json_extract(json, '$.capability')=?2) AND (?3 IS NULL OR o.id=?3) ORDER BY o.height,o.txid,o.pool,o.output_index")?;
+        let rows = stmt.query_map(params![Utc::now().timestamp(), capability, id], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, u32>(3)?,
+                r.get::<_, u64>(4)?,
+                r.get::<_, u32>(5)?,
+                r.get::<_, i64>(6)?,
+                r.get::<_, String>(7)?,
+            ))
+        })?;
         let mut out = vec![];
         for row in rows {
             let (json, txid, pool, output_index, value, height, time, hash) = row?;
@@ -743,7 +516,13 @@ impl SqliteOfferRepository {
             {
                 continue;
             }
+            if !accepts(&c, &offer)? {
+                continue;
+            }
             let confirmations = scanned_height.unwrap_or(height).saturating_sub(height) + 1;
+            if out.len() >= 1000 {
+                break;
+            }
             out.push(OfferRecord {
                 offer,
                 source_txid: TxId(txid.clone()),
@@ -772,7 +551,8 @@ impl SqliteOfferRepository {
                 }),
             });
         }
-        Ok(out)
+        // Pagination is applied after any optional application filter.
+        Ok(out.into_iter().take(1000).collect())
     }
 }
 fn read_header(r: &rusqlite::Row<'_>) -> rusqlite::Result<BlockHeader> {
@@ -792,9 +572,12 @@ impl OfferRepository for SqliteOfferRepository {
         ))
     }
     async fn list(&self, capability: Option<&str>) -> Result<Vec<OfferRecord>, IndexerError> {
-        self.records(capability, None, true)
+        self.filtered_records(capability, None, |_, _| Ok(true))
     }
     async fn get(&self, id: &str) -> Result<Option<OfferRecord>, IndexerError> {
-        Ok(self.records(None, Some(id), true)?.into_iter().next())
+        Ok(self
+            .filtered_records(None, Some(id), |_, _| Ok(true))?
+            .into_iter()
+            .next())
     }
 }

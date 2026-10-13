@@ -352,9 +352,9 @@ fn same_id_offer(board: &BoardDescriptor, seller: &SellerKeyPair, now: DateTime<
     bind_offer(offer, &board.board.board_id, now, seller).unwrap()
 }
 #[tokio::test]
-async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
+async fn two_encrypted_boards_same_id_isolation_canonical_public_api() {
     use zadp_indexer::{
-        BoardContext, BoardRegistry, BoardSourceType, BoardStatus, HostedBoardPolicy, Visibility,
+        BoardContext, BoardRegistry, BoardSourceType, BoardStatus, HostedBoardPolicy,
     };
     use zcash_keys::{address::Address, keys::UnifiedIncomingViewingKey};
     let now = DateTime::from_timestamp(Utc::now().timestamp() - 1, 0).unwrap();
@@ -454,27 +454,6 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
     }
     let registry = Arc::new(registry);
     let app = zadp_api::multi_board_router(Arc::clone(&registry));
-    // Hosted presentation filtering must apply to every real multi-board offer route.
-    for (entries, expected) in [
-        (serde_json::json!([]), 0),
-        (serde_json::json!([seller.id]), 2),
-    ] {
-        let policy =
-            zadp_api::HostPolicy::from_config(Some("allowlist"), Some(&entries.to_string()))
-                .unwrap();
-        let hosted = zadp_api::multi_board_router_with_policy(Arc::clone(&registry), policy);
-        for (uri, count) in [
-            ("/offers", expected),
-            ("/offers?q=Text", expected),
-            ("/offers?capability=text.shorten", expected),
-            ("/boards/board-a/offers", expected / 2),
-            ("/offers?board_id=board-b", expected / 2),
-        ] {
-            let (_, response) = get(hosted.clone(), uri).await;
-            assert_eq!(response["offers"].as_array().unwrap().len(), count);
-        }
-    }
-
     async fn get(app: axum::Router, path: &str) -> (u16, serde_json::Value) {
         let response = app
             .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
@@ -488,16 +467,6 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
     let (status, selected) = get(app.clone(), "/offers/same-offer-id?board_id=board-b").await;
     assert_eq!(status, 200);
     assert_eq!(selected["board_id"], "board-b");
-    let hidden = zadp_api::multi_board_router_with_policy(
-        Arc::clone(&registry),
-        zadp_api::HostPolicy::from_config(Some("allowlist"), Some("[]")).unwrap(),
-    );
-    assert_eq!(
-        get(hidden, "/offers/same-offer-id?board_id=board-b")
-            .await
-            .0,
-        404
-    );
     let (_, all) = get(app.clone(), "/offers").await;
     assert_eq!(all["offers"].as_array().unwrap().len(), 2);
     assert_eq!(all["offers"][0]["id"], all["offers"][1]["id"]);
@@ -535,29 +504,6 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
         assert!(response["offers"].as_array().unwrap().is_empty());
         assert!(ra.publication_audit(10).unwrap()[0].protocol_valid);
     }
-    ra.moderate(
-        seller.id.as_str(),
-        &oa.id,
-        Visibility::Hidden,
-        "Host-only demo moderation",
-    )
-    .unwrap();
-    assert_eq!(
-        get(app.clone(), "/boards/board-a/offers").await.1["offers"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
-    assert_eq!(
-        get(app.clone(), "/boards/board-b/offers").await.1["offers"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
-    assert!(ra.publication_audit(10).unwrap()[0].protocol_valid);
-    assert_eq!(ra.canonical_records(None).unwrap().len(), 1);
     // A second board's visible ID must not disappear behind the first 1,000 list rows.
     // These are offline decoded-output fixtures, not transactions or mainnet evidence.
     let mut outputs = Vec::new();
@@ -594,7 +540,7 @@ async fn two_encrypted_boards_same_id_isolation_public_api_and_host_policy() {
             .0,
         200
     );
-    assert_eq!(get(app.clone(), "/offers/same-offer-id").await.0, 200);
+    assert_eq!(get(app.clone(), "/offers/same-offer-id").await.0, 400);
     for path in [
         "/boards",
         "/boards/board-a/moderate",
@@ -680,7 +626,6 @@ async fn seven_hosted_boards_metadata_and_wrong_board_admission() {
     }
     let app = zadp_api::multi_board_router_with_metadata(
         Arc::new(registry),
-        Default::default(),
         Default::default(),
         metadata,
     );

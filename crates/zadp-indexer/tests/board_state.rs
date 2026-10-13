@@ -281,47 +281,6 @@ async fn nonce_replay_expiration_and_invalid_signature_are_rejected() {
     assert_eq!(repo.rejection_count().unwrap(), 3);
 }
 
-#[tokio::test]
-async fn host_visibility_is_separate_persistent_and_reversible() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("board.sqlite");
-    let board = descriptor(BoardPolicy::default());
-    let seller = SellerKeyPair::generate();
-    let o = offer(&seller, 1);
-    {
-        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
-        repo.apply_block(block(BIRTHDAY, 1, 0, vec![o.clone()]))
-            .unwrap();
-        for status in [Visibility::Hidden, Visibility::Quarantined] {
-            repo.moderate(o.seller.as_str(), &o.id, status, "Demo host decision")
-                .unwrap();
-            assert!(repo.list(None).await.unwrap().is_empty());
-            assert_eq!(repo.canonical_records(None).unwrap().len(), 1);
-            let audit = repo.publication_audit(100).unwrap();
-            assert!(audit[0].protocol_valid && audit[0].board_allowed);
-            assert_eq!(audit[0].offer.as_ref().unwrap(), &o);
-        }
-    }
-    let repo = SqliteOfferRepository::open(path, board).unwrap();
-    assert!(repo.list(None).await.unwrap().is_empty());
-    repo.moderate(
-        o.seller.as_str(),
-        &o.id,
-        Visibility::Visible,
-        "Manual override",
-    )
-    .unwrap();
-    assert_eq!(repo.list(None).await.unwrap().len(), 1);
-    assert!(repo
-        .moderate(o.seller.as_str(), "unknown", Visibility::Hidden, "reason")
-        .is_err());
-    assert!(repo
-        .moderate(o.seller.as_str(), &o.id, Visibility::Hidden, "\n")
-        .is_err());
-    repo.rewind(None).unwrap();
-    assert!(repo.publication_audit(100).unwrap().is_empty());
-}
-
 #[test]
 fn valid_publication_can_fail_board_policy_without_becoming_invalid() {
     let board = descriptor(BoardPolicy {
@@ -441,8 +400,7 @@ async fn legacy_database_upgrade_preserves_original_board_and_acceptance() {
     }
     // Reproduce the pre-multi-board schema, preserving its original fingerprint/index.
     let c = rusqlite::Connection::open(&path).unwrap();
-    c.execute_batch("DROP TABLE publications; DROP TABLE host_moderation;")
-        .unwrap();
+    c.execute_batch("DROP TABLE publications;").unwrap();
     drop(c);
     let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
     assert_eq!(repo.board(), &board);
@@ -511,14 +469,6 @@ async fn signed_geo_on_v1_board_survives_restart_without_schema_migration() {
     assert_eq!(repo.board().fingerprint().unwrap(), fingerprint);
     assert_eq!(serde_json::to_string(repo.board()).unwrap(), encoded_board);
     assert_eq!(board.board.zadp, BOARD_DESCRIPTOR_VERSION);
-    repo.moderate(
-        local.seller.as_str(),
-        &local.id,
-        Visibility::Hidden,
-        "Fixture",
-    )
-    .unwrap();
-    assert_eq!(repo.list(None).await.unwrap().len(), 1);
     let connection = rusqlite::Connection::open(&path).unwrap();
     let names = connection
         .prepare("PRAGMA table_info(offers)")
@@ -679,15 +629,6 @@ async fn revoke_append_only_reorg_history_and_moderation() {
             .status,
         "active"
     );
-    repo.moderate(k.id.as_str(), &o.id, Visibility::Hidden, "local moderation")
-        .unwrap();
-    repo.apply_block(revoke_block(BIRTHDAY + 1, 2, 1, &r))
-        .unwrap();
-    repo.rewind(Some(BIRTHDAY)).unwrap();
-    assert!(repo.list(None).await.unwrap().is_empty());
-    assert_eq!(repo.canonical_records(None).unwrap().len(), 1);
-    repo.moderate(k.id.as_str(), &o.id, Visibility::Visible, "")
-        .unwrap();
     repo.apply_block(revoke_block(BIRTHDAY + 1, 2, 1, &r))
         .unwrap();
     assert!(repo.list(None).await.unwrap().is_empty());
@@ -878,124 +819,7 @@ async fn expired_offer_can_be_closed_without_rewriting_history_and_low_value_fai
 }
 
 #[tokio::test]
-async fn hosted_moderation_reports_and_reorg_preserve_canonical_history() {
-    let board = descriptor(BoardPolicy::default());
-    let seller = SellerKeyPair::generate();
-    let mut bad = offer(&seller, 61);
-    bad.title = "Email private.person@example.org".into();
-    let bad = bind_offer(
-        bad,
-        "ai-services",
-        DateTime::from_timestamp(Utc::now().timestamp() - 100, 0).unwrap(),
-        &seller,
-    )
-    .unwrap();
-    let repo = SqliteOfferRepository::open(":memory:", board).unwrap();
-    assert_eq!(
-        repo.apply_block(block(BIRTHDAY, 1, 0, vec![bad.clone()]))
-            .unwrap(),
-        1
-    );
-    assert_eq!(repo.canonical_records(None).unwrap().len(), 1);
-    assert!(repo.list(None).await.unwrap().is_empty());
-    assert!(repo.get(&bad.id).await.unwrap().is_none());
-    assert_eq!(
-        repo.moderation_queue().unwrap()[0]["automatic_outcome"],
-        "rejected"
-    );
-    repo.moderate(
-        seller.id.as_str(),
-        &bad.id,
-        Visibility::Visible,
-        "Reviewed false positive",
-    )
-    .unwrap();
-    assert_eq!(repo.list(None).await.unwrap().len(), 1);
-    let r = repo
-        .submit_report(
-            seller.id.as_str(),
-            &bad.id,
-            "abcdefghijklmnop",
-            "personal_information",
-            "Contains contact information",
-        )
-        .unwrap();
-    assert_eq!(
-        repo.submit_report(
-            seller.id.as_str(),
-            &bad.id,
-            "abcdefghijklmnop",
-            "personal_information",
-            "Contains contact information"
-        )
-        .unwrap()
-        .created_at,
-        r.created_at
-    );
-    assert!(repo
-        .submit_report(seller.id.as_str(), &bad.id, "abcdefghijklmnop", "spam", "")
-        .is_err());
-    repo.moderate(
-        seller.id.as_str(),
-        &bad.id,
-        Visibility::Hidden,
-        "Temporary review",
-    )
-    .unwrap();
-    assert!(repo.get(&bad.id).await.unwrap().is_none());
-    assert!(repo
-        .historical_offer(seller.id.as_str(), &bad.id)
-        .unwrap()
-        .is_some());
-    repo.process_report(&r.report_id, "resolved", "Hidden pending review")
-        .unwrap();
-    assert_eq!(repo.reports().unwrap()[0].status, "resolved");
-    repo.rewind(None).unwrap();
-    assert_eq!(repo.reports().unwrap().len(), 1);
-    repo.apply_block(block(BIRTHDAY, 2, 0, vec![bad.clone()]))
-        .unwrap();
-    assert!(repo.list(None).await.unwrap().is_empty());
-    repo.moderate(
-        seller.id.as_str(),
-        &bad.id,
-        Visibility::Visible,
-        "Restore after review",
-    )
-    .unwrap();
-    assert_eq!(repo.get(&bad.id).await.unwrap().unwrap().offer, bad);
-}
-#[tokio::test]
-async fn duplicate_signal_only_third_listing_and_migration() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("moderation.db");
-    let board = descriptor(BoardPolicy::default());
-    let seller = SellerKeyPair::generate();
-    {
-        let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
-        for i in 1..=3 {
-            repo.apply_block(block(
-                BIRTHDAY + u32::from(i) - 1,
-                u32::from(i),
-                u32::from(i) - 1,
-                vec![offer(&seller, i)],
-            ))
-            .unwrap();
-        }
-        assert_eq!(repo.canonical_records(None).unwrap().len(), 3);
-        assert_eq!(repo.list(None).await.unwrap().len(), 2);
-    }
-    // Simulate an older database: automatic rows absent, canonical bytes retained.
-    rusqlite::Connection::open(&path)
-        .unwrap()
-        .execute("DELETE FROM automatic_moderation", [])
-        .unwrap();
-    let repo = SqliteOfferRepository::open(&path, board).unwrap();
-    assert_eq!(repo.list(None).await.unwrap().len(), 2);
-    repo.rewind(Some(BIRTHDAY + 1)).unwrap();
-    assert_eq!(repo.list(None).await.unwrap().len(), 2);
-}
-#[tokio::test]
-async fn same_block_duplicate_outcomes_are_restart_stable() {
+async fn same_block_distinct_canonical_offers_are_restart_stable() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("same-block.db");
     let board = descriptor(BoardPolicy::default());
@@ -1004,8 +828,41 @@ async fn same_block_duplicate_outcomes_are_restart_stable() {
     {
         let repo = SqliteOfferRepository::open(&path, board.clone()).unwrap();
         repo.apply_block(block(BIRTHDAY, 1, 0, originals)).unwrap();
-        assert_eq!(repo.list(None).await.unwrap().len(), 2);
+        assert_eq!(repo.list(None).await.unwrap().len(), 3);
     }
     let repo = SqliteOfferRepository::open(&path, board).unwrap();
-    assert_eq!(repo.list(None).await.unwrap().len(), 2);
+    assert_eq!(repo.list(None).await.unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn standalone_core_has_no_hosted_tables_or_content_rules() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("canonical.sqlite");
+    let board = descriptor(BoardPolicy::default());
+    let key = SellerKeyPair::generate();
+    let mut original = offer(&key, 81);
+    original.title = "Email private.person@example.org".into();
+    let original = bind_offer(
+        original,
+        "ai-services",
+        DateTime::from_timestamp(Utc::now().timestamp() - 100, 0).unwrap(),
+        &key,
+    )
+    .unwrap();
+    let repo = SqliteOfferRepository::open(&path, board).unwrap();
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![original.clone()]))
+        .unwrap();
+    assert_eq!(repo.list(None).await.unwrap()[0].offer, original);
+    repo.with_connection(|c|{
+        let count:i64=c.query_row("SELECT count(*) FROM sqlite_master WHERE name IN ('host_moderation','automatic_moderation','offer_reports','moderation_audit')",[],|r|r.get(0))?;
+        assert_eq!(count,0,"Core must not install a hosted policy schema");
+        // Existing operator tables are opaque to standalone canonical discovery.
+        c.execute_batch("CREATE TABLE host_moderation(seller TEXT,id TEXT,status TEXT,reason TEXT);")?;
+        c.execute("INSERT INTO host_moderation VALUES (?1,?2,'hidden','operator decision')",rusqlite::params![original.seller.as_str(),original.id])?;
+        Ok(())
+    }).unwrap();
+    assert_eq!(
+        repo.get(&original.id).await.unwrap().unwrap().offer,
+        original
+    );
 }

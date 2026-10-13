@@ -241,3 +241,11 @@ Principal Sponsor receives README visibility only.
 ## License
 
 MIT OR Apache-2.0, at your option. See [MIT](LICENSE-MIT), [Apache](LICENSE-APACHE) and [license notice](LICENSE). Third-party dependencies retain their own licenses. Repository visibility is a separate owner decision; this cleanup does not make any repository public.
+
+## Optional hosted moderation
+
+Core can run standalone without content moderation. `zadp-api` exposes canonical
+active discovery; it neither installs hosted policy tables nor provides report
+or admin routes. [ZADP-Hosted](https://github.com/ZADP-protocol/ZADP-Hosted) adds
+operator visibility and abuse handling explicitly. ZADP-Server owns deployment
+operations. Hosted decisions never alter protocol validation or Offer signatures.

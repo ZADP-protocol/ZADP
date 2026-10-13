@@ -189,11 +189,7 @@ async fn unavailable_endpoint_keeps_offer_in_read_only_hosted_api_and_repository
         result: Err(EndpointStatus::Unavailable),
         calls: AtomicUsize::new(0),
     }));
-    let app = zadp_api::board_router_with_verifier(
-        repo.clone(),
-        zadp_api::HostPolicy::default(),
-        verifier,
-    );
+    let app = zadp_api::board_router_with_verifier(repo.clone(), verifier);
     for expected in ["unverified", "unavailable"] {
         let response = app
             .clone()
@@ -295,11 +291,7 @@ async fn v3_primitives_are_explicit_and_discovery_never_fetches_endpoint() {
     }
     drain().await;
     assert_eq!(fake.calls.load(Ordering::SeqCst), 0);
-    let app = zadp_api::board_router_with_verifier(
-        repo.clone(),
-        zadp_api::HostPolicy::default(),
-        verifier.clone(),
-    );
+    let app = zadp_api::board_router_with_verifier(repo.clone(), verifier.clone());
     let res = app
         .oneshot(
             Request::builder()

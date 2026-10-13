@@ -1,8 +1,8 @@
 //! Public hosted views. No registration, moderation, descriptor or spending HTTP routes.
-use crate::{ApiError, EndpointVerifier, HostPolicy, IndexedOffer, OffersQuery, OffersResponse};
+use crate::{ApiError, EndpointVerifier, IndexedOffer, OffersQuery, OffersResponse};
 use axum::{
     extract::{Path, Query, State},
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use std::sync::Arc;
@@ -10,24 +10,19 @@ use zadp_indexer::{BoardRegistry, BoardStatus, BoardSummary, OfferRepository};
 
 #[derive(Clone)]
 pub(crate) struct HostedState {
-    pub(crate) registry: Arc<BoardRegistry>,
-    pub(crate) policy: HostPolicy,
+    registry: Arc<BoardRegistry>,
     endpoints: EndpointVerifier,
     versions: Option<(String, String)>,
     metadata: std::collections::BTreeMap<String, BoardPresentation>,
 }
 pub fn multi_board_router(registry: Arc<BoardRegistry>) -> Router {
-    multi_board_router_with_policy(registry, HostPolicy::default())
-}
-pub fn multi_board_router_with_policy(registry: Arc<BoardRegistry>, policy: HostPolicy) -> Router {
-    multi_board_router_with_versions(registry, policy, None)
+    multi_board_router_with_versions(registry, None)
 }
 pub fn multi_board_router_with_versions(
     registry: Arc<BoardRegistry>,
-    policy: HostPolicy,
     versions: Option<(String, String)>,
 ) -> Router {
-    multi_board_router_with_metadata(registry, policy, versions, Default::default())
+    multi_board_router_with_metadata(registry, versions, Default::default())
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -39,20 +34,10 @@ pub struct BoardPresentation {
 
 pub fn multi_board_router_with_metadata(
     registry: Arc<BoardRegistry>,
-    policy: HostPolicy,
     versions: Option<(String, String)>,
     metadata: std::collections::BTreeMap<String, BoardPresentation>,
 ) -> Router {
     Router::new()
-        .route(
-            "/reports",
-            post(crate::reports::submit)
-                .layer(axum::extract::DefaultBodyLimit::max(4096))
-                .layer(axum::middleware::from_fn_with_state(
-                    crate::throttle::DiscoveryThrottle::new(1, 5).expect("static report budget"),
-                    crate::throttle::limit,
-                )),
-        )
         .route("/healthz", get(health))
         .route("/boards", get(boards))
         .route("/boards/{board_id}", get(board))
@@ -63,7 +48,6 @@ pub fn multi_board_router_with_metadata(
         .with_state(HostedState {
             registry,
             endpoints: EndpointVerifier::default(),
-            policy,
             versions,
             metadata,
         })
@@ -114,27 +98,13 @@ async fn board_offers(
         return Err(ApiError::bad_request("conflicting board filters"));
     }
     query.board_id = Some(id);
-    list(
-        &state.registry,
-        &state.policy,
-        &state.endpoints,
-        query,
-        None,
-    )
-    .await
+    list(&state.registry, &state.endpoints, query, None).await
 }
 async fn offers(
     State(state): State<HostedState>,
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<OffersResponse>, ApiError> {
-    list(
-        &state.registry,
-        &state.policy,
-        &state.endpoints,
-        query,
-        None,
-    )
-    .await
+    list(&state.registry, &state.endpoints, query, None).await
 }
 async fn offer(
     State(state): State<HostedState>,
@@ -142,14 +112,7 @@ async fn offer(
     Query(query): Query<OffersQuery>,
 ) -> Result<Json<IndexedOffer>, ApiError> {
     // Reuse the exact active hosted view; knowing a canonical ID cannot bypass it.
-    let Json(view) = list(
-        &state.registry,
-        &state.policy,
-        &state.endpoints,
-        query,
-        Some(&id),
-    )
-    .await?;
+    let Json(view) = list(&state.registry, &state.endpoints, query, Some(&id)).await?;
     let mut matches = view.offers.into_iter().filter(|o| o.offer.id == id);
     let first = matches.next().ok_or_else(ApiError::not_found)?;
     if matches.next().is_some() {
@@ -159,7 +122,6 @@ async fn offer(
 }
 async fn list(
     registry: &BoardRegistry,
-    policy: &HostPolicy,
     endpoints: &EndpointVerifier,
     query: OffersQuery,
     only_id: Option<&str>,
@@ -174,7 +136,6 @@ async fn list(
     {
         return Err(ApiError::not_found());
     }
-    let policy = policy.snapshot();
     let q = query.q.map(|q| q.to_lowercase());
     let mut offers = Vec::new();
     for board in registry.contexts() {
@@ -194,9 +155,6 @@ async fn list(
         for r in records {
             // Exact lookup must precede list pagination; hidden IDs still use the same policy.
             if only_id.is_some_and(|id| r.offer.id != id) {
-                continue;
-            }
-            if !policy.permits_record(&r) {
                 continue;
             }
             if q.as_ref().is_some_and(|q| {

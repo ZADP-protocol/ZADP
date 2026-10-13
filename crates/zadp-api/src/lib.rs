@@ -1,5 +1,6 @@
 //! Thin HTTP adapters over indexer and seller domain services.
 
+pub mod runtime;
 pub mod throttle;
 
 use std::sync::Arc;
@@ -85,10 +86,7 @@ pub struct IndexedOffer {
 impl IndexedOffer {
     // Host-derived metadata, never part of the signed Offer. A proof establishes
     // origin control only; the reference buyer also needs a supported capability.
-    pub(crate) fn new(
-        record: zadp_indexer::OfferRecord,
-        verification: EndpointVerification,
-    ) -> Self {
+    pub fn new(record: zadp_indexer::OfferRecord, verification: EndpointVerification) -> Self {
         let has_endpoint = record.offer.commerce.is_some();
         let has_fixed_price = record.offer.price.is_some();
         let purchase_available = has_endpoint
@@ -123,31 +121,22 @@ impl IndexedOffer {
 /// Read-only API for real board discovery. No invoice, fulfillment or wallet routes.
 pub struct BoardApiState<R> {
     repository: Arc<R>,
-    policy: HostPolicy,
     endpoints: EndpointVerifier,
 }
 impl<R> Clone for BoardApiState<R> {
     fn clone(&self) -> Self {
         Self {
             repository: Arc::clone(&self.repository),
-            policy: self.policy.clone(),
             endpoints: self.endpoints.clone(),
         }
     }
 }
 pub fn board_router<R: OfferRepository + 'static>(repository: Arc<R>) -> Router {
-    board_router_with_policy(repository, HostPolicy::default())
-}
-pub fn board_router_with_policy<R: OfferRepository + 'static>(
-    repository: Arc<R>,
-    policy: HostPolicy,
-) -> Router {
-    board_router_with_verifier(repository, policy, EndpointVerifier::default())
+    board_router_with_verifier(repository, EndpointVerifier::default())
 }
 /// Dependency injection for offline verification tests; no HTTP endpoint accepts a URL.
 pub fn board_router_with_verifier<R: OfferRepository + 'static>(
     repository: Arc<R>,
-    policy: HostPolicy,
     endpoints: EndpointVerifier,
 ) -> Router {
     Router::new()
@@ -161,7 +150,6 @@ pub fn board_router_with_verifier<R: OfferRepository + 'static>(
         ))
         .with_state(BoardApiState {
             repository,
-            policy,
             endpoints,
         })
 }
@@ -175,11 +163,9 @@ async fn board_offers<R: OfferRepository + 'static>(
         .list(query.capability.as_deref())
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
-    let policy = state.policy.snapshot();
     Ok(Json(OffersResponse {
         offers: records
             .into_iter()
-            .filter(|r| policy.permits_record(r))
             .map(|r| {
                 let verification = state.endpoints.status(&r.offer);
                 IndexedOffer::new(r, verification)
@@ -271,20 +257,20 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    fn not_found() -> Self {
+    pub fn not_found() -> Self {
         Self {
             status: StatusCode::NOT_FOUND,
             message: "Unknown board".into(),
         }
     }
-    fn bad_request(message: &str) -> Self {
+    pub fn bad_request(message: &str) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
             message: message.into(),
         }
     }
 
-    fn internal(message: impl Into<String>) -> Self {
+    pub fn internal(message: impl Into<String>) -> Self {
         let _ = message.into();
         tracing::warn!("repository request failed");
         Self {
@@ -321,14 +307,9 @@ impl IntoResponse for ApiError {
 
 mod boards;
 pub use boards::{
-    multi_board_router, multi_board_router_with_metadata, multi_board_router_with_policy,
-    multi_board_router_with_versions, BoardPresentation,
+    multi_board_router, multi_board_router_with_metadata, multi_board_router_with_versions,
+    BoardPresentation,
 };
-mod host_policy;
-pub use host_policy::{
-    HostPolicy, ManualPolicy, OfferDecision, OfferRule, SellerRule, SellerStatus,
-};
-
 mod endpoint_verification;
 pub use endpoint_verification::{
     EndpointStatus, EndpointVerification, EndpointVerifier, ProofFetcher,
@@ -426,6 +407,3 @@ mod endpoint_metadata_tests {
         }
     }
 }
-
-mod reports;
-pub use reports::moderation_admin_router;

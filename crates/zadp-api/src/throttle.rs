@@ -66,7 +66,7 @@ impl DiscoveryThrottle {
         router.layer(middleware::from_fn_with_state(self, limit))
     }
 }
-pub(crate) async fn limit(
+pub async fn limit(
     State(budget): State<DiscoveryThrottle>,
     request: Request,
     next: Next,

@@ -339,7 +339,6 @@ must configure appropriate headroom. It is not active on an old deployed binary;
 activation requires a separately reviewed deployment. No seller order/payment
 endpoint is proxied or modified by this discovery middleware.
 
-Hosted abuse intake is `POST /reports`; it has no signing, wallet or chain-writing
-capability. See [hosted moderation](hosted-moderation.md) for the bounded request,
-idempotency and rate-limit contract. The optional loopback operator interface is
-separate from the public router and disabled unless explicitly configured.
+The standalone Core discovery API has no report or administrator routes. Optional
+`POST /reports`, private moderation controls and hosted visibility policy belong
+to [ZADP-Hosted](https://github.com/ZADP-protocol/ZADP-Hosted).
