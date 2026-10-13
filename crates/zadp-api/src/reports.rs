@@ -11,7 +11,7 @@ use axum::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use zadp_indexer::{BoardRegistry, OfferRepository, Visibility};
+use zadp_indexer::{BoardRegistry, Visibility};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Submission {
@@ -37,8 +37,7 @@ pub(crate) async fn submit(
         .ok_or_else(ApiError::not_found)?;
     let offer = b
         .repository
-        .get(&r.offer_id)
-        .await
+        .hosted_offer(&r.seller, &r.offer_id)
         .map_err(|_| ApiError::internal("report lookup failed"))?
         .filter(|o| o.offer.seller.as_str() == r.seller && s.policy.snapshot().permits_record(o))
         .ok_or_else(ApiError::not_found)?;
@@ -85,6 +84,7 @@ pub fn moderation_admin_router(
         .route("/reports", post(process))
         .layer(DefaultBodyLimit::max(8192))
         .layer(middleware::from_fn_with_state(state.clone(), authorize))
+        .layer(middleware::from_fn(admin_headers))
         .with_state(state))
 }
 async fn authorize(State(s): State<Admin>, request: Request, next: Next) -> Response {
@@ -196,4 +196,10 @@ async fn related_offer(
     Ok(Json(
         serde_json::json!({"offer":offer,"lifecycle":b.repository.lifecycle(&r.seller,&r.offer_id,chrono::Utc::now()).map_err(|_|ApiError::internal("lifecycle lookup failed"))?}),
     ))
+}
+
+async fn admin_headers(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    for (name,value) in [("cache-control","no-store"),("x-frame-options","DENY"),("x-content-type-options","nosniff"),("referrer-policy","no-referrer"),("content-security-policy","default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")] {response.headers_mut().insert(axum::http::HeaderName::from_static(name),axum::http::HeaderValue::from_static(value));}
+    response
 }

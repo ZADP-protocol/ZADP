@@ -445,6 +445,17 @@ impl SqliteOfferRepository {
         )?;
         Ok(None)
     }
+    /// Exact hosted tuple lookup; an unrelated seller can reuse an Offer ID.
+    pub fn hosted_offer(
+        &self,
+        seller: &str,
+        id: &str,
+    ) -> Result<Option<OfferRecord>, IndexerError> {
+        Ok(self
+            .records(None, Some(id), true)?
+            .into_iter()
+            .find(|r| r.offer.seller.as_str() == seller))
+    }
     /// Historical lookup: original signed Offer JSON is never changed by a control event.
     pub fn historical_offer(&self, seller: &str, id: &str) -> Result<Option<Offer>, IndexerError> {
         let json: Option<String> = self
@@ -631,6 +642,7 @@ impl SqliteOfferRepository {
         reason: &str,
     ) -> Result<(), IndexerError> {
         if !["resolved", "dismissed"].contains(&status)
+            || reason.trim().is_empty()
             || reason.len() > 512
             || reason.chars().any(char::is_control)
         {

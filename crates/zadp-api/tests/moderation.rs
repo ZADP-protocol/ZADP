@@ -217,3 +217,46 @@ async fn public_reports_admin_auth_and_all_discovery_paths() {
         StatusCode::TOO_MANY_REQUESTS
     );
 }
+#[tokio::test]
+async fn report_target_includes_seller_and_unknown_target_is_not_persisted() {
+    let a = SellerKeyPair::generate();
+    let b = SellerKeyPair::generate();
+    let first = offer(&a, 1);
+    let mut second = offer(&b, 2);
+    second.id = first.id.clone();
+    let issued = second.issued_at.unwrap();
+    let second = bind_offer(second, "ai-services", issued, &b).unwrap();
+    let repo = Arc::new(
+        SqliteOfferRepository::open(":memory:", descriptor(BoardPolicy::default())).unwrap(),
+    );
+    repo.apply_block(block(BIRTHDAY, 1, 0, vec![first, second.clone()]))
+        .unwrap();
+    let mut registry = BoardRegistry::new(ZcashNetwork::Mainnet);
+    registry
+        .register(
+            BoardContext {
+                repository: repo.clone(),
+                source_type: BoardSourceType::Hosted,
+                status: BoardStatus::Active,
+            },
+            &HostedBoardPolicy::default(),
+            true,
+        )
+        .unwrap();
+    let app = zadp_api::multi_board_router(Arc::new(registry));
+    let report = serde_json::json!({"board_id":"ai-services","offer_id":second.id,"seller":b.id.as_str(),"reason":"spam","idempotency_key":"abcdefghijklmnop"});
+    assert_eq!(
+        call(app.clone(), "/reports", Some(report.clone()), None)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    assert_eq!(repo.reports().unwrap()[0].seller, b.id.as_str());
+    let mut invalid = report;
+    invalid["offer_id"] = "unknown".into();
+    assert_eq!(
+        call(app, "/reports", Some(invalid), None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(repo.reports().unwrap().len(), 1);
+}
