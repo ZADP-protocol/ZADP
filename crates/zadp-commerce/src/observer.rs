@@ -7,6 +7,7 @@ use zadp_seller::{local::read_protected, publication::LocalWallet};
 pub struct Observer {
     config: Config,
     wallet: Option<LocalWallet>,
+    cached: tokio::sync::Mutex<Option<(std::time::Instant, Snapshot)>>,
 }
 impl Observer {
     pub fn new(config: Config) -> Result<Self> {
@@ -16,15 +17,31 @@ impl Observer {
             }
             ObserverConfig::Mock { .. } | ObserverConfig::Lightwalletd { .. } => None,
         };
-        Ok(Self { config, wallet })
+        Ok(Self {
+            config,
+            wallet,
+            cached: tokio::sync::Mutex::new(None),
+        })
     }
     pub async fn snapshot(&self) -> Snapshot {
-        // Suppress credentials, transport diagnostics and full wallet responses.
-        match tokio::time::timeout(std::time::Duration::from_secs(20), self.load()).await {
-            Ok(Ok(snapshot)) => snapshot,
-            _ => Snapshot::default(),
+        // One bounded observation shared by concurrent authenticated requests. Failure is
+        // cached too, so an unavailable backend cannot cause a retry storm. Never
+        // fall back to a previously synchronized snapshot after a failed refresh.
+        let mut cached = self.cached.lock().await;
+        if let Some((checked, snapshot)) = &*cached {
+            if checked.elapsed() < std::time::Duration::from_secs(5) {
+                return snapshot.clone();
+            }
         }
+        let snapshot =
+            match tokio::time::timeout(std::time::Duration::from_secs(20), self.load()).await {
+                Ok(Ok(snapshot)) => snapshot,
+                _ => Snapshot::default(),
+            };
+        *cached = Some((std::time::Instant::now(), snapshot.clone()));
+        snapshot
     }
+
     async fn read_rpc(&self, method: &str, params: Value) -> Result<Value> {
         anyhow::ensure!(
             ["getwalletstatus", "z_listtransactions"].contains(&method),

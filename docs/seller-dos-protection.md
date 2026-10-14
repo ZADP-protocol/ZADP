@@ -1,0 +1,15 @@
+# Seller HTTP abuse protection
+
+Seller transport protection does not change Offer validity, wire formats, payment amounts or wallet authority. It is independent of hosted discovery moderation.
+
+The HTTP adapter reuses `zadp-api::throttle` (no new service): an aggregate budget plus bounded memory-only client budgets. POST /orders defaults to 5 requests/second, burst 20 globally; each client gets burst 5 and one refill every 20 seconds. Other requests share 50/second, burst 100 globally and 5/second, burst 30 per client. Creation also consumes the HTTP budget. Health checks are exempt. Rejections return 429 with Retry-After. IPv6 clients share a /64 budget; shared Wi-Fi users share a budget. No IP persistence or logging is added.
+
+Configure with ZADP_SELLER_CREATE_{RATE_PER_SECOND,RATE_BURST,CLIENT_RATE,CLIENT_BURST,CLIENT_PERIOD_SECONDS} and ZADP_SELLER_HTTP equivalents. Client map bounds use ZADP_RATE_MAX_CLIENTS (10000) and ZADP_RATE_IDLE_SECONDS (600). For Caddy deployment set ZADP_TRUST_LOOPBACK_PROXY=true only after Caddy overwrites X-Zadp-Client-IP with {remote_host}, and serve with TCP ConnectInfo. Missing/malformed identity fails closed. X-Forwarded-For is never trusted. Direct mode uses the TCP peer; behind a proxy without trusted mode all users intentionally share its budget.
+
+Catalog adapters must call router_unthrottled for internal Offer routers and protect the outer router once. This prevents bypass by switching Offers and avoids treating internal dispatch as a new client.
+
+Admission uses an immediate SQLite transaction. At most 100 unexpired waiting-payment orders per Offer and 10000 historical rows are admitted. Full capacity returns 503 seller_busy. Paid/processing orders do not consume unpaid slots. Idempotent retries return their original order before capacity/lifecycle checks. Expired unpaid rows are retained, not deleted or forcibly cancelled: a payment mined inside its original acceptance window can still be observed later. The historical cap requires operator retention planning; it is not automatically pruned.
+
+Each HTTP observer serializes observation and caches its complete result for five seconds, including failures. Observation times out after 20 seconds. After a failed refresh it returns unavailable, never an older successful result. Wallet/chain reads cannot multiply with concurrent status requests. No additional background observer is required. A successful observation has a bounded five-second freshness window; canonical chain/reorg checks run again on refresh. Already-created paid orders retain their existing exactly-once state machine and evidence checks.
+
+Limitations: these bounds protect application work, not volumetric network attacks. Each catalog Offer has its own unpaid/history capacity (catalog already limited to 64 entries). No production settings are changed by this source change. Deployment must update the seller Core pin/binary and trusted Caddy header together, then test direct spoofed headers, 429 responses and existing order completion without creating real payments.

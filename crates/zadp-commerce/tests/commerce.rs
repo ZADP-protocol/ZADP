@@ -869,3 +869,125 @@ async fn canonical_revocation_blocks_new_orders_but_preserves_existing_and_reorg
         "read-only check never creates a database"
     );
 }
+
+#[test]
+fn unpaid_capacity_preserves_idempotency_and_releases_expired_slots() {
+    let (_dir, c, now) = fixture();
+    let mut store = Store::open(c.clone()).unwrap();
+    let key = random_hex(32);
+    let original = store.create(request(&c), &key, now).unwrap();
+    for _ in 1..100 {
+        store.create(request(&c), &random_hex(32), now).unwrap();
+    }
+    assert_eq!(
+        store
+            .create(request(&c), &random_hex(32), now)
+            .unwrap_err()
+            .to_string(),
+        "seller_busy"
+    );
+    assert_eq!(
+        store.create(request(&c), &key, now).unwrap().order_id,
+        original.order_id
+    );
+    store
+        .create(request(&c), &random_hex(32), now + 601)
+        .unwrap();
+    // History and claim remain intact; no cleanup deletes replay bindings.
+    assert_eq!(
+        store.create(request(&c), &key, now + 601).unwrap().order_id,
+        original.order_id
+    );
+}
+
+#[tokio::test]
+async fn concurrent_observation_shares_snapshot_and_failure_backoff() {
+    let (_dir, c, _) = fixture();
+    let ObserverConfig::Mock { snapshot_file } = &c.observer else {
+        unreachable!()
+    };
+    fs::write(
+        snapshot_file,
+        serde_json::to_vec(&Snapshot {
+            synchronized: true,
+            tip: 42,
+            payments: vec![],
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    fs::set_permissions(snapshot_file, fs::Permissions::from_mode(0o600)).unwrap();
+    let observer = zadp_commerce::observer::Observer::new(c.clone()).unwrap();
+    assert_eq!(observer.snapshot().await.tip, 42);
+    fs::remove_file(snapshot_file).unwrap();
+    let (a, b) = tokio::join!(observer.snapshot(), observer.snapshot());
+    assert_eq!((a.tip, b.tip), (42, 42));
+    let unavailable = zadp_commerce::observer::Observer::new(c).unwrap();
+    assert!(!unavailable.snapshot().await.synchronized);
+    assert!(!unavailable.snapshot().await.synchronized);
+}
+
+#[tokio::test]
+async fn create_flood_is_limited_before_parsing_but_health_remains_available() {
+    use axum::{body::Body, http::Request};
+    use tower::ServiceExt;
+    let (_dir, c, _) = fixture();
+    let app = zadp_commerce::http::router(c).unwrap();
+    for _ in 0..5 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/orders")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 422);
+    }
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/orders")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 429);
+    assert!(response.headers().contains_key("retry-after"));
+    assert_eq!(
+        app.oneshot(
+            Request::builder()
+                .uri("/healthz")
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await
+        .unwrap()
+        .status(),
+        200
+    );
+}
+
+#[test]
+fn paid_order_completes_while_unpaid_capacity_is_full() {
+    let (_dir, c, now) = fixture();
+    let mut store = Store::open(c.clone()).unwrap();
+    let paid = store.create(request(&c), &random_hex(32), now).unwrap();
+    let snapshot = evidence(&c, &paid, now);
+    let claim = paid.claim_token.as_deref().unwrap();
+    store.check(&paid.order_id, claim, &snapshot, now).unwrap();
+    for _ in 0..100 {
+        store.create(request(&c), &random_hex(32), now).unwrap();
+    }
+    assert!(store.create(request(&c), &random_hex(32), now).is_err());
+    store.check(&paid.order_id, claim, &snapshot, now).unwrap();
+    let result = store.check(&paid.order_id, claim, &snapshot, now).unwrap();
+    assert_eq!(result.status, "completed");
+}

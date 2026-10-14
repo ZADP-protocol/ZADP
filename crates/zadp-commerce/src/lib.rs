@@ -420,6 +420,10 @@ impl Store {
             "invalid offer/request"
         );
         let digest = hash(&serde_json::to_string(&request)?);
+        let transaction = rusqlite::Transaction::new_unchecked(
+            &self.db,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
         let existing: Option<String> = self
             .db
             .query_row(
@@ -440,20 +444,18 @@ impl Store {
             .db
             .query_row("SELECT count(*) FROM orders", [], |r| r.get(0))?;
         let active: i64 = self.db.query_row(
-            "SELECT count(*) FROM orders WHERE status IN ('waiting_payment','paid','processing')",
-            [],
+            "SELECT count(*) FROM orders WHERE status = 'waiting_payment' AND expires >= ?1",
+            [now],
             |r| r.get(0),
         )?;
-        ensure!(
-            count < 10_000 && active < 100,
-            "seller order capacity reached"
-        );
+        ensure!(count < 10_000 && active < 100, "seller_busy");
         let id = random_hex(16);
         let memo = format!("ZADP-COMMERCE/1:{id}:{}", random_hex(32));
         let amount = self.config.amount_zat()?;
         let expires = (now + self.config.order_lifetime_seconds)
             .min(self.config.offer.expires_at.timestamp());
-        self.db.execute("INSERT INTO orders(id,token_hash,key_hash,request_hash,offer_id,recipient,account,amount,memo,created,expires,status,input,transitions) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,'waiting_payment',?12,?13)", params![id,hash(&token(key)),hash(key),digest,request.offer_id,self.config.recipient,self.config.seller_account,amount,memo,now,expires,request.request.text,r#"["created","waiting_payment"]"#])?;
+        transaction.execute("INSERT INTO orders(id,token_hash,key_hash,request_hash,offer_id,recipient,account,amount,memo,created,expires,status,input,transitions) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,'waiting_payment',?12,?13)", params![id,hash(&token(key)),hash(key),digest,request.offer_id,self.config.recipient,self.config.seller_account,amount,memo,now,expires,request.request.text,r#"["created","waiting_payment"]"#])?;
+        transaction.commit()?;
         self.response(
             &self.row(&id)?.unwrap(),
             Some(token(key)),

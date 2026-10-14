@@ -38,6 +38,13 @@ pub fn router_with_endpoint_proof(
     config: Config,
     endpoint_proof: Option<zadp_protocol::EndpointProof>,
 ) -> anyhow::Result<Router> {
+    protect(router_unthrottled(config, endpoint_proof)?)
+}
+/// For catalog adapters: protect the OUTER router once, across all Offers.
+pub fn router_unthrottled(
+    config: Config,
+    endpoint_proof: Option<zadp_protocol::EndpointProof>,
+) -> anyhow::Result<Router> {
     if let Some(proof) = &endpoint_proof {
         let endpoint = &config
             .offer
@@ -98,7 +105,10 @@ async fn create(
             if e.to_string() == "offer_closed" {
                 return error(StatusCode::GONE, "offer_closed");
             }
-            if e.to_string() == "offer_lifecycle_unavailable" {
+            if matches!(
+                e.to_string().as_str(),
+                "offer_lifecycle_unavailable" | "seller_busy"
+            ) {
                 return error(
                     StatusCode::SERVICE_UNAVAILABLE,
                     "offer_lifecycle_unavailable",
@@ -187,4 +197,54 @@ async fn service_capability(State(state): State<Service>) -> Json<serde_json::Va
         .is_ok()
         .into();
     Json(descriptor)
+}
+
+/// Shared HTTP protection, before body parsing and catalog serialization.
+/// Uses the same trusted-peer IP boundary as discovery, never raw X-Forwarded-For.
+pub fn protect(router: Router) -> anyhow::Result<Router> {
+    use zadp_api::throttle::{DiscoveryThrottle, ThrottleDefaults};
+    let create = DiscoveryThrottle::from_env_with_defaults(
+        "ZADP_SELLER_CREATE",
+        ThrottleDefaults {
+            rate_per_second: 5,
+            burst: 20,
+            client_rate: 1,
+            client_burst: 5,
+            client_period_seconds: 20,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let read = DiscoveryThrottle::from_env_with_defaults(
+        "ZADP_SELLER_HTTP",
+        ThrottleDefaults {
+            rate_per_second: 50,
+            burst: 100,
+            client_rate: 5,
+            client_burst: 30,
+            client_period_seconds: 1,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let create_layer = axum::middleware::from_fn(
+        move |request: axum::extract::Request, next: axum::middleware::Next| {
+            let budget = create.clone();
+            async move {
+                if request.method() == Method::POST && request.uri().path() == "/orders" {
+                    // Run the existing trusted-client middleware on this request only.
+                    use tower::ServiceExt;
+                    budget
+                        .apply(
+                            Router::new()
+                                .fallback(move |request| async move { next.run(request).await }),
+                        )
+                        .oneshot(request)
+                        .await
+                        .unwrap()
+                } else {
+                    next.run(request).await
+                }
+            }
+        },
+    );
+    Ok(read.apply(router.layer(create_layer)))
 }
