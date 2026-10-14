@@ -1,6 +1,6 @@
 //! Explicit local shielded transfer. No HTTP route, timer, seed export or implicit approval.
 use crate::{
-    local::read_protected,
+    local::{read_protected, read_protected_proposal},
     publication::{inspect_fee, LocalWallet},
 };
 use anyhow::{ensure, Context, Result};
@@ -166,7 +166,7 @@ pub async fn transfer(a: Transfer) -> Result<()> {
         "exact preview approval required"
     );
     let p: Value = serde_json::from_slice(&bytes)?;
-    let proposal: Value = serde_json::from_slice(&read_protected(&a.proposal)?)?;
+    let proposal: Value = serde_json::from_slice(&read_protected_proposal(&a.proposal)?)?;
     ensure!(
         p["config_sha256"] == digest(&config_bytes)
             && p["proposal_sha256"] == digest(pczt(&proposal)?.as_bytes())
