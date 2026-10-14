@@ -238,7 +238,11 @@ pub async fn run(
     let app = crate::throttle::DiscoveryThrottle::from_env()
         .map_err(anyhow::Error::msg)?
         .apply(app);
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 

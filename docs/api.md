@@ -323,21 +323,43 @@ excludes accepted revocations; original Offer bytes remain in canonical history.
 No production activation or mainnet revocation has been performed.
 
 
-## Prepared discovery throttle (not a protocol rule)
+## Discovery client and aggregate budgets (not protocol rules)
 
-The `zadp-api` executable now wraps the complete read-only HTTP router in an
-aggregate process token bucket. Defaults: `ZADP_API_RATE_PER_SECOND=10` and
-`ZADP_API_RATE_BURST=30`. Bounds are 1–1000/sec and 1–10000 burst. Invalid/zero
-configuration refuses startup. Exhaustion returns 429 JSON `{"error":"rate_limited"}`,
-Retry-After:1 and Cache-Control:no-store. `/healthz` is exempt.
+Discovery defaults: 5 requests/sec per IPv4 address or IPv6 /64, burst 30;
+aggregate 100/sec, burst 200. Environment variables:
+`ZADP_API_RATE_PER_SECOND`, `ZADP_API_RATE_BURST`, `ZADP_API_CLIENT_RATE`,
+`ZADP_API_CLIENT_BURST`, `ZADP_API_CLIENT_PERIOD_SECONDS` (default 1).
+`/healthz` is exempt. Exhaustion returns 429 JSON `{"error":"rate_limited"}`,
+`Retry-After` seconds until refill and `Cache-Control:no-store`.
 
-This is a shared CPU/request budget, not per-client fairness or network DDoS
-protection. No IP identifiers are stored and forwarding headers cannot choose a
-fresh bucket. One client can exhaust shared capacity; a future trusted-edge
-per-client limit may complement it. Each replica has its own budget. Operators
-must configure appropriate headroom. It is not active on an old deployed binary;
-activation requires a separately reviewed deployment. No seller order/payment
-endpoint is proxied or modified by this discovery middleware.
+Direct mode (default) uses the actual socket peer and ignores all forwarded
+headers. `ZADP_TRUST_LOOPBACK_PROXY=true` uses one strictly parsed
+`X-Zadp-Client-IP` only from a loopback socket peer. Caddy MUST overwrite that
+header with `{remote_host}` on every discovery/report proxy. Missing, repeated,
+malformed or non-loopback proxy identity returns 403 without exposing its value.
+Ordinary X-Forwarded-For never selects a bucket. Local untrusted processes are
+outside this trust model; loopback itself does not authenticate Caddy. A CDN
+requires a separately reviewed edge trust policy; none is inferred automatically.
+
+`ZADP_RATE_MAX_CLIENTS=10000` bounds the map; new identities receive 429 when
+full. `ZADP_RATE_IDLE_SECONDS=600` expires idle entries with lazy minute sweeps.
+IPv4-mapped IPv6 is normalized to IPv4. IPs are RAM-only, never added to logs,
+responses or databases. Active clients can retain a bucket; process restart
+clears all budgets. No persistent IP banning. Shared Wi-Fi/NAT shares a budget;
+limits are configurable. Aggregate protection is still needed for distributed
+abuse, and each replica has independent state. A rejected client bucket does
+not consume aggregate tokens.
+
+The generic `from_env_with_defaults` helper lets other HTTP adapters define their
+own budget prefixes and defaults. Report policy and defaults remain exclusively
+in ZADP-Hosted; Core introduces no report/moderation endpoints or policy.
+Configuration is validated before serving. Routers embedded without socket
+ConnectInfo share an unknown-client bucket; trusted proxy mode fails closed.
+
+Deployment must pair the new binary, explicit proxy configuration and matching
+Caddy header overwrite. Do not enable proxy trust with an old Caddy config.
+Production is not changed by this implementation. Aggregate 100/sec is an initial
+ceiling, not a measured capacity guarantee. Seller payments/orders are untouched.
 
 The standalone Core discovery API has no report or administrator routes. Optional
 `POST /reports`, private moderation controls and hosted visibility policy belong
