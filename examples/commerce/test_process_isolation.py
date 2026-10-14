@@ -83,7 +83,7 @@ class ProcessIsolation(unittest.TestCase):
             self.assertEqual(invalid.exception.code,401)
             def payment(confirmations):subprocess.run([sys.executable,'examples/commerce/mock_payment.py','--directory',str(seller_dir),'--order',order['order_id'],'--confirmations',str(confirmations)],cwd=ROOT,check=True,stdout=subprocess.DEVNULL)
             payment(1);pending=buyer('check');self.assertEqual(pending['payment_check'],'confirming');self.assertNotIn('result',pending)
-            payment(3);self.assertEqual(buyer('check')['status'],'paid');self.assertEqual(buyer('check')['status'],'processing');result=buyer('check');self.assertEqual(result['result'],input_text.upper())
+            payment(3);time.sleep(5.1);self.assertEqual(buyer('check')['status'],'paid');self.assertEqual(buyer('check')['status'],'processing');result=buyer('check');self.assertEqual(result['result'],input_text.upper())
             self.assertEqual(database_state(discovery_dir/'index.sqlite'),before)
             self.assertEqual({p.name:p.read_bytes() for p in discovery_dir.glob('*.json')},original_public)
             index_dump=''.join(before)
