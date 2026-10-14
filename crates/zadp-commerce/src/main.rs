@@ -40,7 +40,26 @@ async fn main() -> Result<()> {
             Ok(serde_json::from_slice(&bytes)?)
         })
         .transpose()?;
-    let router = http::router_with_endpoint_proof(config, proof)?;
+    let observer = std::sync::Arc::new(zadp_commerce::observer::Observer::new(config.clone())?);
+    let warm_up = matches!(
+        config.observer,
+        zadp_commerce::ObserverConfig::Lightwalletd { .. }
+    );
+    let router = http::protect(http::router_with_shared_observer(
+        config,
+        proof,
+        observer.clone(),
+    )?)?;
+    if warm_up {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let _ = observer.snapshot().await;
+            }
+        });
+    }
     let listener = tokio::net::TcpListener::bind(args.bind).await?;
     eprintln!(
         "Seller commerce ready on {} (no payment signing or broadcasting)",

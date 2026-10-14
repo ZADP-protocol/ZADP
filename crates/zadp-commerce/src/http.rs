@@ -45,6 +45,15 @@ pub fn router_unthrottled(
     config: Config,
     endpoint_proof: Option<zadp_protocol::EndpointProof>,
 ) -> anyhow::Result<Router> {
+    let observer = Arc::new(Observer::new(config.clone())?);
+    router_with_shared_observer(config, endpoint_proof, observer)
+}
+/// Catalog/background warm-up and HTTP checks must use this SAME observer.
+pub fn router_with_shared_observer(
+    config: Config,
+    endpoint_proof: Option<zadp_protocol::EndpointProof>,
+    observer: Arc<Observer>,
+) -> anyhow::Result<Router> {
     if let Some(proof) = &endpoint_proof {
         let endpoint = &config
             .offer
@@ -56,7 +65,7 @@ pub fn router_unthrottled(
     }
     let state = Service {
         store: Arc::new(Mutex::new(Store::open(config.clone())?)),
-        observer: Arc::new(Observer::new(config.clone())?),
+        observer,
         origin: config.browser_origin.clone(),
         capability: crate::capability::describe(&config.offer.capability, &config.offer.id),
         endpoint_proof,
