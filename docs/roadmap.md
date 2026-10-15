@@ -16,25 +16,26 @@ approval. See [Protocol 1.0](protocol.md) and [mainnet evidence](mainnet-evidenc
 
 ## NOW
 
-- Documentation cleanup and public-release readiness; owner review remains separate.
+- Public-release readiness, including current dependency advisories and full-history review; owner approval remains separate.
 - Production policy boundaries: protocol validity, admission, host visibility,
   endpoint verification, supported capability and live orders availability.
 - Seller retention/redaction implementation with replay-safe tombstones and recovery.
-- PaymentController real-wallet acceptance with a separate buyer account,
-  exact fee proposal, human approval and sanitized evidence. A live unpaid
-  preparation is not completed agent mainnet acceptance.
+- Keep checked-in PaymentController acceptance evidence distinct from later
+  operator runs. A real-wallet claim needs a separate buyer account, exact fee
+  proposal, approval and sanitized fulfillment evidence. Unpaid preparation is not acceptance.
 - Capability-model expansion beyond deterministic text examples.
 
 ## NEXT
 
-- `offer_update` remains unimplemented. Additive seller-signed `offer_revoke` is implemented and offline-tested; production activation/mainnet acceptance remain pending ([design](offer-revoke.md)).
+- `offer_update` remains unimplemented. Additive seller-signed `offer_revoke` is implemented and offline-tested; deployments and mainnet acceptance require separate operator evidence ([design](offer-revoke.md)).
 - Broader seller capabilities and request/response interoperability.
 - Board federation / descriptor-sharing design; no automatic sharing protocol today.
-- Stronger host moderation, abuse limits and spam controls.
+- Further hosted abuse controls belong in ZADP-Hosted; Core stays independently runnable.
 - More independent clients, indexers, wallet adapters and interoperability evidence.
 
 ## DEFERRED
 
 Escrow, reputation, DAO/token systems, hosted custody and cross-chain abstractions.
 No roadmap item authorizes funds, publication, deployment, wallet provisioning or
-an automatic sweep. Hosted charging remains disabled pending its separate review.
+an automatic sweep. Hosted pricing, charging and rollout are operator policy,
+not state configured or enabled by this roadmap.

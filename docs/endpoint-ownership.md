@@ -64,7 +64,7 @@ There is no URL-fetch HTTP route. Only origins extracted from visible, cryptogra
 
 Checks run asynchronously with four concurrent requests, at most 512 in-memory cached origins, a five-second total deadline including DNS, and a 16 KiB response cap. Cached results are reused for less than 60 seconds, with proof expiry and seller/origin/signature checked again for each Offer. The first discovery response may be unverified while checking; normal feed refresh obtains the result. Stale checks disable buying until revalidated. Downtime can take up to this cache interval to be noticed; an expiry is never extended by caching. The cache is not canonical database state and is empty after restart.
 
-No hosted or seller deployment, payment, publication, wallet route or custody change is required to implement this feature. Deployment must preserve Basic Auth and the existing read-only hosted API.
+No hosted or seller deployment, payment, publication, wallet route or custody change is required to implement this feature. Deployment must preserve the operator-selected access controls and read-only discovery boundary.
 
 Canonical wire 3 permits an endpoint without price. Its proof is still required
 for a hosted service link, but no payment is available without a signed fixed

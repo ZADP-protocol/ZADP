@@ -53,13 +53,14 @@ service quality generally, custody, refunds or delivery atomicity.
 Detailed sanitized records remain in the private
 [Server human acceptance](https://github.com/ZADP-protocol/ZADP-Server/blob/main/docs/human-mainnet-purchase.md).
 
-## Remaining acceptance boundary
+## Acceptance boundary at the 2026-10-11 review
 
-Agent settlement/fulfillment is accepted only in offline/synthetic testing.
+At that review, agent settlement/fulfillment was accepted only in offline/synthetic testing.
 A live legacy order preparation reached REQUIRE_APPROVAL with no payment and
 must not be presented as agent mainnet acceptance. Separate funded buyer-wallet
 binding, an exact unsigned fee proposal, human approval and live fulfillment
-are still required. See [roadmap](roadmap.md) and [privacy](privacy.md).
+were still required for the next milestone. Later operator acceptance is outside
+this dated evidence summary. See [roadmap](roadmap.md) and [privacy](privacy.md).
 
 Detailed operator records, release SHAs, backups and private-host policy belong
 to Server. This public summary does not disclose protected configuration or

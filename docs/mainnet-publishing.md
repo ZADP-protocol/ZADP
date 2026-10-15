@@ -91,4 +91,5 @@ mainnet runtime or wallet.
 See [offer_revoke](offer-revoke.md) for signed control framing, exact preview/approval,
 read-only seller lifecycle binding, HTTP 410 and reorg behavior. Active discovery
 excludes accepted revocations; original Offer bytes remain in canonical history.
-No production activation or mainnet revocation has been performed.
+This document does not establish current production activation or mainnet
+revocation acceptance. Those require separately recorded operator evidence.

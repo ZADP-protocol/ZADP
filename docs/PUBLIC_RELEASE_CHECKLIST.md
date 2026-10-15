@@ -13,7 +13,7 @@ This is a review gate, not authorization to change repository visibility.
 - [ ] Protocol-focused README, SECURITY.md and CONTRIBUTING.md reviewed.
 - [ ] Owner made a Code of Conduct decision.
 - [ ] Protocol, wire, descriptor, optional commerce, expiry and privacy docs sufficient for implementers.
-- [ ] Offer v1, Offer v2, indexer and reference client regression results reviewed.
+- [ ] Canonical wire 3, legacy wire 1/2, revocation, indexer and reference-client regressions reviewed.
 - [ ] Independent self-hosting/reference client instructions tested.
 - [ ] No production wallet seed, spending key or private authority included.
 - [ ] Owner explicitly approves changing core repository visibility.

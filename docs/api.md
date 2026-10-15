@@ -1,19 +1,15 @@
 # ZADP HTTP API reference
 
-Snapshot reviewed **2026-10-12**. Production baseline before the prepared throttle rollout: Core
-`a60069362ff48af003218fa0f88909514c51dbde`, Web
-`ccf1d0518916883ca59cbbfabb50c9b6bf84e1ee`.
-This reference describes API behavior, not normative signing/wire semantics;
-see [Protocol 1.0](protocol.md). Deployment history belongs to Server.
-
-This describes implemented behavior and the hosted private-alpha exposure checked
-on that date. It is a human-readable reference, not an OpenAPI schema or a promise
-of future endpoints. Deployment may expose fewer routes than the Core implements.
+Core behavior reviewed **2026-10-15** against main `4a2847461b60eaa02fe416b168039baaf1813bc0`.
+This reference describes implemented handlers, not normative signing/wire
+semantics or a guarantee about a particular deployment. See [Protocol 1.0](protocol.md).
+Hosted moderation and deployment policy live in separate repositories.
 
 ## Separate discovery and seller APIs
 
 Discovery reads indexed, signed Offers from Zcash boards. It returns board
-metadata, active hosted-visible Offers and endpoint ownership status. It does not
+metadata, active board-admitted Offers and endpoint ownership status. Optional
+Hosted discovery applies its own visibility rules on top. It does not
 create seller orders, receive service payments or return service results.
 
 The seller commerce API runs at the advertised HTTPS origin. Buyers send order
@@ -29,14 +25,14 @@ the discovery API and has no signatures, transactions or Buy action.
 - Same-origin Web discovery proxy: `https://zadp.io/api`.
 - Current reference seller: `https://seller.zadp.io`.
 
-Discovery and the Web proxy currently require HTTP Basic Auth. Unauthenticated
-requests return `401`. Credentials are supplied separately. TLS and authentication
-are reverse-proxy responsibilities, not Offer protocol fields. Internal services
-bind to loopback.
+The public zadp.io discovery service does not currently require a login.
+Independent deployments may require authentication or expose fewer routes. TLS
+and access controls are reverse-proxy responsibilities, not Offer fields. Core
+does not install HTTP Basic Auth. Bind internal services to loopback.
 
 Seller proof/capability documents and order creation do not require discovery
 credentials. Order retrieval/cancellation require their own Bearer claim token.
-Never forward discovery Basic Auth credentials to a seller. The reference seller
+Never forward discovery credentials to a seller. The reference seller
 permits one configured browser Origin; CLI clients may omit Origin. CORS permits
 GET, POST, DELETE and Content-Type, Authorization, Idempotency-Key headers for
 that Origin.
@@ -49,18 +45,18 @@ The multi-board Core router implements:
 - `GET /boards`: `{"boards": [...]}` public metadata.
 - `GET /boards/{board_id}`: one board metadata object.
 - `GET /boards/{board_id}/offers`: `{"offers": [...]}` for that board.
-- `GET /offers`: `{"offers": [...]}` aggregated active hosted view.
-- `GET /offers/{id}`: one active hosted-visible Offer object.
+- `GET /offers`: `{"offers": [...]}` aggregated active canonical view.
+- `GET /offers/{id}`: one active board-admitted Offer object.
 
-**Current hosted difference:** the production proxy exposes the first five routes
-but does **not** expose `/offers/{id}` or `/api/offers/{id}`. Both returned `404`
-in the snapshot check, although the Core handler exists. Hosted clients currently
-select details from list results. The proxy permits GET/HEAD on its discovery
-allowlist; there are no hosted write routes.
+**Hosted distinction:** these are the standalone Core routes. Hosted operators
+choose their proxy allowlist and must apply the same visibility policy to all
+public Offer routes. Report intake and private moderation are separate Hosted
+functionality, not Core discovery writes. Use the [hosted API guide](https://zadp.io/api.html)
+for the official service's exposed contract.
 
 ### Filtering and limits
 
-`/offers`, `/boards/{board_id}/offers`, and the Core-only `/offers/{id}` accept:
+`/offers`, `/boards/{board_id}/offers`, and `/offers/{id}` accept:
 
 - `board_id`: exact board ID; unknown boards return `404`.
 - `capability`: exact capability filter.
@@ -74,15 +70,16 @@ contract or `limit` parameter. A truncated result may omit matching Offers.
 Exact Core ID lookup runs before this cap; an ID shared across boards requires
 an unambiguous board filter.
 
-Only active boards and unexpired, board-admitted, host-visible Offers appear.
+Core returns active boards and unexpired, board-admitted Offers. Hosted adds
+its own visibility/payment rules before public results.
 Expiry is enforced at `now >= expires_at`. Expired records may remain in canonical
 storage; these routes are not a history API. Host approval/visibility and protocol
 validity are separate. Endpoint downtime does not remove a visible discovery Offer.
 
-Read-only example (curl prompts for the private-alpha password):
+Read-only public discovery example (add credentials only if your chosen host requires them):
 
 ```sh
-curl --user alpha --fail --silent --show-error \
+curl --fail --silent --show-error \
   'https://api.zadp.io/offers?board_id=ai-services&capability=text.summarize'
 ```
 
@@ -103,8 +100,7 @@ are unsigned host presentation metadata.
 
 No receiving address, incoming viewing key, wallet account or private config is
 exposed here. `/boards` can include non-active registered boards, whose Offers
-are excluded from active discovery. Current hosted board IDs are `ai-services`,
-`digital-services`, `local-services`, `jobs`, `games`, `general`, `hello`.
+are excluded from active discovery. Board names and inventory are deployment-specific; obtain them from `/boards`.
 Clients cannot register/create boards through HTTP.
 
 ## Offer response model
@@ -299,17 +295,18 @@ Update this snapshot when handlers, serializers or proxy allowlists change:
   [order state/model](../crates/zadp-commerce/src/lib.rs),
   [capabilities](../crates/zadp-commerce/src/capability.rs).
 
-Snapshot checks: authenticated hosted health/boards/offers returned 200; individual
-hosted Offer paths returned 404; seller health/capabilities/proof returned 200.
-No order, payment or broadcast was made for this reference. Related documents:
+The earlier authenticated deployment snapshot is superseded. Handler-level
+behavior should be verified with offline repository tests; current hosted
+operation and acceptance records belong to Server. Related documents:
 [multi-board](multi-board.md), [commerce](commerce.md),
 [commercial modes](commercial-modes-v3.md),
 [process boundaries](commerce-process-boundaries.md).
 
 ## Evidence and privacy
 
-One human mainnet summary-service purchase is verified; agent settlement remains
-offline/synthetic acceptance only. A live unpaid preparation is not fulfillment.
+The checked-in [mainnet evidence](mainnet-evidence.md) records a human purchase
+and the scope of its dated acceptance. A live unpaid preparation is not
+fulfillment; later operational acceptance must have separate sanitized evidence.
 `purchase_available` is host eligibility: Web additionally checks fresh seller
 `orders_available`, supported transport and unchanged signed terms before POST.
 No discovery field authorizes wallet spending. See [privacy](privacy.md) and
@@ -320,7 +317,8 @@ No discovery field authorizes wallet spending. See [privacy](privacy.md) and
 See [offer_revoke](offer-revoke.md) for signed control framing, exact preview/approval,
 read-only seller lifecycle binding, HTTP 410 and reorg behavior. Active discovery
 excludes accepted revocations; original Offer bytes remain in canonical history.
-No production activation or mainnet revocation has been performed.
+This API description is not evidence of a mainnet revocation or authority to
+perform one. Current activation and transaction records belong to the operator.
 
 
 ## Discovery client and aggregate budgets (not protocol rules)

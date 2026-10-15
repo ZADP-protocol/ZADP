@@ -4,7 +4,7 @@ Read [development](docs/development.md), [protocol](docs/protocol.md) and
 [architectural decisions](docs/decisions.md). Keep discovery, wallet spending
 and seller service execution boundaries separate.
 
-Use small logical commits. Preserve ZADP/1 wire/signature compatibility; document
+Use small logical commits. Preserve Protocol 1.0 canonical wire 3 and historical wire 1/2 verification; document
 any discrepancy before proposing a versioned breaking change. Add regression
 tests for externally reachable failures, not tests that only mirror implementation.
 Use English for code comments, UI and documentation.

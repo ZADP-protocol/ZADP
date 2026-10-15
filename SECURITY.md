@@ -5,8 +5,8 @@ product. No supported security maintenance window or independent audit is claime
 
 Do not disclose a vulnerability with exploit details in a public issue. Use the
 repository's private GitHub vulnerability reporting channel if enabled; otherwise
-contact a repository maintainer privately before sharing details. No dedicated
-security email or guaranteed response time is advertised.
+contact [security@zadp.io](mailto:security@zadp.io) before sharing details.
+No guaranteed response time or independent security audit is advertised.
 
 Never submit wallet seeds, spending keys, authentication/cookies, private seller
 viewing keys, invoice inputs/tokens or funded wallet databases in reports, logs,

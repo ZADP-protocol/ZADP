@@ -95,8 +95,10 @@ refund, escrow or delivery atomicity is guaranteed. See [commerce](commerce.md).
 - Web: zadp.io product, local globe/search/matching, drafts and direct seller UX.
 - Seller: hosted approved multi-Offer catalog, isolated order DBs, incoming-only
   observation, routing and deterministic fulfillment; no publication HTTP route.
-- Server: instance configuration, exact-SHA deployment, backups, rollback, host
-  policy and detailed sanitized acceptance records. Secrets stay outside Git.
+- Hosted: optional moderation, visibility, reports/admin and hosted publication-payment enforcement.
+- MCP: read-only tools/resources over moderated Hosted discovery, without wallet authority.
+- Server: instance configuration, exact-SHA deployment, backups, rollback and
+  detailed sanitized acceptance records. Secrets stay outside Git.
 
 Seller DB input/result are plaintext protected by permissions, not encrypted
 against its operator. Target retention exists but automated purge/redaction is
@@ -106,10 +108,10 @@ holders and cannot spend. See [threat model](threat-model.md).
 
 ## Evidence boundaries
 
-Mainnet discovery/geo reconstruction and one **human** buyer→seller purchase
-are verified. Hosted multi-Offer Seller is deployed; original summary orders are
-enabled, Tokyo/Shanghai live-demo orders disabled. Agent payment/fulfillment is
-accepted only offline/synthetic so far; live unpaid preparation proves no payment.
+The checked-in [mainnet evidence](mainnet-evidence.md) records discovery/geo
+reconstruction and a human buyer→seller purchase as of its stated review date.
+It is not a current inventory, availability or deployment guarantee. Offline
+agent acceptance and unpaid preparation are distinct from a real paid purchase.
 Core's `zadp-demo` and Python local summary bridge remain test/legacy fixtures,
 not production architecture. Board federation is future design.
 See [mainnet evidence](mainnet-evidence.md) and [roadmap](roadmap.md).

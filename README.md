@@ -29,8 +29,9 @@ flowchart LR
 ```
 
 Core owns protocol, reference scanning/indexing/API, reusable clients and tests.
-Web owns the hosted product; Seller owns multi-Offer fulfillment; Server owns
-instance operations. No private repository is required to implement ZADP.
+Web owns the hosted product; Hosted owns optional moderation and visibility;
+Seller owns multi-Offer fulfillment; Server owns instance operations. MCP is a
+separate read-only adapter over Hosted discovery. No private repository is required to implement ZADP.
 See [architecture](docs/architecture.md) and [repository boundaries](docs/repository-boundaries.md).
 
 ## Protocol 1.0
@@ -86,15 +87,16 @@ and [threat model](docs/threat-model.md).
 Legacy publication and independent reconstruction, geo publication, canonical
 wire-3 geo discovery and one real **human** buyer→seller summary-service purchase
 have been verified. Seller fulfillment waited for confirmations and executed
-exactly once. Tokyo/Shanghai wire-3 live demos remain **orders disabled**.
-Agent end-to-end payment/fulfillment remains offline/synthetic acceptance; a live
-unpaid order preparation is not a completed agent mainnet purchase.
+exactly once. The checked-in evidence is a dated milestone record, not a live inventory or
+current deployment report. Agent offline acceptance and a live unpaid order
+preparation are not proof of a completed agent mainnet purchase.
 See [mainnet evidence summary](docs/mainnet-evidence.md).
 
-## Hosted alpha and reference implementation
+## Hosted service and reference implementation
 
-[Open zadp.io](https://zadp.io/). The hosted UI/API currently retain Basic Auth;
-the hosted product is optional and uses local/self-hosted cartography.
+[Open zadp.io](https://zadp.io/). The hosted product is optional and uses
+local/self-hosted cartography. Its access policy is an operator choice, separate
+from the protocol. For AI clients, see the [MCP connection guide](https://zadp.io/mcp.html).
 
 ![ZADP globe with clearly labelled synthetic demo inventory](docs/images/zadp-globe-demo.png)
 
@@ -129,39 +131,6 @@ wallet/spending key. See [development and tests](docs/development.md),
 
 Project support is independent of protocol admission and hosted publication pricing.
 
-## Principal Sponsors
-
-_No principal sponsors yet._
-
-**Principal Sponsor — 1.0 ZEC**
-
-Public name/project listing with one HTTPS link, displayed above normal Sponsors.
-README visibility only; no logos, badges or additional marketing text.
-
-**Pay with ZEC:** scan the QR below or copy this complete ZIP-321 payment request into your Zcash
-wallet. It specifies the project recipient and exact tier amount, with no memo:
-
-```text
-zcash:u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau?amount=1.0
-```
-
-<img src="docs/images/zadp-principal-sponsor-qr.svg" alt="Principal Sponsor payment request QR: 1.0 ZEC to the project Unified Address, no memo" width="320">
-
-[PNG QR fallback](docs/images/zadp-principal-sponsor-qr.png) · **1.0 ZEC**, excluding network fees.
-Scan the QR to load the recipient and amount; **add your sponsorship memo manually** before paying.
-
-Manually enter this memo in your wallet before approving payment:
-
-```text
-ZADP-SPONSOR|principal|public=YOUR_NAME|url=https://YOUR_URL
-```
-
-Example:
-
-```text
-ZADP-SPONSOR|principal|public=AliceLabs|url=https://alice.example
-```
-
 ## Sponsors
 
 _No sponsors yet._
@@ -172,7 +141,7 @@ Public name/project listing with one HTTPS link in this Sponsors section.
 README visibility only; no logos, badges or additional marketing text.
 
 **Pay with ZEC:** scan the QR below or copy this complete ZIP-321 payment request into your Zcash
-wallet. It specifies the same project recipient and exact tier amount, with no memo:
+wallet. It specifies the project recipient and exact sponsorship amount, with no memo:
 
 ```text
 zcash:u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau?amount=0.1
@@ -200,7 +169,7 @@ Project sponsorship placements are available in ZEC.
 
 Sponsor listings have no fixed term and remain visible while the ZADP Sponsors section is maintained.
 
-Both tiers use the configured public project Unified Address:
+Sponsorship uses the public project Unified Address:
 
 ```text
 u1x599z4k4ff286gfkajzpmzj9g98xqk2cr9tkktnwr9fv7h6sjrzznttxpjuetfcu7ac722l2x8959s435vn20ll2s0zkgh67qhlhrl2mjg32q27t3lep20fenunkr5gr2umz32gh23hkp85yhqnf8s4lsdrqa8kr8emxv75mvqqlymau
@@ -212,15 +181,15 @@ sponsor names and links are not automatically included in payment requests.
 Network fees are additional: review the recipient, amount, memo and wallet fee
 before sending. Never send a second payment merely because a listing is pending.
 
-Both tier QRs encode exactly their complete ZIP-321 URI above: the project
-Unified Address and tier amount only, with no sponsor name, URL or memo. Wallet
+The sponsor QR encodes exactly the complete ZIP-321 URI above: the project
+Unified Address and sponsorship amount only, with no sponsor name, URL or memo. Wallet
 ZIP-321 support is required; verify the amount and recipient after scanning.
 QRs use square dark modules (`#0D1117`) on an opaque white background with a
 four-module quiet zone, no logo, and no transparent background. SVGs and PNG
 fallbacks remain readable on GitHub light and dark backgrounds.
 
 **Manual review and publication:** the maintainer checks the wallet and shielded
-memo, confirms the tier/amount, reviews the name and HTTPS link, and manually
+memo, confirms the amount, reviews the name and HTTPS link, and manually
 adds approved listings as simple Markdown text links. Publication is not
 automatic. There is no sponsorship watcher, sponsor database, backend API or
 automatic README/GitHub update. The project may refuse names or links containing
@@ -232,10 +201,10 @@ and the `url=` link are intentionally published in the README after manual
 approval. Do not include seeds, spending keys, wallet credentials or other
 private information in the memo.
 
-Project sponsorship is separate from the ZADP protocol. Neither tier grants
-protocol privileges or affects offer ranking, board admission, protocol validity,
-moderation, discovery, seller commerce, indexer behavior or reputation. A
-Principal Sponsor receives README visibility only.
+Project sponsorship is separate from the ZADP protocol. Sponsorship grants no
+protocol privileges and does not affect offer ranking, board admission, protocol validity,
+moderation, discovery, seller commerce, indexer behavior or reputation.
+Sponsorship provides README visibility only.
 
 
 ## License
