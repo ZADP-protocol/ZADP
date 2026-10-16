@@ -11,6 +11,24 @@ A discovery host should not need custody of buyer funds, private order payloads,
 or buyer GPS to match services. Seller signatures authenticate declarations;
 they do not guarantee identity/KYC, quality, availability or fulfillment.
 
+## Use cases in video
+
+### A shared marketplace for games
+
+[Watch: ZADP Zcash Game](docs/videos/ZADP_Zcash_Game.mp4)
+
+Games across regions could share Zcash-backed offers through local indexers,
+reducing reliance on centralized marketplace-sync infrastructure.
+
+### Independent discovery across boards
+
+[Watch: The Protocol Survives](docs/videos/ZADP_The_Protocol_Survives_Final.mp4)
+
+Sharing a board's signed descriptor and dedicated incoming viewing key (UIVK)
+lets independent indexers recover its offers without seller republication.
+Indexers can serve multiple independent boards, each with its own signed admission
+policy and local visibility rules for different legal jurisdictions.
+
 ## Architecture overview
 
 ![Signed offer discovery and direct settlement](docs/images/zadp-discovery-and-settlement.png)
