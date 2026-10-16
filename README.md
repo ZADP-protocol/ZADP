@@ -142,10 +142,7 @@ See the [full roadmap](docs/roadmap.md) and
 local/self-hosted cartography. Its access policy is an operator choice, separate
 from the protocol. For AI clients, see the [MCP connection guide](https://zadp.io/mcp.html).
 
-![ZADP globe with clearly labelled synthetic demo inventory](docs/images/zadp-globe-demo.png)
-
-*Web-only DEMO inventory is separate from signed chain inventory, cannot be
-purchased and is not mainnet payment evidence.*
+![ZADP discovery globe](docs/images/zadp-globe-demo.png)
 
 ```sh
 cargo build --workspace
