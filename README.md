@@ -108,13 +108,33 @@ and [threat model](docs/threat-model.md).
 
 ## What has been verified on mainnet
 
-Legacy publication and independent reconstruction, geo publication, canonical
-wire-3 geo discovery and one real **human** buyer→seller summary-service purchase
-have been verified. Seller fulfillment waited for confirmations and executed
-exactly once. The checked-in evidence is a dated milestone record, not a live inventory or
-current deployment report. Agent offline acceptance and a live unpaid order
-preparation are not proof of a completed agent mainnet purchase.
-See [mainnet evidence summary](docs/mainnet-evidence.md).
+Mainnet evidence includes legacy and canonical wire-3 publication, independent
+reconstruction, geographic discovery and a real human buyer→seller service
+purchase. An agent-prepared human-paid order and a later real PaymentController /
+ReviewedWalletAdapter purchase also completed. The latter used separate accounts
+under one operator/wallet; see the [agent payment evidence](docs/agent-mainnet-acceptance-2026-10-14.md).
+
+On 2026-10-16, three 90-day Miami gaming Offers were published with real ZEC:
+**0.00767574 ZEC total**, including publication amounts and network fees.
+These fictional examples are discovery-only. Their discovery and exact lookup
+passed **56 production MCP checks** across two supported protocol revisions.
+See the [publication/transaction records](docs/mainnet-discovery-mcp-2026-10-16.md)
+and [mainnet evidence summary](docs/mainnet-evidence.md). Evidence is dated;
+visibility, expiry and seller availability can change.
+
+## Roadmap
+
+- **Delivered:** Protocol 1.0, multi-board indexing, mainnet publication and
+  reconstruction, geo discovery, direct seller commerce, optional Hosted
+  moderation and a separate read-only [MCP adapter](docs/mcp.md).
+- **Now:** dependency/security follow-up, seller retention/redaction, broader
+  capabilities and wire-3 / independent-wallet-owner commerce acceptance.
+- **Next:** board UIVK / signed-descriptor sharing architecture for independent
+  indexers and multiple boards with distinct admission/hosted policies;
+  more client interoperability and `offer_update` development.
+
+See the [full roadmap](docs/roadmap.md) and
+[board-sharing design scope](docs/board-sharing-design.md).
 
 ## Hosted service and reference implementation
 
@@ -149,7 +169,9 @@ wallet/spending key. See [development and tests](docs/development.md),
 - [Security](SECURITY.md) · [Threat model](docs/threat-model.md)
 - [Privacy](docs/privacy.md) · [Glossary](docs/glossary.md)
 - [Mainnet evidence](docs/mainnet-evidence.md) · [Roadmap](docs/roadmap.md)
-- [Release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md) · [Contributing](CONTRIBUTING.md)
+- [Zcash integration status and remaining work](docs/zcash-integration-todos.md)
+- [MCP discovery](docs/mcp.md) · [Board-sharing design](docs/board-sharing-design.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## Support the project
 

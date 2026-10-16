@@ -4,7 +4,7 @@ New Offer signing/publication uses only **ZADP Protocol 1.0, wire/model ID 3**. 
 
 Omit both --endpoint and --price-zec for discovery-only Offer/wire v2. Supply both for commerce; geo remains independent. No fake URL or service price is needed. Board listing value and wallet-derived network fee still apply. See [optional-commerce model](optional-commerce.md).
 
-**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. Offline commerce demos remain fixtures. Geo/wire-3 discovery and one human buyer settlement/fulfillment have since been verified; see [current evidence summary](mainnet-evidence.md). No agent mainnet purchase is claimed.
+**Implementation status:** first funded, human-authorized mainnet publication and discovery were verified on 2026-10-05. The same mined signed OFFER was reconstructed by two fresh persistent indices. [Public acceptance evidence](./mainnet-acceptance.md) records the transaction and costs; the service endpoint is a placeholder. Offline commerce demos remain fixtures. Geo/wire-3 discovery, real paid 90-day discovery publications, human buyer settlement and agent-prepared human-paid fulfillment have since been recorded; see [current evidence summary](mainnet-evidence.md) and [paid publication/MCP acceptance](mainnet-discovery-mcp-2026-10-16.md). A real legacy agent-controller wallet purchase is also recorded with same-operator limits; wire-3 commerce and independent-wallet-owner acceptance remain separate.
 
 ## Wallet version and verification status
 

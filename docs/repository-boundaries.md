@@ -6,7 +6,7 @@ ZADP-Web contains the separate official hosted web product: branded UI, map pres
 
 ZADP-Hosted owns optional moderation, reporting/admin storage and publication-payment visibility enforcement. It composes Core without changing signed protocol semantics.
 
-ZADP-MCP is a read-only adapter over a configured moderated Hosted API; it has no wallet, order or publication authority.
+ZADP-MCP is a separate read-only adapter over a configured moderated Hosted API; it has no wallet, order or publication authority. See the [public MCP guide](mcp.md) and [dated production acceptance](mainnet-discovery-mcp-2026-10-16.md).
 
 ZADP-Server contains private instance deployment and operations. It records independent exact core and Web SHAs, runtime configuration and operational policy. Runtime secrets are outside Git.
 

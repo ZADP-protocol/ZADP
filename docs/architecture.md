@@ -96,7 +96,7 @@ refund, escrow or delivery atomicity is guaranteed. See [commerce](commerce.md).
 - Seller: hosted approved multi-Offer catalog, isolated order DBs, incoming-only
   observation, routing and deterministic fulfillment; no publication HTTP route.
 - Hosted: optional moderation, visibility, reports/admin and hosted publication-payment enforcement.
-- MCP: read-only tools/resources over moderated Hosted discovery, without wallet authority.
+- MCP: separate [read-only tools/resources](mcp.md) over moderated Hosted discovery, without wallet authority.
 - Server: instance configuration, exact-SHA deployment, backups, rollback and
   detailed sanitized acceptance records. Secrets stay outside Git.
 
@@ -109,11 +109,13 @@ holders and cannot spend. See [threat model](threat-model.md).
 ## Evidence boundaries
 
 The checked-in [mainnet evidence](mainnet-evidence.md) records discovery/geo
-reconstruction and a human buyer→seller purchase as of its stated review date.
-It is not a current inventory, availability or deployment guarantee. Offline
-agent acceptance and unpaid preparation are distinct from a real paid purchase.
-Core's `zadp-demo` and Python local summary bridge remain test/legacy fixtures,
-not production architecture. Board federation is future design.
+reconstruction, paid wire-3 publications, a human buyer→seller purchase and
+agent-prepared human-paid fulfillment and a [real controller/wallet purchase](agent-mainnet-acceptance-2026-10-14.md). The [MCP acceptance](mainnet-discovery-mcp-2026-10-16.md)
+exercised read-only production discovery of real paid publications. These are
+dated milestones, not current inventory, availability or deployment guarantees.
+Wire-3 commerce and independent-wallet-owner acceptance remain separate. Core's `zadp-demo` and
+Python local summary bridge remain test/legacy fixtures, not production
+architecture. Automatic [board sharing](board-sharing-design.md) is future design.
 See [mainnet evidence](mainnet-evidence.md) and [roadmap](roadmap.md).
 
 Optional hosted visibility, content rules, reports and operator audit live in

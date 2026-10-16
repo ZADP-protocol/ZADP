@@ -70,5 +70,9 @@ trusted wallet custody, not indexers, seller fulfillment, hosted browser or mode
 Agents request payment through PaymentController. Human approval binds exact
 invoice/recipient/memo/service amount, actual wallet fee, total, expiry and proposal.
 No fee constant, quote, successful test or domain proof authorizes a broadcast.
-See [mainnet evidence](mainnet-evidence.md) for completed human acceptance and
-its limits; real agent-wallet payment acceptance is still unproved.
+See [mainnet evidence](mainnet-evidence.md) for human purchases, agent-prepared
+human-paid fulfillment, a [real agent-controller purchase](agent-mainnet-acceptance-2026-10-14.md)
+and paid publication acceptance. The controller test used separate accounts in
+one wallet/operator; wire-3 commerce and independent wallet owners remain separate. The [MCP adapter](mcp.md)
+accepts no buyer GPS or wallet authority; ordinary client network metadata is
+not guaranteed confidential.

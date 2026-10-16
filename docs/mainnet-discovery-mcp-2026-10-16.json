@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-16",
+  "network": "mainnet",
+  "board_id": "games",
+  "offer_wire_version": 3,
+  "purpose": "Fictional gaming discovery demos; no real boat rentals or bookings.",
+  "duration_days": 90,
+  "service_price_present": false,
+  "seller_endpoint_present": false,
+  "geo": {
+    "lat_e5": 2576170,
+    "lon_e5": -8019180,
+    "radius_m": 10000
+  },
+  "offers": [
+    {
+      "title": "Sunset Cruiser - Demo",
+      "offer_id": "01M52HXFAERA512758W6FZ0TB1",
+      "txid": "66b903ca80d401e3a048763d3a8a8360feb2790fc160e3f81b9da7c76dbaf516",
+      "publication_zat": 245858,
+      "fee_zat": 10000,
+      "total_zat": 255858,
+      "expires_at": "2027-01-14T14:30:04Z",
+      "canonical_url": "https://zadp.io/offers/games/693df02733de06511630e98c33960fa36973ce095a9a1b1062bcfee5b22ee2b9/01M52HXFAERA512758W6FZ0TB1",
+      "block_height": 3519902
+    },
+    {
+      "title": "Island Hopper - Demo",
+      "offer_id": "01M52HZXTQEEK9Z3MPDK2J4357",
+      "txid": "56f2c4566436573568fb60067471e4aed471c89ff3f307d38201a9232f8c57cd",
+      "publication_zat": 245858,
+      "fee_zat": 10000,
+      "total_zat": 255858,
+      "expires_at": "2027-01-14T14:31:25Z",
+      "canonical_url": "https://zadp.io/offers/games/693df02733de06511630e98c33960fa36973ce095a9a1b1062bcfee5b22ee2b9/01M52HZXTQEEK9Z3MPDK2J4357",
+      "block_height": 3519903
+    },
+    {
+      "title": "Reef Explorer - Demo",
+      "offer_id": "01M52J62YBGZDYWD2BWJN863QK",
+      "txid": "3c11bfd5053b11fa01b67266f1fef19417a9e686757c261b074b592bdd21af69",
+      "publication_zat": 245858,
+      "fee_zat": 10000,
+      "total_zat": 255858,
+      "expires_at": "2027-01-14T14:34:47Z",
+      "canonical_url": "https://zadp.io/offers/games/693df02733de06511630e98c33960fa36973ce095a9a1b1062bcfee5b22ee2b9/01M52J62YBGZDYWD2BWJN863QK",
+      "block_height": 3519905
+    }
+  ],
+  "publication_total_zat": 767574,
+  "mcp_acceptance": {
+    "endpoint": "https://mcp.zadp.io/mcp",
+    "client": "Official MCP Inspector 2.11.0",
+    "protocol_versions": [
+      "2026-07-28",
+      "2025-11-25"
+    ],
+    "checks_passed": 56,
+    "writes_payments_or_publication": false
+  },
+  "limitations": [
+    "One initial Inspector exact-lookup invocation exited unsuccessfully; stderr was not retained for that first attempt. A direct repeat and the subsequent complete 56-check run passed. The initial cause is unconfirmed.",
+    "Cryptographic signatures were compared exactly with the locally produced signed Offers; MCP does not independently verify them.",
+    "MCP was used read-only; publication and payment used the existing local Operator and wallet after the human request authorized the three 90-day publications."
+  ]
+}

@@ -1,6 +1,10 @@
 # Protocol 1.0 seller endpoint primitives (wire/model ID 3)
 
-> **Historical document.** This describes an earlier development stage and is not current protocol behavior. Original evidence and development claims below are retained; they do not describe today’s deployment.
+> **Historical design record.** The pre-release observations below describe
+> their stated baseline, not the latest deployment. Canonical wire-3 mainnet
+> publications have since been recorded; see [current protocol](protocol.md) and
+> [mainnet evidence](mainnet-evidence.md). Original compatibility decisions and
+> signed historical bytes are preserved.
 
 
 ## Pre-release compatibility decision

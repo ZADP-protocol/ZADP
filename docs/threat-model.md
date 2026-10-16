@@ -2,7 +2,7 @@
 
 Canonical wire 3 signs optional endpoint and fixed price independently. Price requires endpoint; endpoint without price allows no payment. Geo is optional. Legacy wire 1/2 remain frozen read compatibility. See [protocol](protocol.md) and [privacy/data flow](privacy.md).
 
-This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, the retained offline demos, trusted local publication tooling and independently deployed hosted Seller. Mainnet discovery/geo and one human purchase are verified; agent wallet settlement remains unproved. See [public evidence summary](mainnet-evidence.md).
+This threat model covers the **current** ZADP reference implementation: real CompactTxStreamer board discovery, SQLite indexing, seller publish CLI, the retained offline demos, trusted local publication tooling and independently deployed hosted Seller. Mainnet discovery/geo, paid wire-3 publications, a human purchase and agent-prepared human-paid fulfillment are recorded; a real agent-controller wallet purchase is recorded with same-operator legacy-service limits; independent-wallet-owner and wire-3 commerce acceptance remain separate. See [public evidence summary](mainnet-evidence.md).
 
 ## Assets
 
@@ -63,7 +63,7 @@ Status labels: **Implemented** (in current code), **Partial**, **Remaining**.
 ### Malicious buyer
 
 - **Risk:** Abuse seller endpoints, unpaid load, scrape or DoS seller APIs.
-- **Implemented:** Discovery is read-only. Hosted Seller uses incoming-only observation and gates results on exact confirmed shielded outputs; one human mainnet purchase completed exactly once. Synthetic agent tests do not prove real agent-wallet acceptance.
+- **Implemented:** Discovery is read-only. Hosted Seller uses incoming-only observation and gates results on exact confirmed shielded outputs; one human mainnet purchase completed exactly once. A later real agent-controller purchase also fulfilled once using separate accounts under one operator/wallet; this is not independent-wallet-owner or wire-3 commerce acceptance.
 - **Implemented local gate:** Exact account/receiver/amount/memo, non-change shielded output, invoice mining window, three confirmations, single-output use and reorg rechecks. TLS verification and fixed loopback routing prevent arbitrary offer-controlled requests.
 - **Remaining:** Stronger rate limits, safe retention/redaction implementation, refund policy and real agent-wallet acceptance. Origin proof and claim-token auth do not eliminate endpoint abuse.
 

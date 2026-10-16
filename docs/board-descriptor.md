@@ -53,6 +53,10 @@ A database pins the entire descriptor fingerprint; a policy/descriptor change re
 
 A public UIVK deliberately makes incoming board output values and memos visible to everyone who scans. It does not authorize spending and is narrower than a full viewing key. Anyone can detect other incoming diversified addresses associated with the same incoming key, even though the ZADP scanner rejects them. Use a dedicated board account, never reuse a personal account. Publications are public discovery content, not a confidential seller inbox. Network-service requests for matching full transactions may reveal scanner interest. Shielding does not hide published OFFER content from descriptor holders.
 
+For planned opt-in descriptor/UIVK distribution and independent multi-board
+recovery, see [board-sharing architecture scope](board-sharing-design.md).
+Sharing does not transfer spending authority or rebind Offers between boards.
+
 ## Multi-board hosting and external ownership
 
 See [Multi-board indexing](multi-board.md) for the incremental registry, per-board

@@ -1,6 +1,6 @@
 # Mainnet evidence summary
 
-Public milestone summary as reviewed 2026-10-11 (Europe/Helsinki). This is
+Public milestone summary updated 2026-10-17 (Europe/Helsinki). This is
 non-normative acceptance evidence, not a deployment runbook, active inventory
 promise or authorization to repeat a transaction.
 
@@ -33,8 +33,9 @@ Real signed chain Offers reach the hosted read-only discovery API and globe.
 Browser acceptance checked local Nearby matching and no buyer GPS in network
 requests/storage. Web-only synthetic fixtures remain clearly marked, unpurchased
 presentation data, never canonical index inventory or chain statistics.
-Seven isolated hosted boards now use reviewed 90-day maximum policy; that is
-instance configuration, not a Protocol 1.0 duration constant.
+The hosted configuration reviewed for that milestone used seven isolated
+boards with a 90-day maximum; that is dated instance configuration, not a
+Protocol 1.0 duration constant.
 
 ## Seller fulfillment evidence
 
@@ -53,14 +54,54 @@ service quality generally, custody, refunds or delivery atomicity.
 Detailed sanitized records remain in the private
 [Server human acceptance](https://github.com/ZADP-protocol/ZADP-Server/blob/main/docs/human-mainnet-purchase.md).
 
-## Acceptance boundary at the 2026-10-11 review
+## Agent-prepared, human-paid order — 2026-10-11
 
-At that review, agent settlement/fulfillment was accepted only in offline/synthetic testing.
-A live legacy order preparation reached REQUIRE_APPROVAL with no payment and
-must not be presented as agent mainnet acceptance. Separate funded buyer-wallet
-binding, an exact unsigned fee proposal, human approval and live fulfillment
-were still required for the next milestone. Later operator acceptance is outside
-this dated evidence summary. See [roadmap](roadmap.md) and [privacy](privacy.md).
+A fresh order against the legacy `text.summarize` Offer
+`01M4J8687QJBZHQHEZHDEFVT5Y` requested 1000 zat. The agent verified the Offer
+and seller-origin proof, checked order availability and prepared one idempotent
+order. PaymentController required approval; the user paid from their separate
+phone wallet. Authenticated seller polling observed
+`waiting_payment → paid → processing → completed`, a verified payment and a
+returned result (11 confirmations at the first completed observation against
+a three-confirmation policy).
+
+This closes agent preparation → human wallet payment → seller fulfillment for
+that legacy service. It does not prove canonical wire-3 commerce or autonomous
+ReviewedWalletAdapter settlement. Payment txid, actual network fee and
+`execution_count` were not exposed by that attempt's checked API and are not
+claimed. This supersedes the earlier unpaid-preparation-only milestone without
+reclassifying the earlier attempt as paid.
+
+## Real agent-controller wallet purchase — 2026-10-14
+
+PaymentController returned ALLOW under a bounded, human-authorized one-service
+policy and the real ReviewedWalletAdapter paid the legacy summary-service
+invoice. Service amount 1000 zat plus actual fee 10000 zat; payment tx
+`4b8b78fb090d286f383f4a60415cd673a3fabda9ab3108b80b188d1d67fc9f88`.
+Seller payment verification, confirmation gating, correct result and
+`execution_count=1` were observed. The buyer/seller accounts were separate, but
+under the same wallet/operator. See [sanitized acceptance and limits](agent-mainnet-acceptance-2026-10-14.md).
+This supersedes the earlier real-wallet-unproved status for that specific path.
+
+## Paid discovery publications and production MCP — 2026-10-16
+
+Three canonical wire-3, discovery-only gaming Offers were published for 90 days
+with approximate Miami geography. Each paid 245858 zat for publication plus an
+actual 10000-zat network fee; total **0.00767574 ZEC**. These are fictional game
+examples, not real rental listings or completed seller purchases.
+
+Official MCP Inspector exercised the production read-only adapter with revisions
+2026-07-28 and 2025-11-25: **56 checks passed**, including all four tools,
+searches, exact signed fields, provenance, expiry and canonical links. MCP did
+not publish or pay. See [public transaction records and acceptance limits](mainnet-discovery-mcp-2026-10-16.md).
+
+## Remaining acceptance boundary
+
+Canonical wire-3 commerce, independent wallet owners and a hardened isolated
+agent remain separate acceptance work. Offline settlement, agent-prepared human
+payment, real controller-driven purchase and paid Offer publication prove
+different paths; none grants unrestricted autonomous spending authority.
+See [roadmap](roadmap.md), [MCP](mcp.md) and [privacy](privacy.md).
 
 Detailed operator records, release SHAs, backups and private-host policy belong
 to Server. This public summary does not disclose protected configuration or

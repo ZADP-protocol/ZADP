@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-14",
+  "purchase": {
+    "network": "mainnet",
+    "offer_id": "01M4J8687QJBZHQHEZHDEFVT5Y",
+    "offer_wire": 1,
+    "status": "completed",
+    "payment_check": "verified",
+    "confirmations": 8,
+    "confirmations_required": 3,
+    "execution_count": 1,
+    "execution_count_source": "read-only seller DB, checked after completion and repeated polling",
+    "result_correct": true,
+    "signature_verified": true,
+    "origin_proof_verified": true,
+    "policy_decision": "ALLOW",
+    "auto_approve": false,
+    "adapter": "ReviewedWalletAdapter",
+    "real_wallet_adapter": true,
+    "separate_buyer_seller_accounts": true,
+    "same_wallet_same_operator": true,
+    "service_amount_zat": 1000,
+    "fee_zat": 10000,
+    "total_zat": 11000,
+    "txid": "4b8b78fb090d286f383f4a60415cd673a3fabda9ab3108b80b188d1d67fc9f88"
+  },
+  "limits": [
+    "Legacy wire 1 service, not canonical wire 3 commerce.",
+    "Separate buyer/seller accounts under the same operator and wallet; not independent wallet owners.",
+    "One specifically authorized test policy, not general autonomous spending authority.",
+    "No hardened OS-isolated agent or independently reconstructed fresh chain state proven."
+  ],
+  "private_request_result_or_wallet_authority_included": false
+}

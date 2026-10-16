@@ -304,9 +304,12 @@ operation and acceptance records belong to Server. Related documents:
 
 ## Evidence and privacy
 
-The checked-in [mainnet evidence](mainnet-evidence.md) records a human purchase
-and the scope of its dated acceptance. A live unpaid preparation is not
-fulfillment; later operational acceptance must have separate sanitized evidence.
+The checked-in [mainnet evidence](mainnet-evidence.md) records human purchase,
+agent-prepared human-paid fulfillment, a real agent-controller wallet purchase
+with stated same-operator limits and paid discovery-publication milestones.
+[Production MCP acceptance](mainnet-discovery-mcp-2026-10-16.md) separately records
+read-only discovery. Unpaid preparation is not fulfillment, and publication
+payment is not a seller service purchase.
 `purchase_available` is host eligibility: Web additionally checks fresh seller
 `orders_available`, supported transport and unchanged signed terms before POST.
 No discovery field authorizes wallet spending. See [privacy](privacy.md) and

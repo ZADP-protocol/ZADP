@@ -210,10 +210,16 @@ Hosted automated buying requires a separate [offline-signed endpoint ownership p
 
 ## Current hosted acceptance
 
-The separate hosted Seller completed one human mainnet summary-service purchase
-after three confirmations with exactly-once execution. This is legacy wire-1
-evidence, not wire-3 or autonomous-agent payment acceptance. Tokyo/Shanghai
-wire-3 demos remain order-disabled. See [mainnet evidence](mainnet-evidence.md).
+The separate hosted Seller completed a human mainnet summary-service purchase
+after three confirmations with exactly-once execution. A later fresh order
+also completed after agent preparation and human wallet payment. These are
+legacy wire-1 records. A real PaymentController / ReviewedWalletAdapter
+purchase also fulfilled once on 2026-10-14 using separate accounts under one
+operator/wallet; see [agent payment evidence](agent-mainnet-acceptance-2026-10-14.md).
+Wire-3 commerce and independent-wallet-owner acceptance remain separate.
+Tokyo/Shanghai demos were order-disabled in the recorded acceptance. Paid
+wire-3 discovery publications are a separate milestone, not service purchases.
+See [mainnet evidence](mainnet-evidence.md).
 Seller input/result are plaintext in private SQLite; automated redaction is not
 implemented. See [privacy](privacy.md).
 
@@ -247,7 +253,9 @@ protected PCZT/config paths and a new recovery journal. The adapter rejects any
 changed amount/recipient/memo, expired preview, wrong account or existing journal.
 A model cannot turn an unreviewed InvoiceView into a payment through this adapter.
 
-This is an integration boundary, not evidence of a completed agent mainnet E2E.
+The adapter boundary has a [dated real-wallet mainnet acceptance](agent-mainnet-acceptance-2026-10-14.md)
+for a legacy service under one operator/wallet. Its implementation alone does
+not prove broader agent commerce interoperability.
 The existing policy still returns REQUIRE_APPROVAL when its limits demand it;
 do not use the demo auto-approve helper in production. Order discovery, endpoint
 verification, InvoiceView construction and result polling must be composed by the

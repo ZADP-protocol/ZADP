@@ -89,6 +89,7 @@ removed by fetch; local branch/worktree contents were preserved.
   transitive dependency warning. See [dependency review](dependencies.md).
   Update/retest dependencies before calling this a clean public-release audit.
 
-The [release checklist](PUBLIC_RELEASE_CHECKLIST.md) remains the owner review gate;
-its final visibility approval is not marked automatically. Detailed operator
-configuration and private acceptance records remain in their own repositories.
+The separate release checklist was removed at the owner's request on 2026-10-17.
+This dated review still records its findings; removal does not resolve them or
+change repository visibility. Detailed operator configuration and private
+acceptance records remain in their own repositories.
