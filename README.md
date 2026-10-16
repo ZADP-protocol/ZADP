@@ -15,14 +15,20 @@ they do not guarantee identity/KYC, quality, availability or fulfillment.
 
 ### A shared marketplace for games
 
-[Watch: ZADP Zcash Game](docs/videos/ZADP_Zcash_Game.mp4)
+https://github.com/user-attachments/assets/e957cbeb-9634-44f1-8fb8-6209de24b0bf
+
+[Download original](docs/videos/ZADP_Zcash_Game.mp4) ·
+[Download preview (under 9.5 MB)](docs/videos/ZADP_Zcash_Game.preview.mp4)
 
 Games across regions could share Zcash-backed offers through local indexers,
 reducing reliance on centralized marketplace-sync infrastructure.
 
 ### Independent discovery across boards
 
-[Watch: The Protocol Survives](docs/videos/ZADP_The_Protocol_Survives_Final.mp4)
+https://github.com/user-attachments/assets/1419c746-9d7d-4f5e-a4eb-34fc340e83f8
+
+[Download original](docs/videos/ZADP_The_Protocol_Survives_Final.mp4) ·
+[Download preview (under 9.5 MB)](docs/videos/ZADP_The_Protocol_Survives_Final.preview.mp4)
 
 Sharing a board's signed descriptor and dedicated incoming viewing key (UIVK)
 lets independent indexers recover its offers without seller republication.
