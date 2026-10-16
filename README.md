@@ -252,7 +252,7 @@ Sponsorship provides README visibility only.
 
 ## License
 
-MIT OR Apache-2.0, at your option. See [MIT](LICENSE-MIT), [Apache](LICENSE-APACHE) and [license notice](LICENSE). Third-party dependencies retain their own licenses. Repository visibility is a separate owner decision; this cleanup does not make any repository public.
+Licensed under either the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE), at your option. See [LICENSE](LICENSE) for details. Third-party dependencies retain their own licenses.
 
 ## Optional hosted moderation
 
