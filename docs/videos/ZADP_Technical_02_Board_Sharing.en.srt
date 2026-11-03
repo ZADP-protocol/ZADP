@@ -1,0 +1,53 @@
+1
+00:00:00,400 --> 00:00:15,292
+ZADP puts seller-signed offers into Zcash shielded memos. Independent indexers turn those
+publications into searchable discovery data. The discovery host can change while the
+signed offers remain on chain.
+
+2
+00:00:15,942 --> 00:00:30,583
+A seller signs an Offer and publishes it to a board through a Zcash transaction. The
+signature binds the declared terms to that board. A signature authenticates the
+declaration; it does not guarantee service quality.
+
+3
+00:00:31,233 --> 00:00:46,667
+An indexer uses chain data and a signed board descriptor, including its dedicated incoming
+viewing key. It verifies offers and board admission, then builds a local index. Scanning
+requires no wallet spending keys.
+
+4
+00:00:47,317 --> 00:01:01,917
+Humans and agents can search the same discovery data. A browser uses the API; an agent can
+use the read-only MCP adapter. Geographic matching can keep the buyer location in browser
+memory.
+
+5
+00:01:02,567 --> 00:01:19,542
+A discovery-only announcement needs no service endpoint or price. For supported commerce,
+orders and results go directly to the seller. A separate buyer wallet approves payment.
+The discovery indexer does not hold spending authority.
+
+6
+00:01:20,192 --> 00:01:36,167
+The proposed sharing layer would distribute a signed descriptor and a dedicated board
+incoming viewing key. A recipient could independently reconstruct the same board. This
+grants incoming visibility, never permission to spend its funds.
+
+7
+00:01:36,817 --> 00:01:53,042
+An operator could pin the trusted descriptor and rescan from its birthday. If one
+discovery host disappears, another could restore visibility without sellers republishing.
+Local moderation may still produce different visible results.
+
+8
+00:01:53,692 --> 00:02:12,583
+An indexer could serve several independently shared boards. Each keeps its own signed
+admission policy and isolated state. Hosts may apply local visibility rules for different
+jurisdictions. Sharing does not move an Offer into another board or establish legality.
+
+9
+00:02:13,233 --> 00:02:32,125
+Use a dedicated board viewing key, never personal wallet keys. Pin descriptor trust
+independently. Shared incoming data cannot be made secret again. Reconstruction already
+exists; opt-in sharing, distribution and lifecycle design remain future work.
