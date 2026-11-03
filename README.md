@@ -37,9 +37,19 @@ policy and local visibility rules for different legal jurisdictions.
 
 ## Architecture overview
 
-![Signed offer discovery and direct settlement](docs/images/zadp-discovery-and-settlement.png)
+https://github.com/user-attachments/assets/0d0a9c9a-359c-4027-b2b9-fd0723aa38d0
 
-![ZADP ecosystem concept](docs/images/zadp-ecosystem-concept.jpg)
+[Download technical video (2:32, 4.3 MB)](docs/videos/ZADP_Technical_02_Board_Sharing.mp4) ·
+[English subtitles](docs/videos/ZADP_Technical_02_Board_Sharing.en.srt)
+
+A technical walkthrough of signed Offers, Zcash publication, independent indexing,
+API/MCP discovery and direct seller commerce. The final section introduces
+**future opt-in board sharing** through signed descriptors and dedicated incoming
+viewing keys, with independent board policies and hosted visibility rules.
+
+<a href="docs/images/zadp-discovery-and-settlement.png"><img src="docs/images/zadp-discovery-and-settlement.png" alt="Signed offer discovery and direct settlement" width="30%"></a>
+
+<a href="docs/images/zadp-ecosystem-concept.jpg"><img src="docs/images/zadp-ecosystem-concept.jpg" alt="ZADP ecosystem concept" width="30%"></a>
 
 ```mermaid
 flowchart LR
@@ -142,7 +152,7 @@ See the [full roadmap](docs/roadmap.md) and
 local/self-hosted cartography. Its access policy is an operator choice, separate
 from the protocol. For AI clients, see the [MCP connection guide](https://zadp.io/mcp.html).
 
-![ZADP discovery globe](docs/images/zadp-globe-demo.png)
+<a href="docs/images/zadp-globe-demo.png"><img src="docs/images/zadp-globe-demo.png" alt="ZADP discovery globe" width="30%"></a>
 
 ```sh
 cargo build --workspace
